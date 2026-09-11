@@ -1,11 +1,12 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Spec forged by ANVIL through the lane, ab-20260911-1954 round B (round A: last + 1 overflow, fixed in
---  prose). The lane cannot pass a declarations-only spec to body-fill (it exits on the gate word), so the
---  body was filled by body-fill-bench driven by the seat: claude-cli haiku -> opus, candidate 2, proof
---  tier level 2. Spec + body re-proved as built, level 2: 66 checks, zero unproved. ONE WARNING stands:
---  json_scan_pkg.adb:61 "initialization of K has no effect" — body-fill compiled without -gnatwa, so
---  crucible-proves-clean (warnings as errors) will refuse this tree until the body is re-filled with the
---  project switches. Recorded, not hand-patched. Theorem is bounds-safety only. Carried unchanged.
+--  Json_Scan_Pkg, SECOND forge (BRIEF_json_scan_semantic_obligation_2026-09-11): found means found.
+--  Spec: ANVIL lane, wu-crucible-json-scan-2 round D, 2026-09-11 21:27 (A: aspects before the expression;
+--  B: index overflow — Line/Key First pinned to 1; C: accepted, body-fill failed; D: predicate
+--  No_Key_Before names the loop invariant). Body: THE LANE's body-fill, claude-cli haiku -> opus,
+--  candidate 2, proof tier level 2 — the first body to come through the lane end to end.
+--  Re-proved as built, level 2: 164 checks, zero unproved, 14 loop invariants. FIVE -gnatwa warnings
+--  stand ("initialization of X has no effect", adb:65-69): body-fill compiles without the project
+--  switches; crucible-proves-clean refuses them until the harness repair lands. Recorded, not patched.
 --
 package Json_Scan_Pkg with SPARK_Mode is
 
@@ -18,24 +19,104 @@ package Json_Scan_Pkg with SPARK_Mode is
       last  : Natural := 0;
    end record;
 
+   function Is_Key_At (Line : String; Key : String; I : Positive) return Boolean
+     is (I in Line'Range
+         and then I + Key'Length + 1 <= Line'Last
+         and then Line (I) = '"'
+         and then (for all K in 1 .. Key'Length => Line (I + K) = Key (Key'First + K - 1))
+         and then Line (I + Key'Length + 1) = '"'
+         and then (for some C in I + Key'Length + 2 .. Line'Last => Line (C) = ':'
+                   and then (for all S in I + Key'Length + 2 .. C - 1 => Line (S) = ' ')))
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then Key'First = 1
+                   and then Key'Length >= 1
+                   and then Key'Length <= 64
+                   and then I <= Line'Last),
+          Post => ((if Is_Key_At'Result then I in Line'Range)
+                   and then (if Is_Key_At'Result then Line (I) = '"'));
+
+   function Has_Key (Line : String; Key : String) return Boolean
+     is ((for some I in Line'Range => Is_Key_At (Line, Key, I)))
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then Key'First = 1
+                   and then Key'Length >= 1
+                   and then Key'Length <= 64),
+          Post => ((Has_Key'Result = True) = (for some I in Line'Range => Is_Key_At (Line, Key, I)));
+
+   function No_Key_Before (Line : String; Key : String; N : Positive) return Boolean
+     is ((for all J in Line'First .. N - 1 => not Is_Key_At (Line, Key, J)))
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then Key'First = 1
+                   and then Key'Length >= 1
+                   and then Key'Length <= 64
+                   and then N - 1 <= Line'Last),
+          Post => ((No_Key_Before'Result = True) = (for all J in Line'First .. N - 1 => not Is_Key_At (Line, Key, J)));
+
    function Key_Position (Line : String; Key : String) return Natural
-     with Pre  => Key'Length >= 1 and then Line'Length <= 65536,
-          Post => (Key_Position'Result = 0 or else Key_Position'Result in Line'Range) and then
-                  ((if Key_Position'Result /= 0 then Line (Key_Position'Result) = '''));
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then Key'First = 1
+                   and then Key'Length >= 1
+                   and then Key'Length <= 64),
+          Post => ((Key_Position'Result = 0 or else Key_Position'Result in Line'Range)
+                   and then ((Key_Position'Result /= 0) = Has_Key (Line, Key))
+                   and then (if Key_Position'Result /= 0 then Is_Key_At (Line, Key, Key_Position'Result))
+                   and then (if Key_Position'Result /= 0 then No_Key_Before (Line, Key, Key_Position'Result)));
 
    function Value_Span (Line : String; Key : String) return Span_Type
-     with Pre  => Key'Length >= 1 and then Line'Length <= 65536,
-          Post => ((if not Value_Span'Result.found then Value_Span'Result.first = 0 and then Value_Span'Result.last = 0 and then Value_Span'Result.kind = K_None)) and then
-                  ((if Value_Span'Result.found then Value_Span'Result.first in Line'Range and then Value_Span'Result.last in Line'Range and then Value_Span'Result.first <= Value_Span'Result.last and then Value_Span'Result.kind /= K_None)) and then
-                  ((if Key_Position (Line, Key) = 0 then not Value_Span'Result.found));
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then Key'First = 1
+                   and then Key'Length >= 1
+                   and then Key'Length <= 64),
+          Post => ((Value_Span'Result.found = Has_Key (Line, Key))
+                   and then (if not Value_Span'Result.found then Value_Span'Result.first = 0
+                             and then Value_Span'Result.last = 0
+                             and then Value_Span'Result.kind = K_None)
+                   and then (if Value_Span'Result.found then Value_Span'Result.first in Line'Range
+                             and then Value_Span'Result.last in Line'Range
+                             and then Value_Span'Result.first <= Value_Span'Result.last
+                             and then Value_Span'Result.kind /= K_None)
+                   and then (if Value_Span'Result.found then Value_Span'Result.first > Key_Position (Line, Key)
+                             and then Line (Value_Span'Result.first) /= ' ')
+                   and then (if Value_Span'Result.found and then Value_Span'Result.kind = K_String then Line (Value_Span'Result.first) = '"'
+                             and then Line (Value_Span'Result.last) = '"'
+                             and then Value_Span'Result.first < Value_Span'Result.last)
+                   and then (if Value_Span'Result.found and then Value_Span'Result.kind = K_Composite then (Line (Value_Span'Result.first) = '{'
+                             or else Line (Value_Span'Result.first) = '['))
+                   and then (if Value_Span'Result.found and then Value_Span'Result.kind = K_Bare then Line (Value_Span'Result.first) /= '"'
+                             and then Line (Value_Span'Result.first) /= '{'
+                             and then Line (Value_Span'Result.first) /= '['));
 
    function String_Contents (Line : String; S : Span_Type) return Span_Type
-     with Pre  => S.found and then S.kind = K_String and then S.first in Line'Range and then S.last in Line'Range and then S.first <= S.last,
-          Post => String_Contents'Result.found and then String_Contents'Result.kind = K_String and then
-                  (String_Contents'Result.first >= S.first and then String_Contents'Result.last <= S.last and then String_Contents'Result.first - 1 <= String_Contents'Result.last);
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then S.found
+                   and then S.kind = K_String
+                   and then S.first in Line'Range
+                   and then S.last in Line'Range
+                   and then S.first < S.last),
+          Post => ((String_Contents'Result.found and then String_Contents'Result.kind = K_String)
+                   and then (String_Contents'Result.first = S.first + 1)
+                   and then (String_Contents'Result.last = S.last - 1));
 
    function Equals_Literal (Line : String; S : Span_Type; Literal : String) return Boolean
-     with Pre  => S.found and then S.first in Line'Range and then S.last in Line'Range and then S.first - 1 <= S.last and then Literal'Length <= 64,
-          Post => ((Equals_Literal'Result = True) = (S.last - S.first + 1 = Literal'Length and then Line (S.first .. S.last) = Literal));
+     with Pre  => (Line'First = 1
+                   and then Line'Length <= 65536
+                   and then S.found
+                   and then S.first in Line'Range
+                   and then S.last in Line'Range
+                   and then S.first - 1 <= S.last
+                   and then Literal'First = 1
+                   and then Literal'Length <= 64),
+          Post => ((Equals_Literal'Result = True) = ((Literal'Length = S.last - S.first + 1)
+                   and then (Line (S.first .. S.last) = Literal)));
+
+   --  BODY: the scanning loops are FOR loops over Line'Range (never while loops, so termination is by construction);
+   --  BODY: the loop that finds the first key occurrence carries pragma Loop_Invariant (No_Key_Before (Line, Key, I));
+   --  BODY: and every expression function in the body is enclosed in parentheses.
 
 end Json_Scan_Pkg;
