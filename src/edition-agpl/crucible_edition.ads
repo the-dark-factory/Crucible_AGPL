@@ -8,6 +8,7 @@
 --  hand-author them"). Not forged. Recorded in BRIEF_crucible_door_wu_2026-09-11.md.
 --
 with Edition_Licence_Pkg;
+use type Edition_Licence_Pkg.Edition_Type;
 
 package Crucible_Edition with SPARK_Mode is
 
