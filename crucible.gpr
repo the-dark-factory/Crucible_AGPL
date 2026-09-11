@@ -1,0 +1,24 @@
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--
+--  CRUCIBLE — one executable, one door. The edition is a COMPILED-IN external, never an
+--  argument or an environment variable at run time: mui:edition-is-compiled-not-argued.
+
+project Crucible is
+
+   type Edition_Type is ("agpl", "commercial");
+   Edition : Edition_Type := external ("CRUCIBLE_EDITION", "agpl");
+
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj";
+   for Exec_Dir use "bin";
+   for Main use ("crucible_main.adb");
+
+   package Builder is
+      for Executable ("crucible_main.adb") use "crucible-" & Edition;
+   end Builder;
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatU", "-gnatwa");
+   end Compiler;
+
+end Crucible;

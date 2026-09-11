@@ -1,0 +1,2 @@
+crucible.gpr:14:18: "crucible_main.adb" is not a source of project "crucible"
+gprbuild: problems with main sources
