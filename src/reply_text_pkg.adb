@@ -1,49 +1,47 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Body of Reply_Text_Pkg: only Escape_Quotes needs a body; every other operation is an
---  expression function completed in the spec. Written by the ANVIL lane's body-fill
---  (claude-cli, candidate 2; candidate 1 failed proof), job job-46218f0bf97cd3709a6171a8
---  verified 2026-09-12 09:36; results.jsonl still records via/model as null (harness gap noted
---  2026-09-11). Re-proved with the spec as built: 237 checks, 0 unproved, 0 warnings.
---  Escapes '"' only, not '\' -- see the spec header. Carried unchanged.
+--  Body of Reply_Text_Pkg v2: only Escape_Quotes needs a body. Written by the ANVIL lane's
+--  body-fill (opus, candidate 3), job verified 2026-09-12 11:41; re-proved with the spec as
+--  built: 265 checks, 0 unproved, 0 warnings. Escapes '"' only, not '\' -- see the spec header.
 pragma Ada_2012;
 
---  Body for Reply_Text_Pkg.
+--  Reply_Text_Pkg (body)
 --
---  Every other operation in the specification is an expression function
---  completed in the spec itself; only Escape_Quotes needs a body here.
+--  Purpose: supplies the one operation of the specification that is not an
+--  expression function.  Every other visible subprogram of Reply_Text_Pkg is
+--  declared in the spec as an expression function and therefore needs no
+--  body here; re-declaring them would be an error.
 --
---  Escape_Quotes prefixes each double-quote character with a backslash so
---  the text can be embedded inside a JSON string literal.  The output
---  buffer is fully initialised at declaration (no box notation) so that
---  gnatprove can discharge the "Result might not be initialized" check,
---  and the loop carries an inductive invariant bounding the fill counter
---  between I and 2 * I, which is exactly what the postcondition needs.
+--  Escape_Quotes rewrites each '"' in S as the two-character sequence \" so
+--  that the result can itself be embedded inside a JSON string literal.  The
+--  loop invariants establish the length bounds asserted by the postcondition:
+--  one character in yields at least one and at most two characters out.
 
-package body Reply_Text_Pkg with SPARK_Mode => On is
+package body Reply_Text_Pkg with SPARK_Mode is
+
+   ---------------------
+   -- Escape_Quotes --
+   ---------------------
 
    function Escape_Quotes (S : String) return String is
-      Result : String (1 .. 2 * S'Length) := (others => ' ');
-      Len    : Natural                    := 0;
+      Buf : String (1 .. 2 * S'Length) := (others => ' ');
+      Len : Natural := 0;
    begin
-      --  Pre guarantees S'First = 1, so S'Range is 1 .. S'Length.
       for I in S'Range loop
-         pragma Loop_Invariant (Len >= I - 1);
-         pragma Loop_Invariant (Len <= 2 * (I - 1));
-
          if S (I) = '"' then
-            Result (Len + 1) := '\';
-            Result (Len + 2) := '"';
+            Buf (Len + 1) := '\';
+            Buf (Len + 2) := '"';
             Len := Len + 2;
          else
-            Result (Len + 1) := S (I);
+            Buf (Len + 1) := S (I);
             Len := Len + 1;
          end if;
+
+         pragma Loop_Invariant (Len >= I - S'First + 1);
+         pragma Loop_Invariant (Len <= 2 * (I - S'First + 1));
+         pragma Loop_Invariant (Len <= Buf'Last);
       end loop;
 
-      pragma Assert (Len >= S'Length);
-      pragma Assert (Len <= 2 * S'Length);
-
-      return Result (1 .. Len);
+      return Buf (1 .. Len);
    end Escape_Quotes;
 
 end Reply_Text_Pkg;
