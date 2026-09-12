@@ -7,16 +7,24 @@ package Model_Request_Pkg with SPARK_Mode is
    Max_Reply : constant := 65536;
 
    Model_Key : constant String := Reply_Text_Pkg.Q ("model") & ":";
-   Prompt_Key : constant String := Reply_Text_Pkg.Q ("prompt") & ":";
+   Messages_Key : constant String := Reply_Text_Pkg.Q ("messages") & ":";
+   Role_Key : constant String := Reply_Text_Pkg.Q ("role") & ":";
+   Content_Key : constant String := Reply_Text_Pkg.Q ("content") & ":";
    Stream_Key : constant String := Reply_Text_Pkg.Q ("stream") & ":";
+   User_Role : constant String := Reply_Text_Pkg.Q ("user");
    Brace_Open : constant String := "{";
    Brace_Close : constant String := "}";
+   Bracket_Open : constant String := "[";
+   Bracket_Close : constant String := "]";
    Comma : constant String := ",";
 
    function Request_Text (Model : String; Prompt : String) return String is
      (Brace_Open
       & Model_Key & Reply_Text_Pkg.Q (Model) & Comma
-      & Prompt_Key & Reply_Text_Pkg.Q (Reply_Text_Pkg.Escape_Quotes (Prompt)) & Comma
+      & Messages_Key & Bracket_Open & Brace_Open
+      & Role_Key & User_Role & Comma
+      & Content_Key & Reply_Text_Pkg.Q (Reply_Text_Pkg.Escape_Quotes (Prompt))
+      & Brace_Close & Bracket_Close & Comma
       & Stream_Key & Reply_Text_Pkg.Json_Bool (False)
       & Brace_Close)
    with Global => null,
@@ -25,7 +33,7 @@ package Model_Request_Pkg with SPARK_Mode is
         Post => Request_Text'Result'Length >= 2
                 and then Request_Text'Result (Request_Text'Result'First) = '{'
                 and then Request_Text'Result (Request_Text'Result'Last) = '}'
-                and then Request_Text'Result'Length <= 2 * Prompt'Length + Model'Length + 64;
+                and then Request_Text'Result'Length <= 2 * Prompt'Length + Model'Length + 96;
 
    type Fault_Kind is (No_Fault, Model_Unreachable, Model_Timeout, Reply_Over_Bound);
 
@@ -37,7 +45,7 @@ package Model_Request_Pkg with SPARK_Mode is
    with Global => null;
 
    function Reply_Accepted (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Boolean is
-     (Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault)
+     ((Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault))
    with Global => null,
         Post => Reply_Accepted'Result = (Reached and then not Timed_Out and then Reply_Length <= Max_Reply);
 
