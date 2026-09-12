@@ -40,7 +40,7 @@ procedure Audit_Sink_Main is
 
       entry Take (E : out Audit_Ledger_Pkg.Event; Done : out Boolean) when (Fill > 0 or else Closed) is
       begin
-         if (Fill = 0 and Closed) then
+         if (Fill = 0 and then Closed) then
             Done := True;
          else
             Head := Head + 1;
@@ -62,7 +62,7 @@ procedure Audit_Sink_Main is
    task Sink;
 
    task body Sink is
-      L : Audit_Ledger_Pkg.Ledger := (Entries => (others => (Source => Audit_Ledger_Pkg.Audit_Sink, Code => 0)), Count => 0, Full => False);
+      L : Audit_Ledger_Pkg.Ledger := (Entries => [others => (Source => Audit_Ledger_Pkg.Audit_Sink, Code => 0)], Count => 0, Full => False);
       E : Audit_Ledger_Pkg.Event;
       Done : Boolean;
    begin
@@ -75,8 +75,7 @@ procedure Audit_Sink_Main is
       end loop;
       L := Audit_Ledger_Pkg.Appended (L, (Source => Audit_Ledger_Pkg.Audit_Sink, Code => Audit_Ledger_Pkg.Ledger_Sealed));
       for I in 1 .. L.Count loop
-         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Image_Of (Audit_Ledger_Pkg.Activity_Kind'Pos (L.Entries (I).Source))
-                              & Sep & Reply_Text_Pkg.Image_Of (L.Entries (I).Code));
+         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Image_Of (Audit_Ledger_Pkg.Activity_Kind'Pos (L.Entries (I).Source)) & Sep & Reply_Text_Pkg.Image_Of (L.Entries (I).Code));
       end loop;
       Ada.Text_IO.Put_Line (Full_Mark & Reply_Text_Pkg.Image_Of (Boolean'Pos (L.Full)) & Sep & Reply_Text_Pkg.Image_Of (L.Count));
       Ada.Text_IO.Put_Line (Sealed_Mark);
@@ -87,33 +86,28 @@ begin
    declare
       Buffer : String (1 .. 256);
       Last   : Natural;
+      Space  : Natural := 0;
    begin
       while not Ada.Text_IO.End_Of_File loop
          Ada.Text_IO.Get_Line (Buffer, Last);
-         declare
-            Space_Index : Natural := 0;
-         begin
-            for I in Buffer'Range loop
-               if Buffer (I) = Sep then
-                  Space_Index := I;
-                  exit;
-               end if;
-            end loop;
-            if Space_Index = 0 then
-               return;
+         for J in Buffer'Range loop
+            if Buffer (J) = Sep then
+               Space := J;
+               exit;
             end if;
-            declare
-               Src_Val : constant Natural := Natural'Value (Buffer (1 .. Space_Index - 1));
-               Code_Val : constant Natural := Natural'Value (Buffer (Space_Index + 1 .. Last));
-               E : Audit_Ledger_Pkg.Event := (Source => Audit_Ledger_Pkg.Activity_Kind'Val (Src_Val), Code => Code_Val);
-               Accepted : Boolean;
-            begin
-               Events.Put (E, Accepted);
-               while not Accepted loop
-                  delay 0.001;
-                  Events.Put (E, Accepted);
-               end loop;
-            end;
+         end loop;
+         declare
+            Src  : constant Natural := Natural'Value (Buffer (1 .. Space - 1));
+            Code : constant Natural := Natural'Value (Buffer (Space + 1 .. Last));
+            Ev   : constant Audit_Ledger_Pkg.Event :=
+              (Source => Audit_Ledger_Pkg.Activity_Kind'Val (Src), Code => Code);
+            Accepted : Boolean := False;
+         begin
+            loop
+               Events.Put (Ev, Accepted);
+               exit when Accepted;
+               delay 0.001;
+            end loop;
          end;
       end loop;
       Events.Close;
