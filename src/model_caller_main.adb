@@ -13,7 +13,7 @@ procedure Model_Caller_Main is
    Length_Header : constant String := "Content-Length: ";
    Close_Header  : constant String := "Connection: close";
    CRLF          : constant String := ASCII.CR & ASCII.LF;
-   Max_Reply     : constant := 16384;
+   Max_Reply     : constant := 65536;
    Timeout_Seconds : constant Duration := 600.0;
 
    H_Buf  : String (1 .. 4096);
