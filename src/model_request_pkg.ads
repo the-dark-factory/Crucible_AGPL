@@ -38,14 +38,11 @@ package Model_Request_Pkg with SPARK_Mode is
    type Fault_Kind is (No_Fault, Model_Unreachable, Model_Timeout, Reply_Over_Bound);
 
    function Reply_Fault (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Fault_Kind is
-     ((if not Reached then Model_Unreachable
-       elsif Timed_Out then Model_Timeout
-       elsif Reply_Length > Max_Reply then Reply_Over_Bound
-       else No_Fault))
+     (if not Reached then Model_Unreachable elsif Timed_Out then Model_Timeout elsif Reply_Length > Max_Reply then Reply_Over_Bound else No_Fault)
    with Global => null;
 
    function Reply_Accepted (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Boolean is
-     ((Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault))
+     (Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault)
    with Global => null,
         Post => Reply_Accepted'Result = (Reached and then not Timed_Out and then Reply_Length <= Max_Reply);
 
