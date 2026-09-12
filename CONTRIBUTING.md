@@ -1,9 +1,10 @@
 # Contributing to CRUCIBLE
 
 CRUCIBLE is dual-licensed: AGPL-3.0-or-later, and a commercial grant held by The Dark Factory
-Ltd over the same tree. Contributions are welcome under the Contributor Licence Agreement, which
-is the Apache Software Foundation's ICLA V2.2 with the Company substituted. It is a licence, not
-an assignment: you keep your copyright.
+Ltd over the same tree. Contributions are welcome under the Contributor Licence Agreement, which is the Harmony
+Contributor License Agreement v1.0, licence variant, Outbound Licence Option Five, governed by
+the laws of England and Wales (the unmodified templates and the fills are in ada-factory,
+`CLA.md` and `cla/`). It is a licence, not an assignment: you keep your copyright.
 
 **Your contribution stays AGPL.** A component you contribute is used in the AGPL edition and is
 not built into the commercial edition. **What we learn from it may inform our other work**,
