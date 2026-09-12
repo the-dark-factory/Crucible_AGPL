@@ -1,0 +1,2 @@
+# github_login	name	date_signed	form	sha256_of_signed_pdf_as_received
+# Maintainers append a row when a signed Harmony CLA (cla/ha-cla-i.pdf or cla/ha-cla-e.pdf) arrives at tony.gair@thedarkfactory.co.uk. The CLA check reads THIS file on the base branch, so a pull request cannot add its own author.
