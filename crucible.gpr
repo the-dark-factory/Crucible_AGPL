@@ -11,7 +11,7 @@ project Crucible is
    for Source_Dirs use ("src", "src/edition-" & Edition);
    for Object_Dir use "obj/" & Edition;  --  per edition: a shared obj let the commercial build reuse the agpl edition object (found 2026-09-12)
    for Exec_Dir use "bin";
-   for Main use ("crucible_main.adb");
+   for Main use ("crucible_main.adb", "model_caller_main.adb");
 
    package Builder is
       for Executable ("crucible_main.adb") use "crucible-" & Edition;
