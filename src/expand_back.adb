@@ -1,11 +1,12 @@
+--  SLOT BEGIN (context)
 with Ada.Text_IO;
 with Json_Scan_Pkg;
 with Mascot_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Judge_Pkg;
 with Provenance_Stamp_Pkg;
-with Reply_Text_Pkg;
 with Door_Responder_Pkg;
+--  SLOT END (context)
 
 procedure Expand_Back is
    Null_Id      : constant String := "null";
@@ -126,7 +127,9 @@ begin
                   SR    : constant Mascot_Scan_Pkg.Scan_Result := Mascot_Scan_Pkg.Scan (Set);
                begin
                   if not SR.Ok then
-                     Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & Reply_Text_Pkg.Image_Of (Mascot_Scan_Pkg.Fault_Kind'Pos (SR.Fault))));
+                     --  SLOT BEGIN (scan-refusal)
+Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & Mascot_Scan_Pkg.Fault_Kind'Image (SR.Fault)));
+                     --  SLOT END (scan-refusal)
                      Ada.Text_IO.Flush;
                      return;
                   end if;
