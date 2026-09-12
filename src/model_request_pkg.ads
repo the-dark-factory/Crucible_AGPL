@@ -1,0 +1,44 @@
+with Reply_Text_Pkg;
+
+package Model_Request_Pkg with SPARK_Mode is
+
+   Max_Model : constant := 64;
+   Max_Prompt : constant := 4096;
+   Max_Reply : constant := 16384;
+
+   Model_Key : constant String := Reply_Text_Pkg.Q ("model") & ":";
+   Prompt_Key : constant String := Reply_Text_Pkg.Q ("prompt") & ":";
+   Stream_Key : constant String := Reply_Text_Pkg.Q ("stream") & ":";
+   Brace_Open : constant String := "{";
+   Brace_Close : constant String := "}";
+   Comma : constant String := ",";
+
+   function Request_Text (Model : String; Prompt : String) return String is
+     (Brace_Open
+      & Model_Key & Reply_Text_Pkg.Q (Model) & Comma
+      & Prompt_Key & Reply_Text_Pkg.Q (Reply_Text_Pkg.Escape_Quotes (Prompt)) & Comma
+      & Stream_Key & Reply_Text_Pkg.Json_Bool (False)
+      & Brace_Close)
+   with Global => null,
+        Pre  => Model'First = 1 and then Model'Length >= 1 and then Model'Length <= Max_Model
+               and then Prompt'First = 1 and then Prompt'Length <= Max_Prompt,
+        Post => Request_Text'Result'Length >= 2
+                and then Request_Text'Result (Request_Text'Result'First) = '{'
+                and then Request_Text'Result (Request_Text'Result'Last) = '}'
+                and then Request_Text'Result'Length <= 2 * Prompt'Length + Model'Length + 64;
+
+   type Fault_Kind is (No_Fault, Model_Unreachable, Model_Timeout, Reply_Over_Bound);
+
+   function Reply_Fault (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Fault_Kind is
+     ((if not Reached then Model_Unreachable
+      elsif Timed_Out then Model_Timeout
+      elsif Reply_Length > Max_Reply then Reply_Over_Bound
+      else No_Fault))
+   with Global => null;
+
+   function Reply_Accepted (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Boolean is
+     ((Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault))
+   with Global => null,
+        Post => Reply_Accepted'Result = (Reached and then not Timed_Out and then Reply_Length <= Max_Reply);
+
+end Model_Request_Pkg;
