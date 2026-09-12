@@ -21,6 +21,7 @@ procedure Expand_Back is
    Joiner       : constant Character := ',';
    Open_Bracket : constant Character := '[';
    Close_Bracket : constant Character := ']';
+   Blank        : constant Character := ' ';
 
    Id_Buf      : String (1 .. 256);
    Fault_Buf   : String (1 .. 256);
@@ -134,9 +135,33 @@ begin
                      Facts : constant Mascot_Judge_Pkg.Fact_Set := Mascot_Measure_Pkg.Measure (SR.Table);
                   begin
                      if not Mascot_Judge_Pkg.Accepted (Facts) then
-                        Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Judge));
-                        Ada.Text_IO.Flush;
-                        return;
+                        declare
+                           Failed     : constant Mascot_Judge_Pkg.Failed_Set := Mascot_Judge_Pkg.Failed (Facts);
+                           Names      : String (1 .. 1024);
+                           Names_Last : Natural := 0;
+                        begin
+                           for N in Mascot_Judge_Pkg.Fact_Name loop
+                              if Failed (N) then
+                                 declare
+                                    Word : constant String := Mascot_Judge_Pkg.Fact_Name'Image (N);
+                                 begin
+                                    if Names_Last < Names'Last then
+                                       Names_Last := Names_Last + 1;
+                                       Names (Names_Last) := Blank;
+                                    end if;
+                                    for K in Word'Range loop
+                                       if Names_Last < Names'Last then
+                                          Names_Last := Names_Last + 1;
+                                          Names (Names_Last) := Word (K);
+                                       end if;
+                                    end loop;
+                                 end;
+                              end if;
+                           end loop;
+                           Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Judge & Names (1 .. Names_Last)));
+                           Ada.Text_IO.Flush;
+                           return;
+                        end;
                      end if;
 
                      declare
