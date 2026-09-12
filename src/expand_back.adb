@@ -9,7 +9,7 @@ with Door_Responder_Pkg;
 
 procedure Expand_Back is
    Null_Id      : constant String := "null";
-   Response_Key : constant String := "response";
+   Response_Key : constant String := "content";
    Think_End    : constant String := "</think>";
    Msg_Model    : constant String := "model reply fault ";
    Msg_Scan     : constant String := "design text refused ";
