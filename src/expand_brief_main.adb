@@ -2,7 +2,6 @@ with Ada.Text_IO;
 with GNAT.OS_Lib;
 with GNAT.Expect;
 with Json_Scan_Pkg;
-with Reply_Text_Pkg;
 with Door_Responder_Pkg;
 
 procedure Expand_Brief_Main is
