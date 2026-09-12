@@ -14,3 +14,7 @@ CLA's sublicense, because a file cannot be half-excluded.
 
 Refusing the CLA refuses the merge, the commercial tier and a register account. It never
 refuses you the AGPL software.
+
+**On GitHub:** the CLA check on every pull request stays red until your login is in
+`cla/SIGNATURES.tsv`; the pull-request template says how to sign. The templates and the fills
+are in `CLA.md` and `cla/` here.
