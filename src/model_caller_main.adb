@@ -7,7 +7,7 @@ with Model_Request_Pkg;
 procedure Model_Caller_Main is
    use type Ada.Streams.Stream_Element_Offset;
 
-   Request_Line  : constant String := "POST /api/generate HTTP/1.0";
+   Request_Line  : constant String := "POST /api/chat HTTP/1.0";
    Host_Header   : constant String := "Host: ";
    Type_Header   : constant String := "Content-Type: application/json";
    Length_Header : constant String := "Content-Length: ";
