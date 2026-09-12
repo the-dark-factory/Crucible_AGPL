@@ -22,12 +22,12 @@ procedure Expand_Back is
    Open_Bracket : constant Character := '[';
    Close_Bracket : constant Character := ']';
 
-   Id_Buf     : String (1 .. 256);
-   Fault_Buf  : String (1 .. 256);
-   Body_Buf   : String (1 .. 65536);
-   Id_Last    : Natural;
-   Fault_Last : Natural;
-   Body_Last  : Natural;
+   Id_Buf      : String (1 .. 256);
+   Fault_Buf   : String (1 .. 256);
+   Body_Buf    : String (1 .. 65536);
+   Id_Last     : Natural;
+   Fault_Last  : Natural;
+   Body_Last   : Natural;
 begin
    Ada.Text_IO.Get_Line (Id_Buf, Id_Last);
    Ada.Text_IO.Get_Line (Fault_Buf, Fault_Last);
@@ -45,7 +45,7 @@ begin
       end if;
 
       declare
-         R : constant Json_Scan_Pkg.Span_Type := Json_Scan_Pkg.Value_Span (Json_Body, Response_Key);
+         R   : constant Json_Scan_Pkg.Span_Type := Json_Scan_Pkg.Value_Span (Json_Body, Response_Key);
       begin
          if not R.found then
             Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & Null_Id));
@@ -56,16 +56,12 @@ begin
          declare
             Raw   : constant String := Json_Body (R.first + 1 .. R.last - 1);
             Start : Natural := Raw'First;
-            K     : Natural := 0;
          begin
-            for J in Raw'Range loop
-               if J + Think_End'Length - 1 <= Raw'Last and then Raw (J .. J + Think_End'Length - 1) = Think_End then
-                  K := J;
+            for K in Raw'Range loop
+               if K + Think_End'Length - 1 <= Raw'Last and then Raw (K .. K + Think_End'Length - 1) = Think_End then
+                  Start := K + Think_End'Length;
                end if;
             end loop;
-            if K > 0 then
-               Start := K + Think_End'Length;
-            end if;
 
             declare
                Set : Mascot_Scan_Pkg.Line_Set;
@@ -119,8 +115,14 @@ begin
                   exit when Set.Count = Mascot_Measure_Pkg.Max_Nodes;
                end loop;
 
+               if Set.Lines (Set.Count + 1).Len > 0
+                 and then Set.Count < Mascot_Measure_Pkg.Max_Nodes
+               then
+                  Set.Count := Set.Count + 1;
+               end if;
+
                declare
-                  SR : constant Mascot_Scan_Pkg.Scan_Result := Mascot_Scan_Pkg.Scan (Set);
+                  SR    : constant Mascot_Scan_Pkg.Scan_Result := Mascot_Scan_Pkg.Scan (Set);
                begin
                   if not SR.Ok then
                      Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & Reply_Text_Pkg.Image_Of (Mascot_Scan_Pkg.Fault_Kind'Pos (SR.Fault))));
@@ -178,6 +180,7 @@ begin
                               Design_Last := Design_Last + 1;
                               Design (Design_Last) := Close_Bracket;
                            end if;
+
                            Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => False, Stamped => True, Design_Text => Design (1 .. Design_Last), Fault_Message => Null_Id));
                            Ada.Text_IO.Flush;
                         end;

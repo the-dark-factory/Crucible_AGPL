@@ -1,4 +1,3 @@
-
 with Ada.Text_IO;
 with Ada.Streams;
 with GNAT.Sockets;
@@ -15,7 +14,7 @@ procedure Model_Caller_Main is
    Close_Header  : constant String := "Connection: close";
    CRLF          : constant String := ASCII.CR & ASCII.LF;
    Max_Reply     : constant := 16384;
-   Timeout_Seconds : constant Duration := 120.0;
+   Timeout_Seconds : constant Duration := 600.0;
 
    H_Buf  : String (1 .. 4096);
    P_Buf  : String (1 .. 4096);
@@ -145,4 +144,3 @@ begin
       Ada.Text_IO.Flush;
    end;
 end Model_Caller_Main;
-
