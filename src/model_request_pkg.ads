@@ -4,7 +4,7 @@ package Model_Request_Pkg with SPARK_Mode is
 
    Max_Model : constant := 64;
    Max_Prompt : constant := 4096;
-   Max_Reply : constant := 16384;
+   Max_Reply : constant := 65536;
 
    Model_Key : constant String := Reply_Text_Pkg.Q ("model") & ":";
    Prompt_Key : constant String := Reply_Text_Pkg.Q ("prompt") & ":";
@@ -31,13 +31,13 @@ package Model_Request_Pkg with SPARK_Mode is
 
    function Reply_Fault (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Fault_Kind is
      ((if not Reached then Model_Unreachable
-      elsif Timed_Out then Model_Timeout
-      elsif Reply_Length > Max_Reply then Reply_Over_Bound
-      else No_Fault))
+       elsif Timed_Out then Model_Timeout
+       elsif Reply_Length > Max_Reply then Reply_Over_Bound
+       else No_Fault))
    with Global => null;
 
    function Reply_Accepted (Reached : Boolean; Timed_Out : Boolean; Reply_Length : Natural) return Boolean is
-     ((Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault))
+     (Reply_Fault (Reached, Timed_Out, Reply_Length) = No_Fault)
    with Global => null,
         Post => Reply_Accepted'Result = (Reached and then not Timed_Out and then Reply_Length <= Max_Reply);
 
