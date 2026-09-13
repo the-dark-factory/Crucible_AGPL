@@ -1,9 +1,8 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Text_Pkg lineage 4 (2026-09-13): lineage 3 verbatim plus the WIRING fragments — a type slot with
---  its Initial constant, wire and store instances over the proved Jorvik wrappers, library-level wire and store
---  objects, a leaf with its ports as parameters, and a stage package with one task per activity plus a trivial
---  main (Jorvik: No_Task_Hierarchy). Unit 3 of BRIEF_jorvik_channel_wiring_2026-09-13. Lane
---  wu-crucible-mascot-emit-text-4 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved.
+--  Mascot_Emit_Text_Pkg lineage 5 (2026-09-13): lineage 4 verbatim plus the UNIT-NAME and FILE-NAME fragments the
+--  writer's MASCOT r2 names in its section F — Wire_Unit_Name, Store_Unit_Name, Types_Unit_Name, Stage_Unit_Name,
+--  Main_Unit_Name, Body_File, Actual_Separator — and two constants (Types_Suffix, Adb_Suffix). Exact-length Posts
+--  only. Lane wu-crucible-mascot-emit-text-5 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved.
 --  Body (Stem_Of) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-A spec.
 with Mascot_Emit_Pkg;
 with Pool_Pkg;
@@ -340,5 +339,49 @@ package Mascot_Emit_Text_Pkg with SPARK_Mode is
                 and then Name'First = 1 and then Name'Length >= 1 and then Name'Length <= 256,
         Post => Path_Join'Result'First = 1
                 and then Path_Join'Result'Length = Dir'Length + Slash'Length + Name'Length;
+
+   Types_Suffix : constant String := "_Types";
+   Adb_Suffix   : constant String := ".adb";
+
+   function Wire_Unit_Name (Name : String) return String
+   is (Name & Wire_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Wire_Unit_Name'Result'First = 1 and then Wire_Unit_Name'Result'Length = Name'Length + Wire_Suffix'Length;
+
+   function Store_Unit_Name (Name : String) return String
+   is (Name & Store_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Store_Unit_Name'Result'First = 1 and then Store_Unit_Name'Result'Length = Name'Length + Store_Suffix'Length;
+
+   function Types_Unit_Name (System : String) return String
+   is (System & Types_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Types_Unit_Name'Result'First = 1 and then Types_Unit_Name'Result'Length = System'Length + Types_Suffix'Length;
+
+   function Stage_Unit_Name (System : String) return String
+   is (System & Stage_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Stage_Unit_Name'Result'First = 1 and then Stage_Unit_Name'Result'Length = System'Length + Stage_Suffix'Length;
+
+   function Main_Unit_Name (System : String) return String
+   is (System & Main_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Main_Unit_Name'Result'First = 1 and then Main_Unit_Name'Result'Length = System'Length + Main_Suffix'Length;
+
+   function Body_File (Name : String) return String
+   is (Stem_Of (Name) & Adb_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Body_File'Result'First = 1 and then Body_File'Result'Length = Name'Length + Adb_Suffix'Length;
+
+   function Actual_Separator return String
+   is (Comma_Space)
+   with Global => null,
+        Post => Actual_Separator'Result'First = 1 and then Actual_Separator'Result'Length = Comma_Space'Length;
 
 end Mascot_Emit_Text_Pkg;
