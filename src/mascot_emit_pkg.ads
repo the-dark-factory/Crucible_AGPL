@@ -1,10 +1,12 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Pkg lineage 2 (2026-09-13): lineage 1 verbatim with three expressions redirected to the
---  scanner's list facts — Declared = Every_Word_Declared, Plumbing = Every_Word_Plumbing, Withs = Refers
---  over reads/writes/reports/accessed — so an activity may name several channels or pools per key.
---  Lane wu-crucible-mascot-emit-2 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved,
---  131 GPU s. Body (Ada_Name) carried unchanged from lineage 1. Never hand-edited. Comment-stripped sha
---  equals the round-A spec.
+--  Mascot_Emit_Pkg lineage 3 (2026-09-13): lineage 2 verbatim plus two postconditions the writer's accepted
+--  MASCOT named as a gap — Faulty_Line's zero direction (result 0 iff every line up to Upto is No_Fault) and
+--  Line_Fault's guard Post (No_Fault implies Id_Nameable; Element_Ok for a channel or pool line; Buffer_Ok for
+--  a channel line) — and Emit_Ok's Post (Emit_Ok iff every line is No_Fault). A quantified restatement of
+--  the guards in Emit_Ok did not prove (rounds A, B; level 4 and a local check): edges take the guards at
+--  their call sites through Line_Fault's Post. Lane wu-crucible-mascot-emit-3 round C, planner
+--  qwen3.8-27b-ada:v0.3, accepted 0 unproved, 135 GPU s; body (Ada_Name) carried unchanged. Never hand-edited.
+--  Comment-stripped sha equals the round-C spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Scan_Pkg;
@@ -132,7 +134,14 @@ package Mascot_Emit_Pkg with SPARK_Mode is
    function Line_Fault (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Fault_Kind
    is ((if not Id_Nameable (S, I) then Id_Not_Nameable elsif (Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) or else Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Pool)) and then not Element_Ok (S, I) then Element_Not_Identifier elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) and then not Buffer_Ok (S, I) then Buffer_Not_Positive elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not (Declared (S, I, Mascot_Scan_Pkg.Key_Reads) and then Declared (S, I, Mascot_Scan_Pkg.Key_Writes) and then Declared (S, I, Mascot_Scan_Pkg.Key_Reports) and then Declared (S, I, Mascot_Scan_Pkg.Key_Accessed)) then Reference_Undeclared elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not (Plumbing (S, I, Mascot_Scan_Pkg.Key_Reads) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Writes) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Reports) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Accessed)) then Reference_Not_Plumbing else No_Fault))
    with Global => null,
-        Pre    => I <= S.Count;
+        Pre    => I <= S.Count,
+        Post   => (if Line_Fault'Result = No_Fault then
+                     Id_Nameable (S, I)
+                     and then (if Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel)
+                                  or else Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Pool)
+                               then Element_Ok (S, I))
+                     and then (if Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel)
+                               then Buffer_Ok (S, I)));
 
    function Faulty_Line (S : Mascot_Scan_Pkg.Line_Set; Upto : Mascot_Measure_Pkg.Node_Count) return Mascot_Measure_Pkg.Node_Ref
    is ((if Upto = 0 then 0 elsif Line_Fault (S, Upto) /= No_Fault then Upto else Faulty_Line (S, Upto - 1)))
@@ -140,11 +149,13 @@ package Mascot_Emit_Pkg with SPARK_Mode is
         Pre    => Upto <= S.Count,
         Subprogram_Variant => (Decreases => Upto),
         Post   => Faulty_Line'Result <= Upto
-                 and then (if Faulty_Line'Result /= 0 then Line_Fault (S, Faulty_Line'Result) /= No_Fault);
+                 and then (if Faulty_Line'Result /= 0 then Line_Fault (S, Faulty_Line'Result) /= No_Fault)
+                 and then (if Faulty_Line'Result = 0 then (for all I in 1 .. Upto => Line_Fault (S, I) = No_Fault));
 
    function Emit_Ok (S : Mascot_Scan_Pkg.Line_Set) return Boolean
    is (Faulty_Line (S, S.Count) = 0)
-   with Global => null;
+   with Global => null,
+        Post   => Emit_Ok'Result = (for all I in 1 .. S.Count => Line_Fault (S, I) = No_Fault);
 
    function Fault_Of (S : Mascot_Scan_Pkg.Line_Set) return Fault_Kind
    is ((if Faulty_Line (S, S.Count) = 0 then No_Fault else Line_Fault (S, Faulty_Line (S, S.Count))))
