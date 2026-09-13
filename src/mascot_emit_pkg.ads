@@ -1,12 +1,9 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Pkg lineage 3 (2026-09-13): lineage 2 verbatim plus two postconditions the writer's accepted
---  MASCOT named as a gap — Faulty_Line's zero direction (result 0 iff every line up to Upto is No_Fault) and
---  Line_Fault's guard Post (No_Fault implies Id_Nameable; Element_Ok for a channel or pool line; Buffer_Ok for
---  a channel line) — and Emit_Ok's Post (Emit_Ok iff every line is No_Fault). A quantified restatement of
---  the guards in Emit_Ok did not prove (rounds A, B; level 4 and a local check): edges take the guards at
---  their call sites through Line_Fault's Post. Lane wu-crucible-mascot-emit-3 round C, planner
---  qwen3.8-27b-ada:v0.3, accepted 0 unproved, 135 GPU s; body (Ada_Name) carried unchanged. Never hand-edited.
---  Comment-stripped sha equals the round-C spec.
+--  Mascot_Emit_Pkg lineage 4 (2026-09-13): lineage 3 verbatim plus the discharge facts — Max_Discharge (1000),
+--  Has_Discharge and Discharge_Of over the scanner's Key_Discharge with the line's bound, so a leaf template
+--  carries its discharge SENTENCE (the identifier-bounded Has_Text read every sentence as absent). Lane
+--  wu-crucible-mascot-emit-4 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved, 151 GPU s;
+--  body (Ada_Name) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-A spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Scan_Pkg;
@@ -75,6 +72,18 @@ package Mascot_Emit_Pkg with SPARK_Mode is
    is (Has_Text (L, Key) and then Json_Scan_Pkg.Equals_Literal (L.Text (1 .. L.Len), Json_Scan_Pkg.String_Contents (L.Text (1 .. L.Len), Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Key)), Lit))
    with Global => null,
         Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then Lit'First = 1 and then Lit'Length >= 1 and then Lit'Length <= 64;
+
+   Max_Discharge : constant Natural := 1000;
+
+   function Has_Discharge (L : Mascot_Scan_Pkg.Line_Rec) return Boolean
+   is (Mascot_Scan_Pkg.Present (L, Mascot_Scan_Pkg.Key_Discharge) and then Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Mascot_Scan_Pkg.Key_Discharge).kind = Json_Scan_Pkg.K_String and then Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Mascot_Scan_Pkg.Key_Discharge).last - Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Mascot_Scan_Pkg.Key_Discharge).first >= 2 and then Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Mascot_Scan_Pkg.Key_Discharge).last - Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Mascot_Scan_Pkg.Key_Discharge).first <= Max_Discharge + 1)
+   with Global => null;
+
+   function Discharge_Of (L : Mascot_Scan_Pkg.Line_Rec) return String
+   is (Mascot_Scan_Pkg.Slice_Of (L, Json_Scan_Pkg.String_Contents (L.Text (1 .. L.Len), Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Mascot_Scan_Pkg.Key_Discharge))))
+   with Global => null,
+        Pre  => Has_Discharge (L),
+        Post => Discharge_Of'Result'First = 1 and then Discharge_Of'Result'Length >= 1 and then Discharge_Of'Result'Length <= Max_Discharge;
 
    function Id_Nameable (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Boolean
    is (Has_Text (S.Lines (I), Mascot_Scan_Pkg.Key_Id) and then Nameable (Text_Of (S.Lines (I), Mascot_Scan_Pkg.Key_Id)))
