@@ -1,10 +1,10 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Pkg lineage 5 (2026-09-13): lineage 4 verbatim plus the DISCHARGE under Emit_Ok — Fault_Kind gains
---  Discharge_Missing, Line_Fault refuses an activity line without a discharge string, and Line_Fault's Post carries the
---  activity guards (Declared, Plumbing, Has_Discharge), so Emit_Ok is the one guard under which every per-line call of
---  the writer is legal (the writer's MASCOT r2, section F.1). Lane wu-crucible-mascot-emit-5 round A, planner
---  qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved. Body (Ada_Name) carried unchanged. Never hand-edited.
---  Comment-stripped sha equals the round-A spec.
+--  Mascot_Emit_Pkg lineage 6 (2026-09-13): lineage 5 verbatim plus the PRODUCER COUNT — Words_From (a recursive count
+--  of the scanner's Word_Starts inside a span) and Producer_Count (1 for a producer key, the number of words for a
+--  producers key, else 0), because a counted-close place needs the NUMBER of its producers and the scanner's
+--  One_Or_Many is a classification. Found by the first run of the writer's stage. Lane wu-crucible-mascot-emit-6
+--  round B (round A lacked the K_String conjunct String_Contents requires), planner qwen3.8-27b-ada:v0.3, accepted,
+--  0 unproved. Body (Ada_Name) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-B spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Scan_Pkg;
@@ -136,6 +136,27 @@ package Mascot_Emit_Pkg with SPARK_Mode is
 
    function First_Of_Its_Element (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Boolean
    is (Has_Text (S.Lines (I), Mascot_Scan_Pkg.Key_Element) and then (for all J in 1 .. I - 1 => not Same_Element (S, I, J)))
+   with Global => null,
+        Pre    => I <= S.Count;
+
+   function Words_From (L : Mascot_Scan_Pkg.Line_Rec; V : Json_Scan_Pkg.Span_Type; P : Positive) return Natural
+   is ((if Mascot_Scan_Pkg.Word_Starts (L, V, P) then 1 else 0)
+    + (if P < V.last then Words_From (L, V, P + 1) else 0))
+   with Global => null,
+        Pre    => V.first >= 1 and then V.last <= L.Len and then V.first <= V.last
+                  and then P >= V.first and then P <= V.last,
+        Subprogram_Variant => (Decreases => V.last - P),
+        Post   => Words_From'Result <= V.last - P + 1;
+
+   function Producer_Count (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Natural
+   is ((if Mascot_Scan_Pkg.Present (S.Lines (I), Mascot_Scan_Pkg.Key_Producer) then 1
+     elsif Mascot_Scan_Pkg.Present (S.Lines (I), Mascot_Scan_Pkg.Key_Producers)
+       and then Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers).kind = Json_Scan_Pkg.K_String
+       and then Json_Scan_Pkg.String_Contents (S.Lines (I).Text (1 .. S.Lines (I).Len), Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers)).first >= 1
+       and then Json_Scan_Pkg.String_Contents (S.Lines (I).Text (1 .. S.Lines (I).Len), Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers)).last <= S.Lines (I).Len
+       and then Json_Scan_Pkg.String_Contents (S.Lines (I).Text (1 .. S.Lines (I).Len), Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers)).first <= Json_Scan_Pkg.String_Contents (S.Lines (I).Text (1 .. S.Lines (I).Len), Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers)).last
+     then Words_From (S.Lines (I), Json_Scan_Pkg.String_Contents (S.Lines (I).Text (1 .. S.Lines (I).Len), Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers)), Json_Scan_Pkg.String_Contents (S.Lines (I).Text (1 .. S.Lines (I).Len), Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Mascot_Scan_Pkg.Key_Producers)).first)
+     else 0))
    with Global => null,
         Pre    => I <= S.Count;
 
