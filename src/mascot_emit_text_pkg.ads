@@ -1,9 +1,9 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Text_Pkg lineage 2 (2026-09-13): lineage 1 verbatim plus the file-name facts the writer's
---  accepted MASCOT named as a gap on this core — Lower, Stem_Of (body-filled, character-wise Post), Unit_File,
---  Types_File, Path_Join and the five file-name literals. Lane wu-crucible-mascot-emit-text-2 round A,
---  planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved, 132 GPU s. Never hand-edited.
---  Comment-stripped sha equals the round-A spec.
+--  Mascot_Emit_Text_Pkg lineage 3 (2026-09-13): lineage 2 verbatim plus Context_Name and Context_Slot — the
+--  marker pair a later fill puts with-clauses inside, at the head of the types package and of each activity
+--  template, so a type fill can name a carried type and a body fill can with a core it calls. Lane
+--  wu-crucible-mascot-emit-text-3 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved.
+--  Body (Stem_Of) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-A spec.
 with Mascot_Emit_Pkg;
 with Pool_Pkg;
 
@@ -148,6 +148,14 @@ package Mascot_Emit_Text_Pkg with SPARK_Mode is
         Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Stem) and then Digest'First = 1 and then Digest'Length = 64,
         Post => Carried_Row'Result'First = 1
                 and then Carried_Row'Result'Length = Stem'Length + Ads_Suffix'Length + 1 + Digest'Length + 1 + Emitted_Word'Length + 1;
+
+   Context_Name : constant String := "context";
+
+   function Context_Slot return String
+   is (Slot_Begin (Context_Name) & Slot_End (Context_Name))
+   with Global => null,
+        Post => Context_Slot'Result'First = 1
+                and then Context_Slot'Result'Length = Indent'Length + Marker_Prefix'Length + Begin_Word'Length + Context_Name'Length + Close_Paren'Length + 1 + Indent'Length + Marker_Prefix'Length + End_Marker_Word'Length + Context_Name'Length + Close_Paren'Length + 1;
 
    Slash               : constant String := "/";
    Types_File_Suffix   : constant String := "_types.ads";
