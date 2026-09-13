@@ -1,9 +1,9 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Text_Pkg lineage 5 (2026-09-13): lineage 4 verbatim plus the UNIT-NAME and FILE-NAME fragments the
---  writer's MASCOT r2 names in its section F — Wire_Unit_Name, Store_Unit_Name, Types_Unit_Name, Stage_Unit_Name,
---  Main_Unit_Name, Body_File, Actual_Separator — and two constants (Types_Suffix, Adb_Suffix). Exact-length Posts
---  only. Lane wu-crucible-mascot-emit-text-5 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved.
---  Body (Stem_Of) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-A spec.
+--  Mascot_Emit_Text_Pkg lineage 6 (2026-09-13): lineage 5 verbatim plus Wire_Place (Name, Buffer, Producers) — the
+--  library-level wire object with its capacity AND its producer count, for Channel_Wiring_Pkg lineage 2's counted
+--  close (writer MASCOT r3 F.1). No new literal; Wire_Object kept. Lane wu-crucible-mascot-emit-text-6 round B
+--  (round A dropped the first with-clause), planner qwen3.8-27b-ada:v0.3, accepted, 0 unproved. Body (Stem_Of)
+--  carried unchanged. Never hand-edited. Comment-stripped sha equals the round-B spec.
 with Mascot_Emit_Pkg;
 with Pool_Pkg;
 
@@ -383,5 +383,12 @@ package Mascot_Emit_Text_Pkg with SPARK_Mode is
    is (Comma_Space)
    with Global => null,
         Post => Actual_Separator'Result'First = 1 and then Actual_Separator'Result'Length = Comma_Space'Length;
+
+   function Wire_Place (Name, Buffer, Producers : String) return String
+   is (Indent & Name & Port_Suffix & Colon & Name & Wire_Suffix & Dot & Wire_Type & Open_Paren & Buffer & Comma_Space & Producers & Close_Paren & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name) and then Mascot_Emit_Pkg.Positive_Digits (Buffer) and then Mascot_Emit_Pkg.Positive_Digits (Producers),
+        Post => Wire_Place'Result'First = 1
+                and then Wire_Place'Result'Length = Indent'Length + Name'Length + Port_Suffix'Length + Colon'Length + Name'Length + Wire_Suffix'Length + Dot'Length + Wire_Type'Length + Open_Paren'Length + Buffer'Length + Comma_Space'Length + Producers'Length + Close_Paren'Length + Semicolon'Length + 1;
 
 end Mascot_Emit_Text_Pkg;
