@@ -1,3 +1,12 @@
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  Mascot_Scan_Pkg lineage 5 (2026-09-13): lineage 4 round C verbatim plus nine LIST facts — a value
+--  under reads/writes/reports/accessed/producers/consumers may name several ids separated by single
+--  spaces; Refers (one line's id is a word of another's value), Every_Word_Declared, Every_Word_Plumbing
+--  over Word_At / Word_Starts / Ref_Span / Id_Text_Of / Id_Well_Formed. Find_Ref and every earlier fact
+--  unchanged, so the judge's acceptance of the expansion-stage MASCOT r2 stands. Lane
+--  wu-crucible-mascot-scan-5 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved,
+--  195 GPU s. Body (Slice_Of, Scan) carried unchanged. Never hand-edited. Comment-stripped sha equals
+--  the round-A spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 
@@ -87,6 +96,53 @@ package Mascot_Scan_Pkg with SPARK_Mode is
    is (Json_Scan_Pkg.Equals_Literal (B.Text (1 .. B.Len), Json_Scan_Pkg.String_Contents (B.Text (1 .. B.Len), Json_Scan_Pkg.Value_Span (B.Text (1 .. B.Len), Key)), Slice_Of (A, SA)))
    with Global => null,
         Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then Present (B, Key) and then Json_Scan_Pkg.Value_Span (B.Text (1 .. B.Len), Key).kind = Json_Scan_Pkg.K_String and then Json_Scan_Pkg.Value_Span (B.Text (1 .. B.Len), Key).first < Json_Scan_Pkg.Value_Span (B.Text (1 .. B.Len), Key).last and then SA.Found and then SA.First in 1 .. A.Len and then SA.Last in 1 .. A.Len and then SA.First <= SA.Last and then SA.Last - SA.First + 1 <= 64;
+
+   function Id_Well_Formed (L : Line_Rec) return Boolean
+   is ((Id_Span (L).Found and then Id_Span (L).First in 1 .. L.Len and then Id_Span (L).Last in 1 .. L.Len and then Id_Span (L).First <= Id_Span (L).Last and then Id_Span (L).Kind = Json_Scan_Pkg.K_String and then Id_Span (L).Last - Id_Span (L).First + 1 >= 3 and then Id_Span (L).Last - Id_Span (L).First + 1 <= 64))
+   with Global => null,
+        Pre    => Present (L, Key_Id);
+
+   function Id_Text_Of (L : Line_Rec) return String
+   is ((Slice_Of (L, Json_Scan_Pkg.String_Contents (L.Text (1 .. L.Len), Id_Span (L)))))
+   with Global => null,
+        Pre    => Present (L, Key_Id) and then Id_Well_Formed (L),
+        Post   => Id_Text_Of'Result'First = 1 and then Id_Text_Of'Result'Length >= 1 and then Id_Text_Of'Result'Length <= 62;
+
+   function Has_Ref_Text (L : Line_Rec; Key : String) return Boolean
+   is ((Present (L, Key) and then Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Key).kind = Json_Scan_Pkg.K_String and then Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Key).last - Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Key).first >= 2))
+   with Global => null,
+        Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64;
+
+   function Ref_Span (L : Line_Rec; Key : String) return Json_Scan_Pkg.Span_Type
+   is ((Json_Scan_Pkg.String_Contents (L.Text (1 .. L.Len), Json_Scan_Pkg.Value_Span (L.Text (1 .. L.Len), Key))))
+   with Global => null,
+        Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then Has_Ref_Text (L, Key),
+        Post   => Ref_Span'Result.first >= 1 and then Ref_Span'Result.last <= L.Len and then Ref_Span'Result.first <= Ref_Span'Result.last;
+
+   function Word_At (L : Line_Rec; V : Json_Scan_Pkg.Span_Type; P : Positive; Id : String) return Boolean
+   is ((P + Id'Length - 1 <= V.last and then (P = V.first or else L.Text (P - 1) = ' ') and then (P + Id'Length - 1 = V.last or else L.Text (P + Id'Length) = ' ') and then Json_Scan_Pkg.Equals_Literal (L.Text (1 .. L.Len), (found => True, kind => Json_Scan_Pkg.K_String, first => P, last => P + Id'Length - 1), Id)))
+   with Global => null,
+        Pre    => V.first >= 1 and then V.last <= L.Len and then V.first <= V.last and then P >= V.first and then P <= V.last and then Id'First = 1 and then Id'Length >= 1 and then Id'Length <= 64;
+
+   function Word_Starts (L : Line_Rec; V : Json_Scan_Pkg.Span_Type; P : Positive) return Boolean
+   is ((L.Text (P) /= ' ' and then (P = V.first or else L.Text (P - 1) = ' ')))
+   with Global => null,
+        Pre    => V.first >= 1 and then V.last <= L.Len and then V.first <= V.last and then P >= V.first and then P <= V.last;
+
+   function Refers (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String; J : Mascot_Measure_Pkg.Node_Index) return Boolean
+   is ((Has_Ref_Text (S.Lines (I), Key) and then Present (S.Lines (J), Key_Id) and then Id_Well_Formed (S.Lines (J)) and then (for some P in Ref_Span (S.Lines (I), Key).first .. Ref_Span (S.Lines (I), Key).last => Word_At (S.Lines (I), Ref_Span (S.Lines (I), Key), P, Id_Text_Of (S.Lines (J))))))
+   with Global => null,
+        Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then I <= S.Count and then J <= S.Count;
+
+   function Every_Word_Declared (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
+   is ((not Present (S.Lines (I), Key) or else (Has_Ref_Text (S.Lines (I), Key) and then (for all P in Ref_Span (S.Lines (I), Key).first .. Ref_Span (S.Lines (I), Key).last => (if Word_Starts (S.Lines (I), Ref_Span (S.Lines (I), Key), P) then (for some J in 1 .. S.Count => Present (S.Lines (J), Key_Id) and then Id_Well_Formed (S.Lines (J)) and then Word_At (S.Lines (I), Ref_Span (S.Lines (I), Key), P, Id_Text_Of (S.Lines (J)))))))))
+   with Global => null,
+        Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then I <= S.Count;
+
+   function Every_Word_Plumbing (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
+   is ((not Present (S.Lines (I), Key) or else (Has_Ref_Text (S.Lines (I), Key) and then (for all P in Ref_Span (S.Lines (I), Key).first .. Ref_Span (S.Lines (I), Key).last => (if Word_Starts (S.Lines (I), Ref_Span (S.Lines (I), Key), P) then (for some J in 1 .. S.Count => Present (S.Lines (J), Key_Id) and then Id_Well_Formed (S.Lines (J)) and then Word_At (S.Lines (I), Ref_Span (S.Lines (I), Key), P, Id_Text_Of (S.Lines (J))) and then (Kind_Is (S.Lines (J), Lit_Channel) or else Kind_Is (S.Lines (J), Lit_Pool))))))))
+   with Global => null,
+        Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then I <= S.Count;
 
    function Find_Ref (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String; Upto : Mascot_Measure_Pkg.Node_Count) return Mascot_Measure_Pkg.Node_Ref
    is ((if Upto = 0 then 0 elsif Present (S.Lines (Upto), Key_Id) and then Present (S.Lines (I), Key) and then Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Key).kind = Json_Scan_Pkg.K_String and then Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Key).first < Json_Scan_Pkg.Value_Span (S.Lines (I).Text (1 .. S.Lines (I).Len), Key).last and then Id_Span (S.Lines (Upto)).Found and then Id_Span (S.Lines (Upto)).First in 1 .. S.Lines (Upto).Len and then Id_Span (S.Lines (Upto)).Last in 1 .. S.Lines (Upto).Len and then Id_Span (S.Lines (Upto)).First <= Id_Span (S.Lines (Upto)).Last and then Id_Span (S.Lines (Upto)).Kind = Json_Scan_Pkg.K_String and then Id_Span (S.Lines (Upto)).Last - Id_Span (S.Lines (Upto)).First + 1 >= 3 and then Id_Span (S.Lines (Upto)).Last - Id_Span (S.Lines (Upto)).First + 1 <= 64 and then Same_Id (S.Lines (Upto), S.Lines (I), Json_Scan_Pkg.String_Contents (S.Lines (Upto).Text (1 .. S.Lines (Upto).Len), Id_Span (S.Lines (Upto))), Key) then Upto else Find_Ref (S, I, Key, Upto - 1)))
