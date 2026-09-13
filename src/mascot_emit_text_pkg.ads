@@ -1,8 +1,9 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Text_Pkg lineage 3 (2026-09-13): lineage 2 verbatim plus Context_Name and Context_Slot — the
---  marker pair a later fill puts with-clauses inside, at the head of the types package and of each activity
---  template, so a type fill can name a carried type and a body fill can with a core it calls. Lane
---  wu-crucible-mascot-emit-text-3 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved.
+--  Mascot_Emit_Text_Pkg lineage 4 (2026-09-13): lineage 3 verbatim plus the WIRING fragments — a type slot with
+--  its Initial constant, wire and store instances over the proved Jorvik wrappers, library-level wire and store
+--  objects, a leaf with its ports as parameters, and a stage package with one task per activity plus a trivial
+--  main (Jorvik: No_Task_Hierarchy). Unit 3 of BRIEF_jorvik_channel_wiring_2026-09-13. Lane
+--  wu-crucible-mascot-emit-text-4 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved.
 --  Body (Stem_Of) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-A spec.
 with Mascot_Emit_Pkg;
 with Pool_Pkg;
@@ -156,6 +157,150 @@ package Mascot_Emit_Text_Pkg with SPARK_Mode is
    with Global => null,
         Post => Context_Slot'Result'First = 1
                 and then Context_Slot'Result'Length = Indent'Length + Marker_Prefix'Length + Begin_Word'Length + Context_Name'Length + Close_Paren'Length + 1 + Indent'Length + Marker_Prefix'Length + End_Marker_Word'Length + Context_Name'Length + Close_Paren'Length + 1;
+
+   Initial_Prefix          : constant String := "Initial_";
+   Colon_Constant          : constant String := " : constant ";
+   Null_Aggregate          : constant String := " := (null record);";
+   Wiring_Pkg_Name         : constant String := "Channel_Wiring_Pkg";
+   Pool_Wiring_Pkg_Name    : constant String := "Pool_Wiring_Pkg";
+   Wire_Suffix             : constant String := "_Wire";
+   Store_Suffix            : constant String := "_Store";
+   Wiring_Gen_Q            : constant String := ".Wiring (Q => ";
+   Wiring_Gen_P            : constant String := ".Wiring (P => ";
+   Initial_Key             : constant String := ", Initial => ";
+   Port_Suffix             : constant String := "_Port";
+   Colon                   : constant String := " : ";
+   In_Out                  : constant String := "in out ";
+   Wire_Type               : constant String := "Wire";
+   Store_Type              : constant String := "Store";
+   Open_Paren              : constant String := "(";
+   Comma_Space             : constant String := ", ";
+   Task_Word               : constant String := "task ";
+   Task_Body_Words         : constant String := "task body ";
+   Task_Suffix             : constant String := "_Task";
+   Stage_Suffix            : constant String := "_Stage";
+   Main_Suffix             : constant String := "_Main";
+   Elaborate_Body          : constant String := " with Elaborate_Body is";
+   Package_Body_Words      : constant String := "package body ";
+   Null_Word               : constant String := "null;";
+
+   function Type_Slot_With_Initial (Element : String) return String
+   is (Slot_Begin (Type_Prefix & Element) & Indent & Type_Word & Element & Null_Record & LF & Indent & Initial_Prefix & Element & Colon_Constant & Element & Null_Aggregate & LF & Slot_End (Type_Prefix & Element))
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Element),
+        Post => Type_Slot_With_Initial'Result'First = 1
+                and then Type_Slot_With_Initial'Result'Length = Indent'Length + Marker_Prefix'Length + Begin_Word'Length + Type_Prefix'Length + Element'Length + Close_Paren'Length + 1 + Indent'Length + Type_Word'Length + Element'Length + Null_Record'Length + 1 + Indent'Length + Initial_Prefix'Length + Element'Length + Colon_Constant'Length + Element'Length + Null_Aggregate'Length + 1 + Indent'Length + Marker_Prefix'Length + End_Marker_Word'Length + Type_Prefix'Length + Element'Length + Close_Paren'Length + 1;
+
+   function Wire_Instance (Name, Types, Element : String) return String
+   is (With_Word & Wiring_Pkg_Name & Semicolon & LF & With_Word & Name & Semicolon & LF & With_Word & Types & Semicolon & LF & Package_Word & Name & Wire_Suffix & Is_New & Wiring_Pkg_Name & Wiring_Gen_Q & Name & Initial_Key & Types & Dot & Initial_Prefix & Element & Close_Inst & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name) and then Mascot_Emit_Pkg.Is_Ada_Identifier (Types) and then Mascot_Emit_Pkg.Is_Ada_Identifier (Element),
+        Post => Wire_Instance'Result'First = 1
+                and then Wire_Instance'Result'Length = With_Word'Length + Wiring_Pkg_Name'Length + Semicolon'Length + 1 + With_Word'Length + Name'Length + Semicolon'Length + 1 + With_Word'Length + Types'Length + Semicolon'Length + 1 + Package_Word'Length + Name'Length + Wire_Suffix'Length + Is_New'Length + Wiring_Pkg_Name'Length + Wiring_Gen_Q'Length + Name'Length + Initial_Key'Length + Types'Length + Dot'Length + Initial_Prefix'Length + Element'Length + Close_Inst'Length + 1;
+
+   function Store_Instance (Name, Types, Element : String) return String
+   is (With_Word & Pool_Wiring_Pkg_Name & Semicolon & LF & With_Word & Name & Semicolon & LF & With_Word & Types & Semicolon & LF & Package_Word & Name & Store_Suffix & Is_New & Pool_Wiring_Pkg_Name & Wiring_Gen_P & Name & Initial_Key & Types & Dot & Initial_Prefix & Element & Close_Inst & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name) and then Mascot_Emit_Pkg.Is_Ada_Identifier (Types) and then Mascot_Emit_Pkg.Is_Ada_Identifier (Element),
+        Post => Store_Instance'Result'First = 1
+                and then Store_Instance'Result'Length = With_Word'Length + Pool_Wiring_Pkg_Name'Length + Semicolon'Length + 1 + With_Word'Length + Name'Length + Semicolon'Length + 1 + With_Word'Length + Types'Length + Semicolon'Length + 1 + Package_Word'Length + Name'Length + Store_Suffix'Length + Is_New'Length + Pool_Wiring_Pkg_Name'Length + Wiring_Gen_P'Length + Name'Length + Initial_Key'Length + Types'Length + Dot'Length + Initial_Prefix'Length + Element'Length + Close_Inst'Length + 1;
+
+   function Wire_Object (Name, Buffer : String) return String
+   is (Indent & Name & Port_Suffix & Colon & Name & Wire_Suffix & Dot & Wire_Type & Open_Paren & Buffer & Close_Paren & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name) and then Mascot_Emit_Pkg.Positive_Digits (Buffer),
+        Post => Wire_Object'Result'First = 1
+                and then Wire_Object'Result'Length = Indent'Length + Name'Length + Port_Suffix'Length + Colon'Length + Name'Length + Wire_Suffix'Length + Dot'Length + Wire_Type'Length + Open_Paren'Length + Buffer'Length + Close_Paren'Length + Semicolon'Length + 1;
+
+   function Store_Object (Name : String) return String
+   is (Indent & Name & Port_Suffix & Colon & Name & Store_Suffix & Dot & Store_Type & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Store_Object'Result'First = 1
+                and then Store_Object'Result'Length = Indent'Length + Name'Length + Port_Suffix'Length + Colon'Length + Name'Length + Store_Suffix'Length + Dot'Length + Store_Type'Length + Semicolon'Length + 1;
+
+   function Leaf_Open (Name : String) return String
+   is (LF & Procedure_Word & Name & LF & Indent & Open_Paren)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Leaf_Open'Result'First = 1
+                and then Leaf_Open'Result'Length = 1 + Procedure_Word'Length + Name'Length + 1 + Indent'Length + Open_Paren'Length;
+
+   function Port_Parameter (Name : String; Is_Pool : Boolean) return String
+   is (Name & Port_Suffix & Colon & In_Out & Name & (if Is_Pool then Store_Suffix & Dot & Store_Type else Wire_Suffix & Dot & Wire_Type))
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Port_Parameter'Result'First = 1
+                and then Port_Parameter'Result'Length = Name'Length + Port_Suffix'Length + Colon'Length + In_Out'Length + Name'Length + (if Is_Pool then Store_Suffix'Length + Dot'Length + Store_Type'Length else Wire_Suffix'Length + Dot'Length + Wire_Type'Length);
+
+   function Parameter_Separator return String
+   is (Semicolon & LF & Indent & Indent)
+   with Global => null,
+        Post => Parameter_Separator'Result'First = 1
+                and then Parameter_Separator'Result'Length = Semicolon'Length + 1 + Indent'Length + Indent'Length;
+
+   function Leaf_Close (Discharge : String) return String
+   is (Close_Paren & Is_Word & LF & Discharge_Comment & Discharge & LF & Begin_Line & LF & Slot_Begin (Body_Name) & Null_Stmt & LF & Slot_End (Body_Name))
+   with Global => null,
+        Pre  => Discharge'First = 1 and then Discharge'Length <= 1024,
+        Post => Leaf_Close'Result'First = 1
+                and then Leaf_Close'Result'Length = Close_Paren'Length + Is_Word'Length + 1 + Discharge_Comment'Length + Discharge'Length + 1 + Begin_Line'Length + 1 + Indent'Length + Marker_Prefix'Length + Begin_Word'Length + Body_Name'Length + Close_Paren'Length + 1 + Null_Stmt'Length + 1 + Indent'Length + Marker_Prefix'Length + End_Marker_Word'Length + Body_Name'Length + Close_Paren'Length + 1;
+
+   function Stage_Spec (System : String) return String
+   is (Package_Word & System & Stage_Suffix & Elaborate_Body & LF & End_Word & System & Stage_Suffix & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Stage_Spec'Result'First = 1
+                and then Stage_Spec'Result'Length = Package_Word'Length + System'Length + Stage_Suffix'Length + Elaborate_Body'Length + 1 + End_Word'Length + System'Length + Stage_Suffix'Length + Semicolon'Length + 1;
+
+   function Stage_Body_Head (System : String) return String
+   is (Package_Body_Words & System & Stage_Suffix & Is_Word & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Stage_Body_Head'Result'First = 1
+                and then Stage_Body_Head'Result'Length = Package_Body_Words'Length + System'Length + Stage_Suffix'Length + Is_Word'Length + 1;
+
+   function Task_Declaration (Name : String) return String
+   is (Indent & Task_Word & Name & Task_Suffix & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Task_Declaration'Result'First = 1
+                and then Task_Declaration'Result'Length = Indent'Length + Task_Word'Length + Name'Length + Task_Suffix'Length + Semicolon'Length + 1;
+
+   function Task_Body_Open (Name : String) return String
+   is (Indent & Task_Body_Words & Name & Task_Suffix & Is_Word & LF & Indent & Begin_Line & LF & Indent & Indent & Name & Open_Paren)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Task_Body_Open'Result'First = 1
+                and then Task_Body_Open'Result'Length = Indent'Length + Task_Body_Words'Length + Name'Length + Task_Suffix'Length + Is_Word'Length + 1 + Indent'Length + Begin_Line'Length + 1 + Indent'Length + Indent'Length + Name'Length + Open_Paren'Length;
+
+   function Port_Actual (Name : String) return String
+   is (Name & Port_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Port_Actual'Result'First = 1
+                and then Port_Actual'Result'Length = Name'Length + Port_Suffix'Length;
+
+   function Task_Body_Close (Name : String) return String
+   is (Close_Paren & Semicolon & LF & Indent & End_Word & Name & Task_Suffix & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Task_Body_Close'Result'First = 1
+                and then Task_Body_Close'Result'Length = Close_Paren'Length + Semicolon'Length + 1 + Indent'Length + End_Word'Length + Name'Length + Task_Suffix'Length + Semicolon'Length + 1;
+
+   function Stage_Body_Tail (System : String) return String
+   is (End_Word & System & Stage_Suffix & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Stage_Body_Tail'Result'First = 1
+                and then Stage_Body_Tail'Result'Length = End_Word'Length + System'Length + Stage_Suffix'Length + Semicolon'Length + 1;
+
+   function Stage_Main (System : String) return String
+   is (Procedure_Word & System & Main_Suffix & Is_Word & LF & Begin_Line & LF & Indent & Null_Word & LF & End_Word & System & Main_Suffix & Semicolon & LF)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System),
+        Post => Stage_Main'Result'First = 1
+                and then Stage_Main'Result'Length = Procedure_Word'Length + System'Length + Main_Suffix'Length + Is_Word'Length + 1 + Begin_Line'Length + 1 + Indent'Length + Null_Word'Length + 1 + End_Word'Length + System'Length + Main_Suffix'Length + Semicolon'Length + 1;
 
    Slash               : constant String := "/";
    Types_File_Suffix   : constant String := "_types.ads";
