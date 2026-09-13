@@ -1,9 +1,9 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Text_Pkg: the TEXT of every fragment the leaf-to-template emitter writes, as pure
---  expression functions over facts Mascot_Emit_Pkg has decided (unit 1 of the re-decomposition
---  brief, 2026-09-13). Every literal declared once; slot-marker words as two literals; exact-length
---  postconditions. Lane wu-crucible-mascot-emit-text round A, planner qwen3.8-27b-ada:v0.3, accepted
---  first round, 0 unproved, 109 GPU s. Never hand-edited. Comment-stripped sha equals the round-A spec.
+--  Mascot_Emit_Text_Pkg lineage 2 (2026-09-13): lineage 1 verbatim plus the file-name facts the writer's
+--  accepted MASCOT named as a gap on this core — Lower, Stem_Of (body-filled, character-wise Post), Unit_File,
+--  Types_File, Path_Join and the five file-name literals. Lane wu-crucible-mascot-emit-text-2 round A,
+--  planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved, 132 GPU s. Never hand-edited.
+--  Comment-stripped sha equals the round-A spec.
 with Mascot_Emit_Pkg;
 with Pool_Pkg;
 
@@ -148,5 +148,44 @@ package Mascot_Emit_Text_Pkg with SPARK_Mode is
         Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Stem) and then Digest'First = 1 and then Digest'Length = 64,
         Post => Carried_Row'Result'First = 1
                 and then Carried_Row'Result'Length = Stem'Length + Ads_Suffix'Length + 1 + Digest'Length + 1 + Emitted_Word'Length + 1;
+
+   Slash               : constant String := "/";
+   Types_File_Suffix   : constant String := "_types.ads";
+   Template_File       : constant String := "template.adb";
+   Prompt_File         : constant String := "planner-prompt.txt";
+   Carried_File        : constant String := "carried.tsv";
+
+   function Lower (C : Character) return Character
+   is ((if C in 'A' .. 'Z' then Character'Val (Character'Pos (C) + 32) else C))
+   with Global => null;
+
+   function Stem_Of (Name : String) return String
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Stem_Of'Result'First = 1
+                and then Stem_Of'Result'Length = Name'Length
+                and then (for all K in Name'Range => Stem_Of'Result (K) = Lower (Name (K)));
+
+   function Unit_File (Name : String) return String
+   is (Stem_Of (Name) & Ads_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (Name),
+        Post => Unit_File'Result'First = 1
+                and then Unit_File'Result'Length = Name'Length + Ads_Suffix'Length;
+
+   function Types_File (System_Ada : String) return String
+   is (Stem_Of (System_Ada) & Types_File_Suffix)
+   with Global => null,
+        Pre  => Mascot_Emit_Pkg.Is_Ada_Identifier (System_Ada),
+        Post => Types_File'Result'First = 1
+                and then Types_File'Result'Length = System_Ada'Length + Types_File_Suffix'Length;
+
+   function Path_Join (Dir : String; Name : String) return String
+   is (Dir & Slash & Name)
+   with Global => null,
+        Pre  => Dir'First = 1 and then Dir'Length >= 1 and then Dir'Length <= 1024
+                and then Name'First = 1 and then Name'Length >= 1 and then Name'Length <= 256,
+        Post => Path_Join'Result'First = 1
+                and then Path_Join'Result'Length = Dir'Length + Slash'Length + Name'Length;
 
 end Mascot_Emit_Text_Pkg;
