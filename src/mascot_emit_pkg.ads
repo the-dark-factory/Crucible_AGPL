@@ -1,11 +1,13 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Pkg lineage 7 (2026-09-13): lineage 6 verbatim plus ONE change in Line_Fault — a CHANNEL line's
---  producer, producers and consumer words must each name a declared line (Declared over the three keys, the same
---  helper the activity keys use; the fault is the existing Reference_Undeclared), because a channel whose producer
---  named no line passed Line_Fault and Emit_Ok and the writer emitted a place whose producer count no task would
---  ever finish (the ghost-producer fixture, brief Amendment 4 erratum 24). Scratch-proved locally first (267 checks,
---  0 unproved), then lane wu-crucible-mascot-emit-7 round A, planner qwen3.8-27b-ada:v0.3, accepted first round,
---  0 unproved. Body (Ada_Name) carried unchanged. Never hand-edited. Comment-stripped sha equals the round-A spec.
+--  Mascot_Emit_Pkg lineage 8 (2026-09-13): lineage 7 verbatim plus ONE change in four places for one fact — a CHANNEL
+--  line's producer, producers and consumer words must each name a declared ACTIVITY line: Activity_Words wraps the
+--  scanner's Every_Word_Activity (lineage 6) beside Declared and Plumbing; Fault_Kind gains Reference_Not_Activity
+--  (last); Line_Fault tests it after the channel's Declared branch and states it in the Post after the channel's
+--  Declared conjunct. Why: a producer naming a channel or a pool passed lineage 7 and the writer emitted a place whose
+--  producer count no task would ever finish (r5 F.10; brief Amendment 4 erratum 24's remainder). Scratch-proved locally
+--  first (278 checks, 0 unproved), then lane wu-crucible-mascot-emit-8 round A, planner qwen3.8-27b-ada:v0.3, accepted
+--  first round, 0 unproved, 247 GPU s. Body (Ada_Name) carried unchanged. Never hand-edited. Comment-stripped sha
+--  equals the round-A spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Scan_Pkg;
@@ -122,6 +124,11 @@ package Mascot_Emit_Pkg with SPARK_Mode is
    with Global => null,
         Pre    => I <= S.Count and then Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64;
 
+   function Activity_Words (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
+   is (Mascot_Scan_Pkg.Every_Word_Activity (S, I, Key))
+   with Global => null,
+        Pre    => I <= S.Count and then Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64;
+
    function Withs (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index; J : Mascot_Measure_Pkg.Node_Index) return Boolean
    is (Mascot_Scan_Pkg.Refers (S, I, Mascot_Scan_Pkg.Key_Reads, J)
      or else Mascot_Scan_Pkg.Refers (S, I, Mascot_Scan_Pkg.Key_Writes, J)
@@ -161,10 +168,10 @@ package Mascot_Emit_Pkg with SPARK_Mode is
    with Global => null,
         Pre    => I <= S.Count;
 
-   type Fault_Kind is (No_Fault, Id_Not_Nameable, Element_Not_Identifier, Buffer_Not_Positive, Reference_Undeclared, Reference_Not_Plumbing, Discharge_Missing);
+   type Fault_Kind is (No_Fault, Id_Not_Nameable, Element_Not_Identifier, Buffer_Not_Positive, Reference_Undeclared, Reference_Not_Plumbing, Discharge_Missing, Reference_Not_Activity);
 
    function Line_Fault (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Fault_Kind
-   is ((if not Id_Nameable (S, I) then Id_Not_Nameable elsif (Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) or else Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Pool)) and then not Element_Ok (S, I) then Element_Not_Identifier elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) and then not Buffer_Ok (S, I) then Buffer_Not_Positive elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) and then not (Declared (S, I, Mascot_Scan_Pkg.Key_Producer) and then Declared (S, I, Mascot_Scan_Pkg.Key_Producers) and then Declared (S, I, Mascot_Scan_Pkg.Key_Consumer)) then Reference_Undeclared elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not (Declared (S, I, Mascot_Scan_Pkg.Key_Reads) and then Declared (S, I, Mascot_Scan_Pkg.Key_Writes) and then Declared (S, I, Mascot_Scan_Pkg.Key_Reports) and then Declared (S, I, Mascot_Scan_Pkg.Key_Accessed)) then Reference_Undeclared elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not (Plumbing (S, I, Mascot_Scan_Pkg.Key_Reads) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Writes) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Reports) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Accessed)) then Reference_Not_Plumbing elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not Has_Discharge (S.Lines (I)) then Discharge_Missing else No_Fault))
+   is ((if not Id_Nameable (S, I) then Id_Not_Nameable elsif (Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) or else Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Pool)) and then not Element_Ok (S, I) then Element_Not_Identifier elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) and then not Buffer_Ok (S, I) then Buffer_Not_Positive elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) and then not (Declared (S, I, Mascot_Scan_Pkg.Key_Producer) and then Declared (S, I, Mascot_Scan_Pkg.Key_Producers) and then Declared (S, I, Mascot_Scan_Pkg.Key_Consumer)) then Reference_Undeclared elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel) and then not (Activity_Words (S, I, Mascot_Scan_Pkg.Key_Producer) and then Activity_Words (S, I, Mascot_Scan_Pkg.Key_Producers) and then Activity_Words (S, I, Mascot_Scan_Pkg.Key_Consumer)) then Reference_Not_Activity elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not (Declared (S, I, Mascot_Scan_Pkg.Key_Reads) and then Declared (S, I, Mascot_Scan_Pkg.Key_Writes) and then Declared (S, I, Mascot_Scan_Pkg.Key_Reports) and then Declared (S, I, Mascot_Scan_Pkg.Key_Accessed)) then Reference_Undeclared elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not (Plumbing (S, I, Mascot_Scan_Pkg.Key_Reads) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Writes) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Reports) and then Plumbing (S, I, Mascot_Scan_Pkg.Key_Accessed)) then Reference_Not_Plumbing elsif Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity) and then not Has_Discharge (S.Lines (I)) then Discharge_Missing else No_Fault))
    with Global => null,
         Pre    => I <= S.Count,
         Post   => (if Line_Fault'Result = No_Fault then
@@ -178,6 +185,10 @@ package Mascot_Emit_Pkg with SPARK_Mode is
                                then Declared (S, I, Mascot_Scan_Pkg.Key_Producer)
                                     and then Declared (S, I, Mascot_Scan_Pkg.Key_Producers)
                                     and then Declared (S, I, Mascot_Scan_Pkg.Key_Consumer))
+                     and then (if Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Channel)
+                               then Activity_Words (S, I, Mascot_Scan_Pkg.Key_Producer)
+                                    and then Activity_Words (S, I, Mascot_Scan_Pkg.Key_Producers)
+                                    and then Activity_Words (S, I, Mascot_Scan_Pkg.Key_Consumer))
                      and then (if Mascot_Scan_Pkg.Kind_Is (S.Lines (I), Mascot_Scan_Pkg.Lit_Activity)
                                then Declared (S, I, Mascot_Scan_Pkg.Key_Reads)
                                     and then Declared (S, I, Mascot_Scan_Pkg.Key_Writes)
