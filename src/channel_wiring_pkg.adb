@@ -1,7 +1,6 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Body of Channel_Wiring_Pkg: the protected body of Wire and the reference instance through which it is
---  proved. body-fill-bench, qwen3-coder:30b via ollama, behind wire_gate.bb, gnatprove level 2 discharged,
---  2026-09-13. Never hand-edited.
+--  Channel_Wiring_Pkg body, lineage 2 (2026-09-13): body-filled behind wire_gate.bb, proved through the Reference
+--  instance; Close counts this producer and closes the value queue under the last one. Never hand-edited.
 package body Channel_Wiring_Pkg with SPARK_Mode is
    package body Wiring is
       protected body Wire is
@@ -31,12 +30,19 @@ package body Channel_Wiring_Pkg with SPARK_Mode is
 
          procedure Close is
          begin
-            Value := Q.Close (Value);
+            if Finished < Producers then
+               Finished := Finished + 1;
+            end if;
+            if Finished = Producers then
+               Value := Q.Close (Value);
+            end if;
          end Close;
 
          function Fill return Q.Count is (Value.Length);
 
          function Is_Closed return Boolean is (Value.Closed);
+
+         function Finished_Count return Natural is (Finished);
       end Wire;
    end Wiring;
 
