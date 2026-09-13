@@ -1,10 +1,10 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Emit_Pkg: the PROVED CORE of the leaf-to-template emitter (names, element and buffer
---  validity, pool discipline, an activity's with-set, the first line of each element type, the fault
---  named when a design cannot be emitted). Lane wu-crucible-mascot-emit round B, 2026-09-13 06:3x,
---  planner qwen3.8-27b-ada:v0.3, proof_gate accepted, 0 unproved (round A was proved but for one
---  postcondition the prover could not reach through the recursion; round B strengthened
---  Faulty_Line's Post). Never hand-edited. Comment-stripped sha equals the round-B spec.
+--  Mascot_Emit_Pkg lineage 2 (2026-09-13): lineage 1 verbatim with three expressions redirected to the
+--  scanner's list facts — Declared = Every_Word_Declared, Plumbing = Every_Word_Plumbing, Withs = Refers
+--  over reads/writes/reports/accessed — so an activity may name several channels or pools per key.
+--  Lane wu-crucible-mascot-emit-2 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved,
+--  131 GPU s. Body (Ada_Name) carried unchanged from lineage 1. Never hand-edited. Comment-stripped sha
+--  equals the round-A spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Scan_Pkg;
@@ -100,17 +100,20 @@ package Mascot_Emit_Pkg with SPARK_Mode is
         Pre    => I <= S.Count and then Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64;
 
    function Declared (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
-   is (not Mascot_Scan_Pkg.Present (S.Lines (I), Key) or else Ref_Of (S, I, Key) in 1 .. S.Count)
+   is (Mascot_Scan_Pkg.Every_Word_Declared (S, I, Key))
    with Global => null,
         Pre    => I <= S.Count and then Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64;
 
    function Plumbing (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
-   is (not Mascot_Scan_Pkg.Present (S.Lines (I), Key) or else (Ref_Of (S, I, Key) in 1 .. S.Count and then (Mascot_Scan_Pkg.Kind_Is (S.Lines (Ref_Of (S, I, Key)), Mascot_Scan_Pkg.Lit_Channel) or else Mascot_Scan_Pkg.Kind_Is (S.Lines (Ref_Of (S, I, Key)), Mascot_Scan_Pkg.Lit_Pool))))
+   is (Mascot_Scan_Pkg.Every_Word_Plumbing (S, I, Key))
    with Global => null,
         Pre    => I <= S.Count and then Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64;
 
    function Withs (S : Mascot_Scan_Pkg.Line_Set; I : Mascot_Measure_Pkg.Node_Index; J : Mascot_Measure_Pkg.Node_Index) return Boolean
-   is (Ref_Of (S, I, Mascot_Scan_Pkg.Key_Reads) = J or else Ref_Of (S, I, Mascot_Scan_Pkg.Key_Writes) = J or else Ref_Of (S, I, Mascot_Scan_Pkg.Key_Reports) = J or else Ref_Of (S, I, Mascot_Scan_Pkg.Key_Accessed) = J)
+   is (Mascot_Scan_Pkg.Refers (S, I, Mascot_Scan_Pkg.Key_Reads, J)
+     or else Mascot_Scan_Pkg.Refers (S, I, Mascot_Scan_Pkg.Key_Writes, J)
+     or else Mascot_Scan_Pkg.Refers (S, I, Mascot_Scan_Pkg.Key_Reports, J)
+     or else Mascot_Scan_Pkg.Refers (S, I, Mascot_Scan_Pkg.Key_Accessed, J))
    with Global => null,
         Pre    => I <= S.Count and then J <= S.Count;
 
