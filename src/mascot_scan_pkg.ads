@@ -1,12 +1,12 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Mascot_Scan_Pkg lineage 5 (2026-09-13): lineage 4 round C verbatim plus nine LIST facts — a value
---  under reads/writes/reports/accessed/producers/consumers may name several ids separated by single
---  spaces; Refers (one line's id is a word of another's value), Every_Word_Declared, Every_Word_Plumbing
---  over Word_At / Word_Starts / Ref_Span / Id_Text_Of / Id_Well_Formed. Find_Ref and every earlier fact
---  unchanged, so the judge's acceptance of the expansion-stage MASCOT r2 stands. Lane
---  wu-crucible-mascot-scan-5 round A, planner qwen3.8-27b-ada:v0.3, accepted first round, 0 unproved,
---  195 GPU s. Body (Slice_Of, Scan) carried unchanged. Never hand-edited. Comment-stripped sha equals
---  the round-A spec.
+--  Mascot_Scan_Pkg lineage 6 (2026-09-13): lineage 5 verbatim plus ONE fact, Every_Word_Activity — the third of the
+--  word-kind family beside Every_Word_Declared and Every_Word_Plumbing: every word of a value names a declared
+--  ACTIVITY line. Why: a channel's producer, producers and consumer words must name activities; Every_Word_Declared
+--  (applied to those keys by the emit core, lineage 7) says only that each word names some line, so a producer naming
+--  a channel or a pool still passed (brief Amendment 4 erratum 24's remainder, r5's F.10). Scratch-proved locally first
+--  (339 checks, 0 unproved), then lane wu-crucible-mascot-scan-6 round A, planner qwen3.8-27b-ada:v0.3, accepted first
+--  round, 0 unproved, 211 GPU s. Body (Slice_Of, Scan) carried unchanged. Never hand-edited. Comment-stripped sha
+--  equals the round-A spec.
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 
@@ -141,6 +141,11 @@ package Mascot_Scan_Pkg with SPARK_Mode is
 
    function Every_Word_Plumbing (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
    is ((not Present (S.Lines (I), Key) or else (Has_Ref_Text (S.Lines (I), Key) and then (for all P in Ref_Span (S.Lines (I), Key).first .. Ref_Span (S.Lines (I), Key).last => (if Word_Starts (S.Lines (I), Ref_Span (S.Lines (I), Key), P) then (for some J in 1 .. S.Count => Present (S.Lines (J), Key_Id) and then Id_Well_Formed (S.Lines (J)) and then Word_At (S.Lines (I), Ref_Span (S.Lines (I), Key), P, Id_Text_Of (S.Lines (J))) and then (Kind_Is (S.Lines (J), Lit_Channel) or else Kind_Is (S.Lines (J), Lit_Pool))))))))
+   with Global => null,
+        Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then I <= S.Count;
+
+   function Every_Word_Activity (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Key : String) return Boolean
+   is ((not Present (S.Lines (I), Key) or else (Has_Ref_Text (S.Lines (I), Key) and then (for all P in Ref_Span (S.Lines (I), Key).first .. Ref_Span (S.Lines (I), Key).last => (if Word_Starts (S.Lines (I), Ref_Span (S.Lines (I), Key), P) then (for some J in 1 .. S.Count => Present (S.Lines (J), Key_Id) and then Id_Well_Formed (S.Lines (J)) and then Word_At (S.Lines (I), Ref_Span (S.Lines (I), Key), P, Id_Text_Of (S.Lines (J))) and then Kind_Is (S.Lines (J), Lit_Activity)))))))
    with Global => null,
         Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then I <= S.Count;
 
