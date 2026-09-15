@@ -1,3 +1,11 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: 578f16e1f084b0207bd4152d26d77c4d8b3fd00bc995d36743e80869636185d0
+--
 package Intake_Gate_Pkg with SPARK_Mode, Pure is
 
    Max_Brief : constant := 65536;

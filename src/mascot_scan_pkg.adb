@@ -1,3 +1,11 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: a5d71133fbdeab0d3fcc36dd46a2c87860fce301aade9b20b8d06e713ecfccdc
+--
 --  mascot_scan_pkg.adb
 --
 --  Purpose: body of Mascot_Scan_Pkg.  Only two operations require bodies --

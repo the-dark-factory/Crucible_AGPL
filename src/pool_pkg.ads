@@ -1,3 +1,11 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: d19623882aeb982ae43734cb39d95672a635a5513bb59f25168b1f6dfc1cea0c
+--
 package Pool_Pkg with SPARK_Mode is
 
    type Discipline_Kind is (Read_Mostly, Read_Write, Set_Once);
