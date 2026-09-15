@@ -1,3 +1,11 @@
+--  Copyright (C) 2026 Anthony Gair
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: af293abd34944ccda121719a4b84c130ef10f0bd9e413bf394e61892f2351d9a
+--
 with Mascot_Judge_Pkg;
 
 package Mascot_Measure_Pkg with SPARK_Mode is

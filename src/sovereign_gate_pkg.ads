@@ -1,3 +1,11 @@
+--  Copyright (C) 2026 Anthony Gair
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: ddf314332d9139586fe3c43465bd51bc0e8e81401d3d118c42683eff59bd8c98
+--
 package Sovereign_Gate_Pkg with SPARK_Mode, Pure is
 
    Max_Endpoint : constant := 1024;
