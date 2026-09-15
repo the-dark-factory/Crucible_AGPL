@@ -1,11 +1,3 @@
---  Copyright (C) 2026 Anthony Gair
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
---  Forged and machine-checked by The Dark Factory. This file is the
---  vendored copy of an IMMUTABLE wu round output. This comment block is
---  the only difference from it; nothing below this line is altered.
---  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: c8262b65918070226749e09d89c982137387536f07b604e017a161604a1d7490
---
 package Bounded_Channel_Pkg with SPARK_Mode is
 
    generic
