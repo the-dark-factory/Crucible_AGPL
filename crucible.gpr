@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --
 --  CRUCIBLE — one executable, one door. The edition is a COMPILED-IN external, never an
 --  argument or an environment variable at run time: mui:edition-is-compiled-not-argued.

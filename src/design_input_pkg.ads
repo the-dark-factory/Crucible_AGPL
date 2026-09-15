@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Design_Input_Pkg: the one PROVED reader of a MASCOT design from standard input into a Line_Set
 --  (blank lines skipped, at most Max_Nodes lines of Max_Line): Blank as a quantified fact; Read with
 --  Global (In_Out => Ada.Text_IO.File_System) and a Post that every counted line is non-blank and every

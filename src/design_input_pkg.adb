@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Body of Design_Input_Pkg: Read only. body-fill-bench, qwen3-coder:30b via ollama; the tier-3 gate
 --  no_unreferenced.bb refused three earlier candidates (pragma Unreferenced; an initialiser with no effect);
 --  this candidate passed gnatprove level 2 and the gate, 2026-09-13. Never hand-edited.

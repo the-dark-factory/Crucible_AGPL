@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Frame_Facts_Pkg -- the measurement between the scanner and the frame decider: from one
 --  JSON-RPC line, the facts Json_Rpc_Frame_Pkg rules on, each defined as Json_Scan_Pkg's own
 --  answer (BRIEF_crucible_door_split_2026-09-11 §2, unit 2 of the door split).

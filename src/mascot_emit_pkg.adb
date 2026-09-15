@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Body of Mascot_Emit_Pkg: Ada_Name only (every other function is an expression function).
 --  body-fill-bench, qwen3-coder:30b via ollama, candidate 1, gnatprove level 2 discharged, 2026-09-13.
 --  Never hand-edited.

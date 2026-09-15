@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Json_Scan_Pkg, THIRD forge (2026-09-12): the accepted round-D specification re-emitted
 --  unchanged in its contracts (BRIEF_json_scan_semantic_obligation_2026-09-11: found means
 --  found), forged again ONLY for the body stage -- the 2026-09-11 body gave five locals

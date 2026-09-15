@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Body of Mascot_Emit_Text_Pkg: Stem_Of only. body-fill-bench, qwen3-coder:30b via ollama, candidate 1
 --  behind the no_unreferenced.bb tier-3 gate, gnatprove level 2 discharged, 2026-09-13. Never hand-edited.
 package body Mascot_Emit_Text_Pkg with SPARK_Mode is

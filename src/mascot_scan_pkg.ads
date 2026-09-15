@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Mascot_Scan_Pkg lineage 6 (2026-09-13): lineage 5 verbatim plus ONE fact, Every_Word_Activity — the third of the
 --  word-kind family beside Every_Word_Declared and Every_Word_Plumbing: every word of a value names a declared
 --  ACTIVITY line. Why: a channel's producer, producers and consumer words must name activities; Every_Word_Declared

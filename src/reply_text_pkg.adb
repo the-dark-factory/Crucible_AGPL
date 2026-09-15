@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Body of Reply_Text_Pkg v2: only Escape_Quotes needs a body. Written by the ANVIL lane's
 --  body-fill (opus, candidate 3), job verified 2026-09-12 11:41; re-proved with the spec as
 --  built: 265 checks, 0 unproved, 0 warnings. Escapes '"' only, not '\' -- see the spec header.

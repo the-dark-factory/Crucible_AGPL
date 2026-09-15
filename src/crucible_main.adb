@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Crucible_Main -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the three proved cores, two prints. It holds no
 --  decision (BRIEF_crucible_door_split_2026-09-11 §4, unit 4 of the door split).

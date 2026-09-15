@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --
 --  CRUCIBLE's edition, COMPILED IN. The project file selects this directory on the
 --  CRUCIBLE_EDITION scenario variable; the other edition is a same-named spec in its own

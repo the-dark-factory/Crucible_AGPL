@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Pool_Wiring_Pkg: a MASCOT pool as a PLACE — a Jorvik protected type Store over the carried value pool
 --  (Pool_Pkg.Pool, a formal package): Read; Write whose Accepted is the proved May_Write decision (a refused
 --  set-once write is a returned fact, never a blocked caller); Write_Count. Every body statement is one call to

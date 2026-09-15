@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Channel_Wiring_Pkg body, lineage 2 (2026-09-13): body-filled behind wire_gate.bb, proved through the Reference
 --  instance; Close counts this producer and closes the value queue under the last one. Never hand-edited.
 package body Channel_Wiring_Pkg with SPARK_Mode is

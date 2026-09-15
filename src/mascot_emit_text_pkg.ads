@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Mascot_Emit_Text_Pkg lineage 6 (2026-09-13): lineage 5 verbatim plus Wire_Place (Name, Buffer, Producers) — the
 --  library-level wire object with its capacity AND its producer count, for Channel_Wiring_Pkg lineage 2's counted
 --  close (writer MASCOT r3 F.1). No new literal; Wire_Object kept. Lane wu-crucible-mascot-emit-text-6 round B

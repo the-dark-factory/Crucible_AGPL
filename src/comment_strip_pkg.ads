@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Comment_Strip_Pkg: the lane's carried-digest formula as PROVED FACTS (Line_End, First_Non_Blank,
 --  Is_Kept: drop comment lines and blank lines, keep the rest with their line feed) plus Stripped, the
 --  copy, with a bounds Post. Unit 2 of the emitter re-decomposition brief, 2026-09-13. Lane

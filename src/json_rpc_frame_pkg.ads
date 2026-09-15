@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged by ANVIL through the lane, ab-20260911-1953 round C, on Tony's command. Round A: a lost
 --  parenthesis in a nested iff (helper Earns_Result added to the prose); round B: the prose ordered
 --  the version test before the notification test, so a notification could carry an error code —

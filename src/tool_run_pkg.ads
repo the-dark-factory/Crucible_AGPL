@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Tool_Run_Pkg -- the run of each door tool as a pure function: licence_gate from (edition,
 --  line) and self_judge from the binary's self-asserted facts to the reply text, composing the
 --  carried judges and the carried reply text; the Refused argument handed to the text IS the

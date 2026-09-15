@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Body of Pool_Wiring_Pkg: the protected body of Store and the reference instance through which it is
 --  proved. body-fill-bench, qwen3-coder:30b via ollama, behind store_gate.bb, gnatprove level 2 discharged,
 --  2026-09-13. Never hand-edited.

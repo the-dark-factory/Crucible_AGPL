@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Body of Json_Scan_Pkg, third forge: the lane's body-fill (opus, candidate 3), job verified
 --  2026-09-12 12:05; locals assigned before first read carry no initializer; re-proved with the
 --  spec as built: 183 checks, 0 unproved, 0 warnings under -gnatwa -gnatwe.

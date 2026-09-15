@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Mascot_Emit_Pkg lineage 8 (2026-09-13): lineage 7 verbatim plus ONE change in four places for one fact — a CHANNEL
 --  line's producer, producers and consumer words must each name a declared ACTIVITY line: Activity_Words wraps the
 --  scanner's Every_Word_Activity (lineage 6) beside Declared and Plumbing; Fault_Kind gains Reference_Not_Activity

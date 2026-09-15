@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Channel_Wiring_Pkg lineage 2 (2026-09-13): the COUNTED CLOSE — a MASCOT channel with several producers is closed
 --  only when every producer has finished with it. Wire takes the producer count as a second discriminant (Cap;
 --  Producers), keeps a count of producers finished, and Close means "this producer is finished": the value queue

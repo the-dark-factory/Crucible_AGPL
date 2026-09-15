@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged by ANVIL through the lane, ab-20260911-0753. Proved: zero unproved, zero justified,
 --  zero cheat markers. Carried here unchanged — a header may be added, a contract may not drift.
 --

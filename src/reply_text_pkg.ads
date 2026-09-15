@@ -1,4 +1,4 @@
---  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Reply_Text_Pkg v2 -- the text of every reply the door sends, as pure functions of scalars
 --  and short strings; v2 adds Tool_Call_Result, the MCP tools/call result shape (content array
 --  with one text item + structuredContent), and widens the bounds coherently (formals 4096, Q
