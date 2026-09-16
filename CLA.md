@@ -13,7 +13,7 @@ owns the copyright in the whole of their contribution; `cla/ha-cla-e.pdf` for an
 | placeholder | value |
 |---|---|
 | "We" / "Us" | The Dark Factory Ltd, registered in England and Wales |
-| `[PROJECT_NAME]` | the Dark Factory Factory |
+| `[PROJECT_NAME]` | CRUCIBLE |
 | `[JURISDICTION]` (§6.1) | England and Wales |
 | §2.3 Outbound Licence | Option Five (Options One to Four deleted) |
 | `[LIST_OF_MEDIA_LICENSES]` (§2.3) | Creative Commons Attribution 4.0 International |
@@ -27,4 +27,8 @@ is AGPL-3.0-or-later. Your contribution therefore always stays AGPL. Our own rul
 see CONTRIBUTING.md.
 
 Refusing to sign refuses the merge, the commercial tier and an account on the registers. It
-never refuses you the AGPL software. No solicitor has read this yet; nobody has signed yet.
+never refuses you the AGPL software.
+
+The agreement texts are the unmodified published Harmony templates and the software licence is the
+FSF's unmodified AGPL-3.0: nothing in this repository is legal wording drafted by us. Nobody has
+signed yet.
