@@ -72,6 +72,19 @@ assignment: you keep your copyright, and your contribution stays AGPL. See `CLA.
 
 ---
 
+## What it emits, and what it does not do
+
+The AGPL edition emits **AGPL only**. Ask it to emit under any other licence and it refuses. That
+is a statement of licence rather than a lock: one tree builds either edition, and anyone may build
+the commercial one — the refusal tells you what this binary is, it does not stop you.
+
+CRUCIBLE proves. It **does not fill bodies**, and it does not design: it takes a specification and
+decides whether what came back may be delivered. Filling bodies is **ANVIL**, a separate line that
+is kept rather than released here — said plainly so that nobody builds on an expectation we have
+not published.
+
+---
+
 ## Honest status
 
 - **Produced by an agentic AI system**, with a human holding the gate and reading before release.
