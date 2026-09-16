@@ -3,8 +3,15 @@
 > **Note de traduction :** ceci est la traduction française de [`README.md`](README.md).
 > **La version anglaise fait foi** ; en cas de divergence, c'est elle qui prévaut.
 
-Une usine qui transforme une spécification écrite en Ada/SPARK accompagné d'une preuve vérifiée par
-machine, et qui refuse de livrer ce qu'elle n'a pas pu prouver.
+Le noyau de décision prouvé d'une usine qui transformera une spécification écrite en Ada/SPARK
+accompagné d'une preuve vérifiée par machine, et qui refusera de livrer ce qu'elle n'aura pas pu
+prouver.
+
+**Ce qu'est cette version, sans détour :** elle ne prend pas encore de spécification et ne forge
+rien. Elle vous donne les cœurs de décision prouvés de l'usine, que vous pouvez reprouver sur votre
+propre matériel plutôt que de nous croire, et une porte MCP dont le seul outil fonctionnel est une
+barrière de licence. Aucun binaire précompilé n'est fourni. Les notes de version disent exactement ce
+qui est présent et ce qui ne l'est pas.
 
 CRUCIBLE est lui-même écrit comme il construit : les parties qui décident sont des paquetages SPARK
 prouvés, et chacune a été produite par l'usine à partir de prose, non écrite à la main.

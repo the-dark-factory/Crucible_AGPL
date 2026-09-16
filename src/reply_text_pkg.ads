@@ -1,21 +1,11 @@
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
---  Reply_Text_Pkg v2 -- the text of every reply the door sends, as pure functions of scalars
---  and short strings; v2 adds Tool_Call_Result, the MCP tools/call result shape (content array
---  with one text item + structuredContent), and widens the bounds coherently (formals 4096, Q
---  8192, results 16384). Door split unit 1, second forge.
---  Spec: ANVIL lane, wu-crucible-reply-text-2 round C, 2026-09-12 11:41, planner Rosie
---  qwen3.8-27b-ada:v0.3, proof_gate accepted: 239 unit checks proved, 0 unproved, 0 compile
---  errors, 0 cheat markers. Round A: the seat's bound arithmetic (case 382bf241). Round B
---  PROVED 243/0 yet emitted malformed tools/list JSON (extra closing braces) -- caught by the
---  door's probe when placed beside the edge, never carried; round C states the brace structure
---  with counts. Body: the lane's body-fill (opus, candidate 3), job verified 11:41. Re-proved
---  as built on bill: level 2, -gnatwa -gnatwe, 265 checks, 0 unproved, 0 warnings. Validated
---  by the edge's in-lane probe (round C, 11:43) BEFORE this carry. Supersedes v1 (round G,
---  09:36); v1's lineage kept as the record.
---  OWED (obligation 6, weak contract, unchanged from v1): Escape_Quotes escapes '"' only, not
---  '\'; its Post states First = 1 and length bounds only. A Post on composed JSON text cannot
---  see nesting either -- the probe is the gate for that (candidate obligation for v0.2.0).
---  Comment-stripped sha of this spec equals the forged round-C spec.
+--  Reply_Text_Pkg v3 -- the text of every reply the door sends. v3 withdraws self_judge from the
+--  door: tools/list advertises licence_gate alone. Self_Judge_Text stays, because the carried
+--  Tool_Run_Pkg composes its own reply with it.
+--  Spec: ANVIL lane, wu-crucible-reply-text-3 round D, 2026-09-16, planner Rosie
+--  qwen3.8-27b-ada:v0.3; proved with its own body ANALYSED, not assumed (own_body slot).
+--  Carried unchanged -- a header may be added, a contract may not drift.
+--
 package Reply_Text_Pkg with SPARK_Mode is
 
    function Q (S : String) return String
@@ -29,7 +19,7 @@ package Reply_Text_Pkg with SPARK_Mode is
 
    function Image_Of (N : Integer) return String
      is (if N < 0 then Integer'Image (N) else Integer'Image (N) (2 .. Integer'Image (N)'Last))
-     with Post => (Image_Of'Result'Length <= 12);
+     with Post => Image_Of'Result'Length <= 12;
 
    function Escape_Quotes (S : String) return String
      with Pre  => (S'First = 1 and then S'Length <= 4096),
@@ -61,6 +51,9 @@ package Reply_Text_Pkg with SPARK_Mode is
    Is_accepted_Key : constant String := Q ("is_accepted") & ":";
    Fault_count_Key : constant String := Q ("fault_count") & ":";
    First_fault_Key : constant String := Q ("first_fault") & ":";
+   Content_Key : constant String := Q ("content") & ":";
+   Text_Key : constant String := Q ("text") & ":";
+   Structuredcontent_Key : constant String := Q ("structuredContent") & ":";
 
    Object_Word : constant String := Q ("object");
    String_Word : constant String := Q ("string");
@@ -70,73 +63,52 @@ package Reply_Text_Pkg with SPARK_Mode is
    Agpl_Word : constant String := Q ("agpl");
    Commercial_Word : constant String := Q ("commercial");
    Text_Word : constant String := Q ("text");
-
-   Content_Key : constant String := Q ("content") & ":";
-   Text_Key : constant String := Q ("text") & ":";
-   Structuredcontent_Key : constant String := Q ("structuredContent") & ":";
-
    Requested_Word : constant String := Q ("requested");
-   Judge_Word : constant String := Q ("judge");
 
-   Licence_Gate_Schema : constant String := "{" & Type_Key & Object_Word & "," & Properties_Key & "{" & Requested_Key & "{" & Type_Key & String_Word & "}" & "}" & "}";
-   Self_Judge_Schema : constant String := "{" & Type_Key & Object_Word & "," & Properties_Key & "{" & Judge_Key & "{" & Type_Key & String_Word & "}" & "}" & "}";
-   Licence_Gate_Tool : constant String := "{" & Name_Key & Q ("licence_gate") & "," & Description_Key & Q ("refuse or permit a requested emission licence for this edition") & "," & Input_Schema_Key & Licence_Gate_Schema & "}";
-   Self_Judge_Tool : constant String := "{" & Name_Key & Q ("self_judge") & "," & Description_Key & Q ("judge a decomposition by this factory's own judge") & "," & Input_Schema_Key & Self_Judge_Schema & "}";
-   Tools_Inner : constant String := Tools_Key & "[" & Licence_Gate_Tool & "," & Self_Judge_Tool & "]";
+   Licence_Gate_Schema : constant String :=
+     "{" & Type_Key & Object_Word & "," & Properties_Key &
+     "{" & Q ("requested") & ":" & "{" & Type_Key & String_Word &
+     "}" & "}" & "}";
+
+   Licence_Gate_Tool : constant String :=
+     "{" & Name_Key & Q ("licence_gate") & "," & Description_Key &
+     Q ("refuse or permit a requested emission licence for this edition") &
+     "," & Input_Schema_Key & Licence_Gate_Schema & "}";
+
+   Tools_Inner : constant String := Tools_Key & "[" & Licence_Gate_Tool & "]";
 
    function Error_Reply (Id_Text : String; Code : Integer; Message : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Error_Key & "{" & Code_Key & Image_Of (Code) & "," & Message_Key & Q (Message) & "}" & "}")
      with Pre  => (Id_Text'First = 1 and then Id_Text'Length <= 4096 and then Message'First = 1 and then Message'Length <= 4096),
-          Post => (Error_Reply'Result'Length >= 2
-                   and then Error_Reply'Result (Error_Reply'Result'First) = '{'
-                   and then Error_Reply'Result (Error_Reply'Result'Last) = '}'
-                   and then Error_Reply'Result'Length <= 16384);
+          Post => (Error_Reply'Result'Length >= 2 and then Error_Reply'Result (Error_Reply'Result'First) = '{' and then Error_Reply'Result (Error_Reply'Result'Last) = '}' and then Error_Reply'Result'Length <= 16384);
 
    function Result_Reply (Id_Text : String; Result_Text : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Result_Key & Result_Text & "}")
      with Pre  => (Id_Text'First = 1 and then Id_Text'Length <= 4096 and then Result_Text'First = 1 and then Result_Text'Length <= 4096),
-          Post => (Result_Reply'Result'Length >= 2
-                   and then Result_Reply'Result (Result_Reply'Result'First) = '{'
-                   and then Result_Reply'Result (Result_Reply'Result'Last) = '}'
-                   and then Result_Reply'Result'Length <= 16384);
+          Post => (Result_Reply'Result'Length >= 2 and then Result_Reply'Result (Result_Reply'Result'First) = '{' and then Result_Reply'Result (Result_Reply'Result'Last) = '}' and then Result_Reply'Result'Length <= 16384);
 
    function Initialize_Result (Server_Name : String) return String
      is ("{" & Protocolversion_Key & Protocol_Word & "," & Capabilities_Key & "{" & Tools_Key & "{" & "}" & "}" & "," & Serverinfo_Key & "{" & Name_Key & Q (Server_Name) & "," & Version_Key & Server_Version_Word & "}" & "}")
      with Pre  => (Server_Name'First = 1 and then Server_Name'Length <= 4096),
-          Post => (Initialize_Result'Result'Length >= 2
-                   and then Initialize_Result'Result (Initialize_Result'Result'First) = '{'
-                   and then Initialize_Result'Result (Initialize_Result'Result'Last) = '}'
-                   and then Initialize_Result'Result'Length <= 16384);
+          Post => (Initialize_Result'Result'Length >= 2 and then Initialize_Result'Result (Initialize_Result'Result'First) = '{' and then Initialize_Result'Result (Initialize_Result'Result'Last) = '}' and then Initialize_Result'Result'Length <= 16384);
 
    function Tools_List_Result return String
      is ("{" & Tools_Inner & "}")
-     with Post => (Tools_List_Result'Result'Length >= 2
-                   and then Tools_List_Result'Result (Tools_List_Result'Result'First) = '{'
-                   and then Tools_List_Result'Result (Tools_List_Result'Result'Last) = '}'
-                   and then Tools_List_Result'Result'Length <= 16384);
+     with Post => (Tools_List_Result'Result'Length >= 2 and then Tools_List_Result'Result (Tools_List_Result'Result'First) = '{' and then Tools_List_Result'Result (Tools_List_Result'Result'Last) = '}' and then Tools_List_Result'Result'Length <= 16384);
 
    function Licence_Gate_Text (Edition_Is_Agpl : Boolean; Requested_Word : String; Refused : Boolean; Reason : String) return String
      is ("{" & Edition_Key & (if Edition_Is_Agpl then Agpl_Word else Commercial_Word) & "," & Requested_Key & Q (Requested_Word) & "," & Refused_Key & Json_Bool (Refused) & "," & Reason_Key & Q (Reason) & "}")
      with Pre  => (Requested_Word'First = 1 and then Requested_Word'Length <= 4096 and then Reason'First = 1 and then Reason'Length <= 4096),
-          Post => (Licence_Gate_Text'Result'Length >= 2
-                   and then Licence_Gate_Text'Result (Licence_Gate_Text'Result'First) = '{'
-                   and then Licence_Gate_Text'Result (Licence_Gate_Text'Result'Last) = '}'
-                   and then Licence_Gate_Text'Result'Length <= 16384);
+          Post => (Licence_Gate_Text'Result'Length >= 2 and then Licence_Gate_Text'Result (Licence_Gate_Text'Result'First) = '{' and then Licence_Gate_Text'Result (Licence_Gate_Text'Result'Last) = '}' and then Licence_Gate_Text'Result'Length <= 16384);
 
    function Self_Judge_Text (Is_Accepted : Boolean; Fault_Count : Natural; First_Fault : String) return String
      is ("{" & Is_accepted_Key & Json_Bool (Is_Accepted) & "," & Fault_count_Key & Image_Of (Fault_Count) & "," & First_fault_Key & Q (First_Fault) & "}")
      with Pre  => (First_Fault'First = 1 and then First_Fault'Length <= 4096),
-          Post => (Self_Judge_Text'Result'Length >= 2
-                   and then Self_Judge_Text'Result (Self_Judge_Text'Result'First) = '{'
-                   and then Self_Judge_Text'Result (Self_Judge_Text'Result'Last) = '}'
-                   and then Self_Judge_Text'Result'Length <= 16384);
+          Post => (Self_Judge_Text'Result'Length >= 2 and then Self_Judge_Text'Result (Self_Judge_Text'Result'First) = '{' and then Self_Judge_Text'Result (Self_Judge_Text'Result'Last) = '}' and then Self_Judge_Text'Result'Length <= 16384);
 
    function Tool_Call_Result (Inner : String) return String
      is ("{" & Content_Key & "[" & "{" & Type_Key & Text_Word & "," & Text_Key & Q (Escape_Quotes (Inner)) & "}" & "]" & "," & Structuredcontent_Key & Inner & "}")
      with Pre  => (Inner'First = 1 and then Inner'Length <= 4096),
-          Post => (Tool_Call_Result'Result'Length >= 2
-                   and then Tool_Call_Result'Result (Tool_Call_Result'Result'First) = '{'
-                   and then Tool_Call_Result'Result (Tool_Call_Result'Result'Last) = '}'
-                   and then Tool_Call_Result'Result'Length <= 16384);
+          Post => (Tool_Call_Result'Result'Length >= 2 and then Tool_Call_Result'Result (Tool_Call_Result'Result'First) = '{' and then Tool_Call_Result'Result (Tool_Call_Result'Result'Last) = '}' and then Tool_Call_Result'Result'Length <= 16384);
 
 end Reply_Text_Pkg;
