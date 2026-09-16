@@ -2,8 +2,13 @@
 
 🌐 [简体中文](README.zh-Hans.md) · [Français](README.fr.md) — quick guides: [中文](GUIDE.zh-Hans.md) · [FR](GUIDE.fr.md). Translations; the English text governs.
 
-A factory that turns a written specification into Ada/SPARK with a machine-checked proof, and
-refuses to deliver anything it could not prove.
+The proven decision kernel of a factory that will turn a written specification into Ada/SPARK
+with a machine-checked proof, and refuse to deliver anything it could not prove.
+
+**What this release is, plainly:** it does not yet take a specification or forge anything. It gives
+you the factory's proven decision cores, which you can re-prove on your own hardware rather than
+take on trust, and an MCP door whose one working tool is a licence gate. There are no prebuilt
+binaries. The release notes say exactly what is and is not here.
 
 CRUCIBLE is itself written the way it builds: the parts that make decisions are proven SPARK
 packages, and every one of them was produced by the factory from prose, not hand-written.
