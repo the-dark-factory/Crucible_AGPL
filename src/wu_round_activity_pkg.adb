@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 2ed72a6c9f86c2ffdcbbb2aaece4b311f6132e3dcd678052c4828f05df0df4f8
+--  Unstamped source sha256: 43ae2277e8dac4b7b900f4acd9e6f3a6f192cb937b51c612e149dff350aa2ea2
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -228,21 +228,28 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                         end if;
 
                         --  The rail's error lines that name an undeclared identifier (Contract_Emission's names_undeclared).
-                        LS := 1;
-                        for P in 1 .. Diag.all'Length + 1 loop
-                           if P = Diag.all'Length + 1 or else Diag.all (P) = LF then
-                              if P > LS then
-                                 declare
-                                    L1 : constant String (1 .. P - LS) := Diag.all (LS .. P - 1);
-                                 begin
-                                    if L1'Length <= Spec_Shape_Pkg.Max_Line and then Spec_Shape_Pkg.Is_Undeclared_Name_Error (L1) then
-                                       Undeclared_Names := Undeclared_Names + 1;
-                                    end if;
-                                 end;
+                        --  The diagnostics arrive as a slice whose bounds are not 1-based: normalised first (found 19:01).
+                        declare
+                           D : constant String (1 .. Diag.all'Length) := Diag.all;
+                        begin
+                           LS := 1;
+                           for P in 1 .. D'Length + 1 loop
+                              if P = D'Length + 1 or else D (P) = LF then
+                                 if P > LS then
+                                    declare
+                                       L1 : constant String (1 .. P - LS) := D (LS .. P - 1);
+                                    begin
+                                       if L1'Length <= Spec_Shape_Pkg.Max_Line and then Spec_Shape_Pkg.Is_Undeclared_Name_Error (L1) then
+                                          Undeclared_Names := Undeclared_Names + 1;
+                                       end if;
+                                    end;
+                                 end if;
+                                 LS := P + 1;
                               end if;
-                              LS := P + 1;
-                           end if;
-                        end loop;
+                           end loop;
+                           Prev_Diag := To_Unbounded_String
+                             (if D'Length <= Max_Repair_Chars then D else D (1 .. Max_Repair_Chars));
+                        end;
                         --  Skipped subprograms the unit did not declare deferred (a COUNT: the known weakening, see the brief).
                         Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
 
@@ -294,8 +301,6 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                         end if;
                         R := Round_Budget_Pkg.Result_Refused;
                         Prev_Unit := To_Unbounded_String (Unit);
-                        Prev_Diag := To_Unbounded_String
-                          (if Diag.all'Length <= Max_Repair_Chars then Diag.all else Diag.all (1 .. Max_Repair_Chars));
                         if Length (Prev_Unit) > Max_Repair_Chars then
                            Prev_Unit := Head (Prev_Unit, Max_Repair_Chars);
                         end if;
