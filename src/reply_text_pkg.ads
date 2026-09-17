@@ -1,10 +1,10 @@
+--  Copyright (C) 2026 Anthony Gair
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
---  Reply_Text_Pkg v3 -- the text of every reply the door sends. v3 withdraws self_judge from the
---  door: tools/list advertises licence_gate alone. Self_Judge_Text stays, because the carried
---  Tool_Run_Pkg composes its own reply with it.
---  Spec: ANVIL lane, wu-crucible-reply-text-3 round D, 2026-09-16, planner Rosie
---  qwen3.8-27b-ada:v0.3; proved with its own body ANALYSED, not assumed (own_body slot).
---  Carried unchanged -- a header may be added, a contract may not drift.
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: f468ce9fae8b7dfe1a39d410386ac89f3c00357d6ce5773402724b3e665dcc2a
 --
 package Reply_Text_Pkg with SPARK_Mode is
 
@@ -44,6 +44,7 @@ package Reply_Text_Pkg with SPARK_Mode is
    Type_Key : constant String := Q ("type") & ":";
    Properties_Key : constant String := Q ("properties") & ":";
    Requested_Key : constant String := Q ("requested") & ":";
+   Sheet_Key : constant String := Q ("sheet") & ":";
    Judge_Key : constant String := Q ("judge") & ":";
    Edition_Key : constant String := Q ("edition") & ":";
    Refused_Key : constant String := Q ("refused") & ":";
@@ -75,7 +76,16 @@ package Reply_Text_Pkg with SPARK_Mode is
      Q ("refuse or permit a requested emission licence for this edition") &
      "," & Input_Schema_Key & Licence_Gate_Schema & "}";
 
-   Tools_Inner : constant String := Tools_Key & "[" & Licence_Gate_Tool & "]";
+   Intake_Check_Schema : constant String :=
+     "{" & Type_Key & Object_Word & "," & Properties_Key &
+     "{" & Sheet_Key & "{" & Type_Key & String_Word & "}" & "}" & "}";
+
+   Intake_Check_Tool : constant String :=
+     "{" & Name_Key & Q ("intake_check") & "," & Description_Key &
+     Q ("measure a spec sheet and refuse it with named gaps, or permit it to be forged") &
+     "," & Input_Schema_Key & Intake_Check_Schema & "}";
+
+   Tools_Inner : constant String := Tools_Key & "[" & Licence_Gate_Tool & "," & Intake_Check_Tool & "]";
 
    function Error_Reply (Id_Text : String; Code : Integer; Message : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Error_Key & "{" & Code_Key & Image_Of (Code) & "," & Message_Key & Q (Message) & "}" & "}")
