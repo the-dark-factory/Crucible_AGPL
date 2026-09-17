@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 6c2716c6b24a9d0bc24182548c98d90ab5ab77be008cd90482e89a0eee7f80e9
+--  Unstamped source sha256: f6ab35369abd691a82184d65f13f4bb8ebaecde2f653ac323d2795c8a499d214
 --
 with Json_Scan_Pkg;
 with Json_Rpc_Frame_Pkg;
@@ -35,8 +35,9 @@ package Frame_Facts_Pkg with SPARK_Mode is
    Spec_Key         : constant String := "spec";
    Body_Key         : constant String := "body";
    Level_Key        : constant String := "level";
+   Forge_Lit        : constant String := "forge";
 
-   type Tool_Type is (T_Licence_Gate, T_Self_Judge, T_Intake_Check, T_Prove_Unit, T_Unknown);
+   type Tool_Type is (T_Licence_Gate, T_Self_Judge, T_Intake_Check, T_Prove_Unit, T_Forge, T_Unknown);
 
    function Parse_Failed (Line : String) return Boolean is
      ((not (Json_Scan_Pkg.Value_Span (Line, Jsonrpc_Key).found and then Json_Scan_Pkg.Value_Span (Line, Jsonrpc_Key).kind = Json_Scan_Pkg.K_String)))
@@ -69,7 +70,7 @@ package Frame_Facts_Pkg with SPARK_Mode is
           Post => ((if not Json_Scan_Pkg.Value_Span (Line, Method_Key).found then Method_Of'Result = Json_Rpc_Frame_Pkg.M_Unknown));
 
    function Tool_Of (Line : String) return Tool_Type is
-     ((if not (Json_Scan_Pkg.Value_Span (Line, Name_Key).found and then Json_Scan_Pkg.Value_Span (Line, Name_Key).kind = Json_Scan_Pkg.K_String) then T_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Licence_Gate_Lit) then T_Licence_Gate elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Self_Judge_Lit) then T_Self_Judge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Intake_Check_Lit) then T_Intake_Check elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Prove_Unit_Lit) then T_Prove_Unit else T_Unknown))
+     ((if not (Json_Scan_Pkg.Value_Span (Line, Name_Key).found and then Json_Scan_Pkg.Value_Span (Line, Name_Key).kind = Json_Scan_Pkg.K_String) then T_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Licence_Gate_Lit) then T_Licence_Gate elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Self_Judge_Lit) then T_Self_Judge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Intake_Check_Lit) then T_Intake_Check elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Prove_Unit_Lit) then T_Prove_Unit elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Forge_Lit) then T_Forge else T_Unknown))
      with Pre  => Line'First = 1 and then Line'Length <= 1048576,
           Post => ((if not Json_Scan_Pkg.Value_Span (Line, Name_Key).found then Tool_Of'Result = T_Unknown));
 

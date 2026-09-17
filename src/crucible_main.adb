@@ -4,9 +4,9 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 1abc695692d5f110ed961456e366377ec9a5756f0814d09b9bc29a6ba903e485
+--  Unstamped source sha256: eb8b6c9295440f4df37878ea3a2fad2cb1f13523e0cbe7208a1b5297194e7a0f
 --
---  Crucible_Main v6 -- the door's edge: a read loop, one declare block, one call into the frame
+--  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
 --  v5 (CRUCIBLE v0.2.0 step 4a) adds the intake_check tool: the sheet argument is decoded by the proven
 --  Json_String_Pkg, split on line feeds into Intake_Measure_Pkg.Sheet (bounded; a sheet that does not fit is
@@ -17,6 +17,8 @@
 --  v6 (step 4b) adds the prove_unit tool: unit, spec, body and level are read from the call, spec and body decoded
 --  by Json_String_Pkg, and Prover_Rail_Call_Pkg.Prove gathers the rail facts; the outcome is decided by the
 --  proven Prover_Rail_Pkg.Decide. Second slot (outcome_word) turns that outcome into its word.
+--  v7 (step 4c) adds the forge tool: the sheet is decoded as for intake_check and carried through Pipeline_Run_Pkg, whose
+--  every step is decided by proven cores (Pipeline_Stage_Pkg, Job_Record_Pkg, Stage_Outcome_Map_Pkg); the reply is its report.
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
@@ -33,6 +35,9 @@ with Intake_Measure_Pkg;
 with Intake_Refusal_Pkg;
 with Prover_Rail_Pkg;
 with Prover_Rail_Call_Pkg;
+with Pipeline_Stage_Pkg;
+with Pipeline_Run_Pkg;
+with Ada.Characters.Handling;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -257,6 +262,47 @@ case O is
          return "{""outcome"":""input_refused"",""reason"":""unreadable""}";
    end Prove_Unit_Text;
 
+   --  The forge tool: the one-line pipeline report for the sheet argument of Line.
+   function Forge_Text (Line : String) return String is
+      use Ada.Strings.Unbounded;
+      function Low (S : String) return String renames Ada.Characters.Handling.To_Lower;
+      Span : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Sheet_Span (Line);
+   begin
+      if not (Span.found and then Span.kind = Json_Scan_Pkg.K_String and then Span.first < Span.last) then
+         return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""no sheet""}";
+      end if;
+      declare
+         C       : constant Json_Scan_Pkg.Span_Type := Json_Scan_Pkg.String_Contents (Line, Span);
+         Raw     : constant String (1 .. Natural'Max (0, C.last - C.first + 1)) := Line (C.first .. C.last);
+         Decoded : String (1 .. Natural'Max (1, Raw'Length));
+         Dec_Len : Natural;
+         Ok      : Boolean;
+      begin
+         Json_String_Pkg.Decode (Raw, Decoded, Dec_Len, Ok);
+         if not Ok then
+            return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""bad_string""}";
+         end if;
+         declare
+            R       : constant Pipeline_Run_Pkg.Report := Pipeline_Run_Pkg.Run (Decoded (1 .. Dec_Len));
+            Why     : constant String := To_String (R.Reason);
+            W1      : constant String (1 .. Why'Length) := Why;
+            Enc     : String (1 .. Natural'Max (1, 2 * W1'Length));
+            Enc_Len : Natural;
+            Enc_Ok  : Boolean;
+         begin
+            Json_String_Pkg.Encode (W1, Enc, Enc_Len, Enc_Ok);
+            return "{""final"":""" & Low (Pipeline_Stage_Pkg.Stage'Image (R.Final)) &
+              """,""stopped_at"":""" & Low (Pipeline_Stage_Pkg.Stage'Image (R.Stopped_At)) &
+              """,""transitions"":""" & Img (R.Transitions) &
+              """,""emit_allowed"":""" & (if R.Emit_Allowed then "true" else "false") &
+              """,""reason"":""" & (if Enc_Ok then Enc (1 .. Enc_Len) else "unencodable") & """}";
+         end;
+      end;
+   exception
+      when others =>
+         return "{""final"":""unmeasured"",""stopped_at"":""intake"",""reason"":""unreadable""}";
+   end Forge_Text;
+
 begin
    while not Ada.Text_IO.End_Of_File loop
       Ada.Text_IO.Get_Line (Buffer.all, Last);
@@ -283,6 +329,8 @@ begin
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
                   elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Prove_Unit then
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
+                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Forge then
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Forge_Text (Line))));
                   else
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
                   end if;

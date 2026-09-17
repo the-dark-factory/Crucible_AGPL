@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: e7544241ecbc04e9aa0f8f2379eb22376b2f216ab09ea06914839240f88a4d5c
+--  Unstamped source sha256: 5b206992cb5668b8abbf7773be2ae21b1021e5a43c27ae362c638d6ebf586a66
 --
 package Reply_Text_Pkg with SPARK_Mode is
 
@@ -100,8 +100,18 @@ package Reply_Text_Pkg with SPARK_Mode is
      "{" & Name_Key & Q ("prove_unit") & "," & Description_Key &
      Q ("prove one unit over the prover rail; the outcome is decided by the proven rail judge") &
      "," & Input_Schema_Key & Prove_Unit_Schema & "}";
+   Forge_Prop   : constant String := Sheet_Key & "{" & Type_Key & String_Word & "}";
+   Forge_Obj    : constant String := Type_Key & Object_Word & "," & Properties_Key;
+   Forge_Schema : constant String := "{" & Forge_Obj & "{" & Forge_Prop & "}" & "}";
+   Forge_Name   : constant String := Name_Key & Q ("forge");
+   Forge_Desc   : constant String := Description_Key & Q ("carry one spec sheet through the pipeline; nothing emitted unless every gate passed");
+   Forge_Tool   : constant String := "{" & Forge_Name & "," & Forge_Desc & "," & Input_Schema_Key & Forge_Schema & "}";
    First_Two_Tools   : constant String := Licence_Gate_Tool & "," & Intake_Check_Tool;
-   Tools_Inner       : constant String := Tools_Key & "[" & First_Two_Tools & "," & Prove_Unit_Tool & "]";
+   Last_Two_Tools : constant String := Prove_Unit_Tool & "," & Forge_Tool;
+   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools;
+
+   subtype Reply_String is String with Dynamic_Predicate => Reply_String'Length <= 8192;
+   Tools_Inner  : constant Reply_String := Tools_Key & "[" & All_Tools & "]";
 
    function Error_Reply (Id_Text : String; Code : Integer; Message : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Error_Key & "{" & Code_Key & Image_Of (Code) & "," & Message_Key & Q (Message) & "}" & "}")
