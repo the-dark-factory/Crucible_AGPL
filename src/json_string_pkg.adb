@@ -4,9 +4,9 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 07057d9aa720f55dedec259519dd1877f6145ec39f679c6902bca977c83d749c
+--  Unstamped source sha256: 1138fbc6f5cf0e143b123da200ecc9498c9d5589c295586cb4b701bd4dee39c5
 --
-package body Json_String_Pkg with SPARK_Mode is
+package body Json_String_Pkg with SPARK_Mode => On is
 
    procedure Decode (Raw : String; Output : out String; Output_Len : out Natural; Ok : out Boolean) is
       K : Positive := 1;
@@ -65,5 +65,48 @@ package body Json_String_Pkg with SPARK_Mode is
       Output_Len := N;
       Ok := True;
    end Decode;
+
+   procedure Encode (Input : String; Output : out String; Output_Len : out Natural; Ok : out Boolean) is
+      N : Natural := 0;
+   begin
+      Output := (others => ' ');
+      Output_Len := 0;
+      Ok := False;
+
+      for K in Input'Range loop
+         pragma Loop_Invariant (N <= 2 * (K - 1));
+         pragma Loop_Invariant (for all J in 1 .. N => Output (J) in ' ' .. '~');
+         pragma Loop_Invariant (for all J in 1 .. K - 1 => Is_Encodable (Input (J)));
+         pragma Loop_Invariant (if (for all J in 1 .. K - 1 => Is_Plain (Input (J)))
+                                then N = K - 1 and then (for all J in 1 .. N => Output (J) = Input (J)));
+         pragma Loop_Invariant (if Input'Length = 1 and then Input (1) = LF then K = 1);
+
+         if Is_Plain (Input (K)) then
+            N := N + 1;
+            Output (N) := Input (K);
+         elsif Input (K) = '"' or else Input (K) = '\' then
+            Output (N + 1) := '\';
+            Output (N + 2) := Input (K);
+            N := N + 2;
+         elsif Input (K) = LF then
+            Output (N + 1) := '\';
+            Output (N + 2) := 'n';
+            N := N + 2;
+         elsif Input (K) = HT then
+            Output (N + 1) := '\';
+            Output (N + 2) := 't';
+            N := N + 2;
+         elsif Input (K) = CR then
+            Output (N + 1) := '\';
+            Output (N + 2) := 'r';
+            N := N + 2;
+         else
+            return;
+         end if;
+      end loop;
+
+      Output_Len := N;
+      Ok := True;
+   end Encode;
 
 end Json_String_Pkg;

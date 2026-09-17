@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f83a57c1c9ce36f74593b9dde111b64838f14c931ae3dc5a18800be439262afc
+--  Unstamped source sha256: 587ea18b56546aa80a4b645f3ec922e94d93118358cbe14ddbe23abb2418f9c2
 --
 package Json_String_Pkg with SPARK_Mode is
 
@@ -39,6 +39,10 @@ package Json_String_Pkg with SPARK_Mode is
      ((if C in ' ' .. '~' or C = LF or C = HT or C = CR or C = BS or C = FF then True else False))
    with Post => (if C = Character'Val (0) then not Is_Output_Char'Result);
 
+   function Is_Encodable (C : Character) return Boolean is
+     ((if Is_Plain (C) or C = '"' or C = '\' or C = LF or C = HT or C = CR then True else False))
+   with Post => (if Is_Encodable'Result then Is_Output_Char (C));
+
    function Is_Hex (C : Character) return Boolean is
      ((if C in '0' .. '9' or C in 'a' .. 'f' or C in 'A' .. 'F' then True else False))
    with Post => (if Is_Hex'Result then C in ' ' .. '~');
@@ -53,5 +57,9 @@ package Json_String_Pkg with SPARK_Mode is
    procedure Decode (Raw : String; Output : out String; Output_Len : out Natural; Ok : out Boolean)
    with Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then Output'First = 1 and then Output'Length >= Raw'Length,
         Post => (if Ok then Output_Len <= Raw'Length and then (for all K in 1 .. Output_Len => Is_Output_Char (Output (K)))) and then (if (for all K in Raw'Range => Is_Plain (Raw (K))) then Ok and then Output_Len = Raw'Length and then (for all K in Raw'Range => Output (K) = Raw (K))) and then (if (for some K in Raw'Range => Raw (K) not in ' ' .. '~') then not Ok) and then (if Raw'Length >= 1 and then Raw (Raw'Last) = '\' and then (Raw'Length = 1 or else Raw (Raw'Last - 1) /= '\') then not Ok) and then (if Raw'Length = 2 and then Raw (1) = '\' and then Is_Simple_Escape (Raw (2)) then Ok and then Output_Len = 1 and then Output (1) = Simple_Value (Raw (2)));
+
+   procedure Encode (Input : String; Output : out String; Output_Len : out Natural; Ok : out Boolean)
+   with Pre => Input'First = 1 and then Input'Last in 0 .. Max_Raw and then Output'First = 1 and then Output'Length >= 2 * Input'Length,
+        Post => (if Ok then Output_Len <= 2 * Input'Length and then (for all K in 1 .. Output_Len => Output (K) in ' ' .. '~')) and then (if (for all K in Input'Range => Is_Plain (Input (K))) then Ok and then Output_Len = Input'Length and then (for all K in Input'Range => Output (K) = Input (K))) and then (if (for some K in Input'Range => not Is_Encodable (Input (K))) then not Ok) and then (if Input'Length = 1 and then Input (1) = LF then Ok and then Output_Len = 2 and then Output (1) = '\' and then Output (2) = 'n');
 
 end Json_String_Pkg;
