@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 79bef863436b97d79af9085b4af8a62d775a65dca7290022da93306541df0df2
+--  Unstamped source sha256: 65de7411f0171d0f4e58fd2eada572cce93216a424989948cab70a3bba645973
 --
 --  Prover_Rail_Call_Pkg -- CRUCIBLE's path to a prover over the PROVER RAIL (step 4b unit 3).
 --  Purpose: gather the facts for one proof request and one reply, and let the proven deciders judge them.
@@ -28,5 +28,20 @@ package Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       Spec_Text : String;
       Body_Text : String;
       Level     : Natural) return Prover_Rail_Pkg.Outcome_Kind;
+
+   --  5a-1b: the same call, and beside the outcome the prover's own severity lines, which the service sends
+   --  as raw lines after its reply line (bounded on the service side by the proven Prove_Diagnostics_Pkg:
+   --  at most 60 lines of at most 512 bytes, in file order). Diagnostics is that text, LF-joined, or empty
+   --  when no lines came, the declared count and the lines received disagreed, or the reply was not complete.
+   --  It never changes Outcome: Prover_Rail_Pkg.Decide sees the reply line's facts only.
+   type Text_Access is access String;
+
+   procedure Prove_With_Diagnostics
+     (Unit_Name   : String;
+      Spec_Text   : String;
+      Body_Text   : String;
+      Level       : Natural;
+      Outcome     : out Prover_Rail_Pkg.Outcome_Kind;
+      Diagnostics : out Text_Access);
 
 end Prover_Rail_Call_Pkg;

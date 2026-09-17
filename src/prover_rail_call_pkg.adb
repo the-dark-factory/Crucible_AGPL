@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 013cb12640ee56b5a4d18935ad3117fc10d9e6b40684a2555278ec80cd0f8578
+--  Unstamped source sha256: 5533567826fe664e2eb96b9fcba5b97780807030670c107e1cd68aeb5eae71df
 --
 --  Prover_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (request-facts, reply-facts),
 --  filled by a Wu edge round; the slot prose is the prover rail client edge's, whose fills passed its probes.
@@ -70,11 +70,13 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       return S (S'First + 1 .. S'Last);
    end Img;
 
-   function Prove
-     (Unit_Name : String;
-      Spec_Text : String;
-      Body_Text : String;
-      Level     : Natural) return Prover_Rail_Pkg.Outcome_Kind
+   procedure Prove_With_Diagnostics
+     (Unit_Name   : String;
+      Spec_Text   : String;
+      Body_Text   : String;
+      Level       : Natural;
+      Outcome     : out Prover_Rail_Pkg.Outcome_Kind;
+      Diagnostics : out Text_Access)
    is
       Request : Prover_Rail_Pkg.Request_Facts;
       Reply   : Prover_Rail_Pkg.Reply_Facts;
@@ -83,6 +85,7 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       Conf_Len : Natural := 0;
       Found    : Boolean := False;   --  a valid rail line whose rail is "prover" was read
    begin
+      Diagnostics := new String'("");
       --  Configuration: ONLY from the file; the first VALID prover line (Rail_Config_Pkg judges validity).
       declare
          F : Ada.Text_IO.File_Type;
@@ -132,17 +135,16 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
          end;
 
          --  SLOT BEGIN (request-facts)
-      Request.rail_is_prover := Found;
-      Request.endpoint_on_estate := On_Estate;
-      Request.unit_bytes := Unit_Bytes;
-      Request.max_unit_bytes := Max_Unit_Bytes;
-      Request.level_demanded := Level;
+Request.rail_is_prover := Found;
+Request.endpoint_on_estate := On_Estate;
+Request.unit_bytes := Unit_Bytes;
+Request.max_unit_bytes := Max_Unit_Bytes;
+Request.level_demanded := Level;
          --  SLOT END (request-facts)
 
          if Prover_Rail_Pkg.May_Send (Request) then
             declare
                Max_Reply : constant Positive := Rail_Config_Pkg.Max_Reply_Of (Conf);
-               type Text_Access is access String;
                Reply_Buf : constant Text_Access := new String (1 .. Max_Reply);
                Reply_Len : Natural;
                Reached, Timed_Out, Over_Bound, Complete : Boolean;
@@ -157,7 +159,7 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
                   Request         => Line,
                   Timeout_Seconds => Rail_Config_Pkg.Timeout_Of (Conf),
                   Max_Reply       => Max_Reply,
-                  Until_Line_Feed => True,
+                  Until_Line_Feed => False,   --  5a-1b: read to the service's close; the line ends at the first LF
                   Reply           => Reply_Buf.all,
                   Reply_Len       => Reply_Len,
                   Reached         => Reached,
@@ -166,51 +168,90 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
                   Complete        => Complete);
                Reply.connected := Reached;
                Reply.timed_out := Timed_Out;
-               Reply.reply_complete := Complete;
 
-               if Complete and then Reply_Len <= 1_048_576 then
-                  declare
-                     R : constant String (1 .. Reply_Len) := Reply_Buf (1 .. Reply_Len);
-                     Lvl, Gen, Unp, Jus, Skp : Natural := 0;
-                     Lvl_Ok, Gen_Ok, Unp_Ok, Jus_Ok, Skp_Ok : Boolean := False;
-                  begin
-                     Read_Natural (R, "level_run_at", Lvl, Lvl_Ok);
-                     Read_Natural (R, "checks_generated", Gen, Gen_Ok);
-                     Read_Natural (R, "checks_unproved", Unp, Unp_Ok);
-                     Read_Natural (R, "checks_justified", Jus, Jus_Ok);
-                     Read_Natural (R, "subprograms_skipped", Skp, Skp_Ok);
-                     --  SLOT BEGIN (reply-facts)
-      Reply.reply_well_formed := Is_Present (R, "digest") and then
-        Is_Present (R, "prover") and then
-        Is_Present (R, "prover_version") and then
-        Is_Present (R, "prover_ran") and then
-        Is_Present (R, "prover_exited_cleanly") and then
-        Is_Present (R, "unit_compiled") and then
-        Lvl_Ok and then Gen_Ok and then Unp_Ok and then Jus_Ok and then Skp_Ok;
-      Reply.subprograms_skipped := Skp;
-      Reply.digest_matches := Value_Text (R, "digest") = Digest;
-      Reply.prover_identified := Value_Text (R, "prover") = "gnatprove" and then
-        Value_Text (R, "prover_version")'Length > 0;
-      Reply.run.prover_ran := Value_Text (R, "prover_ran") = "true";
-      Reply.run.prover_exited_cleanly := Value_Text (R, "prover_exited_cleanly") = "true";
-      Reply.run.unit_compiled := Value_Text (R, "unit_compiled") = "true";
-      Reply.run.level_run_at := Lvl;
-      Reply.run.checks_generated := Gen;
-      Reply.run.checks_unproved := Unp;
-      Reply.run.checks_justified := Jus;
-      Reply.run.level_demanded := Request.level_demanded;
-                     --  SLOT END (reply-facts)
-                  end;
-               end if;
+               --  5a-1b: the stream is the reply LINE (up to the first line feed) followed by the raw
+               --  diagnostic lines the service sent after it. A stream without a line feed holds no complete
+               --  reply line. The line is judged exactly as before; the trailer never touches Reply.
+               declare
+                  LF       : constant Character := Character'Val (10);
+                  Line_End : Natural := 0;
+               begin
+                  for I in 1 .. Reply_Len loop
+                     if Reply_Buf (I) = LF then
+                        Line_End := I;
+                        exit;
+                     end if;
+                  end loop;
+                  Reply.reply_complete := Complete and then Line_End > 0;
+
+                  if Reply.reply_complete and then Line_End - 1 <= 65_536 then
+                     declare
+                        R : constant String (1 .. Line_End - 1) := Reply_Buf (1 .. Line_End - 1);
+                        Lvl, Gen, Unp, Jus, Skp : Natural := 0;
+                        Lvl_Ok, Gen_Ok, Unp_Ok, Jus_Ok, Skp_Ok : Boolean := False;
+                        N     : Natural := 0;
+                        N_Ok  : Boolean := False;
+                        Lines : Natural := 0;
+                     begin
+                        Read_Natural (R, "level_run_at", Lvl, Lvl_Ok);
+                        Read_Natural (R, "checks_generated", Gen, Gen_Ok);
+                        Read_Natural (R, "checks_unproved", Unp, Unp_Ok);
+                        Read_Natural (R, "checks_justified", Jus, Jus_Ok);
+                        Read_Natural (R, "subprograms_skipped", Skp, Skp_Ok);
+                        --  SLOT BEGIN (reply-facts)
+Reply.reply_well_formed := Is_Present (R, "digest") and then Is_Present (R, "prover") and then Is_Present (R, "prover_version") and then Is_Present (R, "prover_ran") and then Is_Present (R, "prover_exited_cleanly") and then Is_Present (R, "unit_compiled") and then Lvl_Ok and then Gen_Ok and then Unp_Ok and then Jus_Ok and then Skp_Ok;
+Reply.subprograms_skipped := Skp;
+Reply.digest_matches := Value_Text (R, "digest") = Digest;
+Reply.prover_identified := Value_Text (R, "prover") = "gnatprove" and then Value_Text (R, "prover_version")'Length > 0;
+Reply.run.prover_ran := Value_Text (R, "prover_ran") = "true";
+Reply.run.prover_exited_cleanly := Value_Text (R, "prover_exited_cleanly") = "true";
+Reply.run.unit_compiled := Value_Text (R, "unit_compiled") = "true";
+Reply.run.level_run_at := Lvl;
+Reply.run.checks_generated := Gen;
+Reply.run.checks_unproved := Unp;
+Reply.run.checks_justified := Jus;
+Reply.run.level_demanded := Request.level_demanded;
+                        --  SLOT END (reply-facts)
+
+                        --  Diagnostics: kept only when the declared count and the complete lines received
+                        --  agree and the trailer is within the collector's bound (60 lines of 512 + LF).
+                        Read_Natural (R, "diagnostics_lines", N, N_Ok);
+                        for I in Line_End + 1 .. Reply_Len loop
+                           if Reply_Buf (I) = LF then
+                              Lines := Lines + 1;
+                           end if;
+                        end loop;
+                        if N_Ok and then Lines = N and then Reply_Len - Line_End <= 60 * 513
+                          and then (Reply_Len = Line_End or else Reply_Buf (Reply_Len) = LF)
+                        then
+                           Diagnostics := new String'(Reply_Buf (Line_End + 1 .. Reply_Len));
+                        end if;
+                     end;
+                  end if;
+               end;
             end;
          end if;
       end;
 
-      return Prover_Rail_Pkg.Decide (Request, Reply);
+      Outcome := Prover_Rail_Pkg.Decide (Request, Reply);
    exception
       when others =>
          --  Anything unexpected is never a pass: the facts gathered so far are judged as they stand.
-         return Prover_Rail_Pkg.Decide (Request, Reply);
+         Outcome := Prover_Rail_Pkg.Decide (Request, Reply);
+         Diagnostics := new String'("");
+   end Prove_With_Diagnostics;
+
+   function Prove
+     (Unit_Name : String;
+      Spec_Text : String;
+      Body_Text : String;
+      Level     : Natural) return Prover_Rail_Pkg.Outcome_Kind
+   is
+      Outcome     : Prover_Rail_Pkg.Outcome_Kind;
+      Diagnostics : Text_Access;
+   begin
+      Prove_With_Diagnostics (Unit_Name, Spec_Text, Body_Text, Level, Outcome, Diagnostics);
+      return Outcome;
    end Prove;
 
 end Prover_Rail_Call_Pkg;
