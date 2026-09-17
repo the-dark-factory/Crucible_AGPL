@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 23ad3d6fd6c100b18dddbcb945e78f18f5324fbac0ebbe9e41c819c48b2a900e
+--  Unstamped source sha256: 7b3cd9c2899edee7c4516a5b0c6ab6cc3a6c843ab7d79b9ed9c838e29d6665b2
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -131,6 +131,7 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Prev_Unit : Unbounded_String;
       Prev_Diag : Unbounded_String;
       Last_Word : Unbounded_String := To_Unbounded_String ("none");
+      Last_Hint : Unbounded_String;   --  Gate_Hint & Substance_Hint of the previous refused round
    begin
       Unit_Name := To_Unbounded_String (Name);
       Spec_Text := Null_Unbounded_String;
@@ -149,7 +150,7 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                  LF & "REPAIR MODE. The previous round emitted the unit shown at the end, and the compiler/prover reported" & LF &
                  "the lines below. Start FROM that unit; do NOT write a new one from scratch. Change ONLY what those lines" & LF &
                  "or the sheet name; re-emit the whole unit." & LF & LF &
-                 "WHY IT WAS REFUSED (" & To_String (Last_Word) & "):" & LF & Gate_Hint (To_String (Last_Word)) & LF &
+                 "WHY IT WAS REFUSED (" & To_String (Last_Word) & "):" & LF & To_String (Last_Hint) & LF &
                  "THE PROVER'S LINES:" & LF &
                  To_String (Prev_Diag) & LF & "THE UNIT THE PREVIOUS ROUND EMITTED:" & LF & To_String (Prev_Unit) & LF
                else "");
@@ -302,6 +303,16 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                            return;
                         end if;
                         R := Round_Budget_Pkg.Result_Refused;
+                        declare
+                           V : constant Contract_Emission_Pkg.Verdict_Type := Contract_Emission_Pkg.Assemble (EF);
+                        begin
+                           Last_Hint := To_Unbounded_String
+                             (Gate_Hint (Gate_Word_Pkg.Word_Of (GF)) &
+                              (if Route /= Fill_Route_Pkg.Route_Refuse and then not May_Emit then
+                                 Substance_Hint (V.fault_no_operations, V.fault_missing_postcondition, V.fault_undeclared_name,
+                                                 V.fault_vocabulary_open, V.fault_over_bound, not EF.preconditions_stated)
+                               else ""));
+                        end;
                         Prev_Unit := To_Unbounded_String (Unit);
                         if Length (Prev_Unit) > Max_Repair_Chars then
                            Prev_Unit := Head (Prev_Unit, Max_Repair_Chars);

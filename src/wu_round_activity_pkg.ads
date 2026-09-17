@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 5051c9e1002f5275fe51772704d5d6886e47f38d572ff47ebb225612dd9a696c
+--  Unstamped source sha256: 6e950036e759143df3f3ebdce925567dddc0970f1399a4a068417d98a91af45f
 --
 --  Wu_Round_Activity_Pkg -- the Emit_Contract stage of CRUCIBLE's pipeline, in process (step 5a-2f).
 --  Purpose: the Wu SPECIFICATION ROUND inside the executable. Per round: the house form + the sheet + the accepted
@@ -80,6 +80,22 @@ package Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       elsif Word = "refused-unproved" then
         "SOME CHECKS WERE NOT PROVED: the lines below name them; strengthen or correct those contracts." & LF
       else "");
+
+   --  When the route ACCEPTED the round (fill or fill-deferred) but the substance judge refused it, the repair
+   --  section names each fault the admitted Contract_Emission_Pkg found — otherwise the model is told nothing.
+   function Substance_Hint
+     (No_Operations, Missing_Postcondition, Undeclared_Name, Vocabulary_Open, Over_Bound, No_Precondition : Boolean)
+      return String is
+     ((if No_Operations then "NO OPERATION IS DECLARED: declare the sheet's operation." & LF else "") &
+      (if Missing_Postcondition then
+         "AN OPERATION HAS NO CONTRACT: every declared operation carries a Post, or is completed by an expression." & LF
+       else "") &
+      (if Undeclared_Name then "A NAME IS USED THAT THE UNIT NEVER DECLARES: declare every type and helper it uses." & LF else "") &
+      (if Vocabulary_Open then "THE UNIT DID NOT COMPILE, so its vocabulary is not established." & LF else "") &
+      (if Over_Bound then "TOO MANY OPERATIONS: at most eight in one unit." & LF else "") &
+      (if No_Precondition then
+         "NO PRECONDITION IS STATED: give the walking operation a  Pre =>  the sheet implies (a non-empty structure, a valid index)." & LF
+       else ""));
 
    Max_Repair_Chars : constant := 32_768;   --  the repair section is bounded: the previous unit and the rail's lines
 
