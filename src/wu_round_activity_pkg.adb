@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 9560662b3d86b081f1237d832dfcf143518df0b5862beaf8ccbe26af94c0484c
+--  Unstamped source sha256: 2ed72a6c9f86c2ffdcbbb2aaece4b311f6132e3dcd678052c4828f05df0df4f8
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -123,7 +123,10 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Result    : out Pipeline_Stage_Pkg.Outcome;
       Reason    : out Unbounded_String)
    is
-      Name      : constant String := Unit_Name_Of (Sheet);
+      Raw_Name  : constant String := Unit_Name_Of (Sheet);
+      --  First index 1: the proven cores index a Name pattern from 1, and a slice concatenation keeps the slice's
+      --  lower bound (found by the 18:53 probe: "unreadable" on every real unit).
+      Name      : constant String (1 .. Raw_Name'Length) := Raw_Name;
       S         : Round_Budget_Pkg.Budget_State := Round_Budget_Pkg.Fresh;
       Prev_Unit : Unbounded_String;
       Prev_Diag : Unbounded_String;
