@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 1c37a024d1361a26106b590018d036c427c48bbbab5c7b303a9db4ea6ba8f5af
+--  Unstamped source sha256: e9809840b99bc95175035c9c3bf0c9d6050792dd3c57f35ec8ff46d88fcec1a9
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
@@ -93,7 +93,7 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          end if;
 
          --  SLOT BEGIN (sent_fact)
-      F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok;
+F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok;
          --  SLOT END (sent_fact)
 
          if F.sent then
@@ -105,7 +105,7 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                Is_Ollama : constant Boolean :=
                  Model_Rail_Fields_Pkg.Protocol_Of (Conf) = Model_Rail_Fields_Pkg.Protocol_Ollama;
                Req_Body  : constant String :=
-                 (if Is_Ollama then Model_Request_Pkg.Request_Text (Model_1, Encoded)
+                 (if Is_Ollama then Model_Request_Pkg.Request_Text (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf))
                   else Model_Request_Pkg.Request_Text_Openai
                          (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)));
                Path      : constant String := (if Is_Ollama then "/api/chat" else "/v1/chat/completions");
@@ -172,14 +172,14 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                end if;
 
                --  SLOT BEGIN (reply_facts)
-      F.reached := Reached;
-      F.timed_out := Timed_Out;
-      F.over_bound := Over_Bound;
-      F.http_usable := Http_Ok;
-      F.truncated := Truncated_Ok;
-      F.content_present := Content_Ok;
-      F.complete := Complete_Ok;
-      F.decoded_ok := Decoded_Ok;
+F.reached := Reached;
+F.timed_out := Timed_Out;
+F.over_bound := Over_Bound;
+F.http_usable := Http_Ok;
+F.truncated := Truncated_Ok;
+F.content_present := Content_Ok;
+F.complete := Complete_Ok;
+F.decoded_ok := Decoded_Ok;
                --  SLOT END (reply_facts)
             end;
          end if;
