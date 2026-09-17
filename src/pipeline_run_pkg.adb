@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 5673e8e76e3af44c105b30d7b5aa03e757ff5325b5943e819e2bd4d82c10b9fa
+--  Unstamped source sha256: 742cb0d758c07c387dda9cab050347c0ab9dff6aa47c894cba4d77318b3c3ec4
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -12,6 +12,7 @@ with Audit_Ledger_Pkg;
 with Job_Record_Pkg;
 with Pipeline_Activities_Pkg;
 with Decompose_Activity_Pkg;
+with Wu_Round_Activity_Pkg;
 
 package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 
@@ -27,6 +28,11 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       R      : Unbounded_String;
       Seq    : Natural := 0;
       Last_S : Pipeline_Stage_Pkg.Stage := Pipeline_Stage_Pkg.Intake;
+      --  5a-2f: the job's products travel between stages here (plumbing; every stage still decides through its cores):
+      --  the accepted design (Decompose), the unit name and the fit specification (Emit_Contract), re-proved by Prove_Spec.
+      Design    : Unbounded_String;
+      Unit_Name : Unbounded_String;
+      Spec_Text : Unbounded_String;
    begin
       for Step in 1 .. Max_Transitions loop
          exit when Pipeline_Stage_Pkg.Is_Terminal (S);
@@ -36,7 +42,12 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
             when Pipeline_Stage_Pkg.Intake =>
                Pipeline_Activities_Pkg.Run_Intake (Sheet, O, R);
             when Pipeline_Stage_Pkg.Decompose =>
-               Decompose_Activity_Pkg.Run (Sheet, O, R);
+               Decompose_Activity_Pkg.Run_Keeping_Design (Sheet, O, R, Design);
+            when Pipeline_Stage_Pkg.Emit_Contract =>
+               Wu_Round_Activity_Pkg.Run (Sheet, To_String (Design), Unit_Name, Spec_Text, O, R);
+            when Pipeline_Stage_Pkg.Prove_Spec =>
+               --  A second, independent judgement of the fit specification by the prover rail.
+               Pipeline_Activities_Pkg.Run_Prove (To_String (Unit_Name), To_String (Spec_Text), "", 2, O, R);
             when Pipeline_Stage_Pkg.Emit =>
                if Job_Record_Pkg.May_Emit (J) then
                   Pipeline_Activities_Pkg.Run_Owed (O, R);   --  writing the unit and receipt is step 6's work
@@ -53,8 +64,8 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
          Last_S := S;
 
          --  SLOT BEGIN (transition)
-J := Job_Record_Pkg.Record_Outcome (J, S, O);
-S := Pipeline_Stage_Pkg.Next (S, O);
+         J := Job_Record_Pkg.Record_Outcome (J, S, O);
+         S := Pipeline_Stage_Pkg.Next (S, O);
          --  SLOT END (transition)
       end loop;
 

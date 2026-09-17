@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 65de7411f0171d0f4e58fd2eada572cce93216a424989948cab70a3bba645973
+--  Unstamped source sha256: f9520680d8a002e72b4cc853b68e6d8b598b94c41892d55d581a5437472acc9d
 --
 --  Prover_Rail_Call_Pkg -- CRUCIBLE's path to a prover over the PROVER RAIL (step 4b unit 3).
 --  Purpose: gather the facts for one proof request and one reply, and let the proven deciders judge them.
@@ -42,6 +42,18 @@ package Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       Body_Text   : String;
       Level       : Natural;
       Outcome     : out Prover_Rail_Pkg.Outcome_Kind;
+      Diagnostics : out Text_Access);
+
+   --  5a-2f: the same call, and beside the outcome the Reply_Facts the outcome was decided from (unit_compiled,
+   --  checks_generated, checks_unproved, subprograms_skipped, ...), so a caller can derive the gate WORD
+   --  (Gate_Word_Pkg) from the very facts Prover_Rail_Pkg.Decide judged. Prove_With_Diagnostics and Prove wrap it.
+   procedure Prove_Full
+     (Unit_Name   : String;
+      Spec_Text   : String;
+      Body_Text   : String;
+      Level       : Natural;
+      Outcome     : out Prover_Rail_Pkg.Outcome_Kind;
+      Facts       : out Prover_Rail_Pkg.Reply_Facts;
       Diagnostics : out Text_Access);
 
 end Prover_Rail_Call_Pkg;

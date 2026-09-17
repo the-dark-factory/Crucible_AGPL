@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 53490b99526133d79fc4bd54c9eab623e8406a2a13668e0821f622cc04428836
+--  Unstamped source sha256: 5f402c941033b00a1fea9878f2448766eef356099c824b2126af1722c2c5a9dc
 --
 --  Decompose_Activity_Pkg body -- template (seat-written plumbing) with TWO slots (model_result, design_result), filled
 --  by a Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 3, Decompose).
@@ -27,15 +27,17 @@ package body Decompose_Activity_Pkg with SPARK_Mode => Off is
 
    function Lower (S : String) return String renames Ada.Characters.Handling.To_Lower;
 
-   procedure Run
+   procedure Run_Keeping_Design
      (Brief  : String;
       Result : out Pipeline_Stage_Pkg.Outcome;
-      Reason : out Unbounded_String)
+      Reason : out Unbounded_String;
+      Design : out Unbounded_String)
    is
       Text     : Model_Rail_Call_Pkg.Text_Access;
       O        : Model_Reply_Pkg.Outcome_Kind;
       Accepted : Boolean := False;
    begin
+      Design := Null_Unbounded_String;
       Model_Rail_Call_Pkg.Complete (Design_Instruction & Brief, Text, O);
 
       if not Model_Reply_Pkg.Is_Text (O) then
@@ -100,6 +102,11 @@ Result := Stage_Outcome_Map_Pkg.From_Model (O);
          if not Fits then
             Reason := To_Unbounded_String ("design does not fit the scanner bounds");
          else
+            --  5a-2f: the design as the judge sees it, kept for Emit_Contract (one subsystem per line, LF-terminated).
+            for L in 1 .. Set.Count loop
+               Append (Design, Set.Lines (L).Text (1 .. Set.Lines (L).Len));
+               Append (Design, LF);
+            end loop;
             declare
                SR : constant Mascot_Scan_Pkg.Scan_Result := Mascot_Scan_Pkg.Scan (Set.all);
             begin
@@ -113,6 +120,19 @@ Result := Stage_Outcome_Map_Pkg.From_Model (O);
                      Reason := To_Unbounded_String
                        ((if Accepted then "design accepted" else "design refused by the judge") &
                         ": " & Natural'Image (Set.Count) & " subsystems");
+                     if not Accepted then
+                        --  Name every judge fact that failed (5a-0: the refusal says WHAT is missing).
+                        declare
+                           Failed : constant Mascot_Judge_Pkg.Failed_Set := Mascot_Judge_Pkg.Failed (Facts);
+                        begin
+                           Append (Reason, "; failed:");
+                           for N in Mascot_Judge_Pkg.Fact_Name loop
+                              if Failed (N) then
+                                 Append (Reason, " " & Lower (Mascot_Judge_Pkg.Fact_Name'Image (N)));
+                              end if;
+                           end loop;
+                        end;
+                     end if;
                   end;
                end if;
             end;
@@ -126,6 +146,17 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Accepted);
       when others =>
          Reason := To_Unbounded_String ("decompose: unreadable");
          Result := Pipeline_Stage_Pkg.Unmeasured_Here;
+         Design := Null_Unbounded_String;
+   end Run_Keeping_Design;
+
+   procedure Run
+     (Brief  : String;
+      Result : out Pipeline_Stage_Pkg.Outcome;
+      Reason : out Unbounded_String)
+   is
+      Design : Unbounded_String;
+   begin
+      Run_Keeping_Design (Brief, Result, Reason, Design);
    end Run;
 
 end Decompose_Activity_Pkg;

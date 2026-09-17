@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 5533567826fe664e2eb96b9fcba5b97780807030670c107e1cd68aeb5eae71df
+--  Unstamped source sha256: 826f8b0923bf5268c033a9b9492fc789ebc6f6776d1d86a66c23cb434b000cb0
 --
 --  Prover_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (request-facts, reply-facts),
 --  filled by a Wu edge round; the slot prose is the prover rail client edge's, whose fills passed its probes.
@@ -70,12 +70,13 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       return S (S'First + 1 .. S'Last);
    end Img;
 
-   procedure Prove_With_Diagnostics
+   procedure Prove_Full
      (Unit_Name   : String;
       Spec_Text   : String;
       Body_Text   : String;
       Level       : Natural;
       Outcome     : out Prover_Rail_Pkg.Outcome_Kind;
+      Facts       : out Prover_Rail_Pkg.Reply_Facts;
       Diagnostics : out Text_Access)
    is
       Request : Prover_Rail_Pkg.Request_Facts;
@@ -135,11 +136,11 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
          end;
 
          --  SLOT BEGIN (request-facts)
-Request.rail_is_prover := Found;
-Request.endpoint_on_estate := On_Estate;
-Request.unit_bytes := Unit_Bytes;
-Request.max_unit_bytes := Max_Unit_Bytes;
-Request.level_demanded := Level;
+      Request.rail_is_prover := Found;
+      Request.endpoint_on_estate := On_Estate;
+      Request.unit_bytes := Unit_Bytes;
+      Request.max_unit_bytes := Max_Unit_Bytes;
+      Request.level_demanded := Level;
          --  SLOT END (request-facts)
 
          if Prover_Rail_Pkg.May_Send (Request) then
@@ -199,18 +200,31 @@ Request.level_demanded := Level;
                         Read_Natural (R, "checks_justified", Jus, Jus_Ok);
                         Read_Natural (R, "subprograms_skipped", Skp, Skp_Ok);
                         --  SLOT BEGIN (reply-facts)
-Reply.reply_well_formed := Is_Present (R, "digest") and then Is_Present (R, "prover") and then Is_Present (R, "prover_version") and then Is_Present (R, "prover_ran") and then Is_Present (R, "prover_exited_cleanly") and then Is_Present (R, "unit_compiled") and then Lvl_Ok and then Gen_Ok and then Unp_Ok and then Jus_Ok and then Skp_Ok;
-Reply.subprograms_skipped := Skp;
-Reply.digest_matches := Value_Text (R, "digest") = Digest;
-Reply.prover_identified := Value_Text (R, "prover") = "gnatprove" and then Value_Text (R, "prover_version")'Length > 0;
-Reply.run.prover_ran := Value_Text (R, "prover_ran") = "true";
-Reply.run.prover_exited_cleanly := Value_Text (R, "prover_exited_cleanly") = "true";
-Reply.run.unit_compiled := Value_Text (R, "unit_compiled") = "true";
-Reply.run.level_run_at := Lvl;
-Reply.run.checks_generated := Gen;
-Reply.run.checks_unproved := Unp;
-Reply.run.checks_justified := Jus;
-Reply.run.level_demanded := Request.level_demanded;
+      Reply.reply_well_formed :=
+        Is_Present (R, "digest") and then
+        Is_Present (R, "prover") and then
+        Is_Present (R, "prover_version") and then
+        Is_Present (R, "prover_ran") and then
+        Is_Present (R, "prover_exited_cleanly") and then
+        Is_Present (R, "unit_compiled") and then
+        Lvl_Ok and then
+        Gen_Ok and then
+        Unp_Ok and then
+        Jus_Ok and then
+        Skp_Ok;
+      Reply.subprograms_skipped := Skp;
+      Reply.digest_matches := Value_Text (R, "digest") = Digest;
+      Reply.prover_identified :=
+        Value_Text (R, "prover") = "gnatprove" and then
+        Value_Text (R, "prover_version")'Length > 0;
+      Reply.run.prover_ran := Value_Text (R, "prover_ran") = "true";
+      Reply.run.prover_exited_cleanly := Value_Text (R, "prover_exited_cleanly") = "true";
+      Reply.run.unit_compiled := Value_Text (R, "unit_compiled") = "true";
+      Reply.run.level_run_at := Lvl;
+      Reply.run.checks_generated := Gen;
+      Reply.run.checks_unproved := Unp;
+      Reply.run.checks_justified := Jus;
+      Reply.run.level_demanded := Request.level_demanded;
                         --  SLOT END (reply-facts)
 
                         --  Diagnostics: kept only when the declared count and the complete lines received
@@ -233,12 +247,27 @@ Reply.run.level_demanded := Request.level_demanded;
          end if;
       end;
 
+      Facts := Reply;
       Outcome := Prover_Rail_Pkg.Decide (Request, Reply);
    exception
       when others =>
          --  Anything unexpected is never a pass: the facts gathered so far are judged as they stand.
+         Facts := Reply;
          Outcome := Prover_Rail_Pkg.Decide (Request, Reply);
          Diagnostics := new String'("");
+   end Prove_Full;
+
+   procedure Prove_With_Diagnostics
+     (Unit_Name   : String;
+      Spec_Text   : String;
+      Body_Text   : String;
+      Level       : Natural;
+      Outcome     : out Prover_Rail_Pkg.Outcome_Kind;
+      Diagnostics : out Text_Access)
+   is
+      Facts : Prover_Rail_Pkg.Reply_Facts;
+   begin
+      Prove_Full (Unit_Name, Spec_Text, Body_Text, Level, Outcome, Facts, Diagnostics);
    end Prove_With_Diagnostics;
 
    function Prove
