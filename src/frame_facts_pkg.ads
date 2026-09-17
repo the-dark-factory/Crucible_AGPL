@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: df9b28c250dbc3db14f93f5a00e0ef34dff740051e57246f336113c2d200e1a2
+--  Unstamped source sha256: 6c2716c6b24a9d0bc24182548c98d90ab5ab77be008cd90482e89a0eee7f80e9
 --
 with Json_Scan_Pkg;
 with Json_Rpc_Frame_Pkg;
@@ -30,8 +30,13 @@ package Frame_Facts_Pkg with SPARK_Mode is
    Self_Judge_Lit   : constant String := "self_judge";
    Intake_Check_Lit : constant String := "intake_check";
    Sheet_Key        : constant String := "sheet";
+   Prove_Unit_Lit   : constant String := "prove_unit";
+   Unit_Key         : constant String := "unit";
+   Spec_Key         : constant String := "spec";
+   Body_Key         : constant String := "body";
+   Level_Key        : constant String := "level";
 
-   type Tool_Type is (T_Licence_Gate, T_Self_Judge, T_Intake_Check, T_Unknown);
+   type Tool_Type is (T_Licence_Gate, T_Self_Judge, T_Intake_Check, T_Prove_Unit, T_Unknown);
 
    function Parse_Failed (Line : String) return Boolean is
      ((not (Json_Scan_Pkg.Value_Span (Line, Jsonrpc_Key).found and then Json_Scan_Pkg.Value_Span (Line, Jsonrpc_Key).kind = Json_Scan_Pkg.K_String)))
@@ -64,7 +69,7 @@ package Frame_Facts_Pkg with SPARK_Mode is
           Post => ((if not Json_Scan_Pkg.Value_Span (Line, Method_Key).found then Method_Of'Result = Json_Rpc_Frame_Pkg.M_Unknown));
 
    function Tool_Of (Line : String) return Tool_Type is
-     ((if not (Json_Scan_Pkg.Value_Span (Line, Name_Key).found and then Json_Scan_Pkg.Value_Span (Line, Name_Key).kind = Json_Scan_Pkg.K_String) then T_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Licence_Gate_Lit) then T_Licence_Gate elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Self_Judge_Lit) then T_Self_Judge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Intake_Check_Lit) then T_Intake_Check else T_Unknown))
+     ((if not (Json_Scan_Pkg.Value_Span (Line, Name_Key).found and then Json_Scan_Pkg.Value_Span (Line, Name_Key).kind = Json_Scan_Pkg.K_String) then T_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Licence_Gate_Lit) then T_Licence_Gate elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Self_Judge_Lit) then T_Self_Judge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Intake_Check_Lit) then T_Intake_Check elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Prove_Unit_Lit) then T_Prove_Unit else T_Unknown))
      with Pre  => Line'First = 1 and then Line'Length <= 1048576,
           Post => ((if not Json_Scan_Pkg.Value_Span (Line, Name_Key).found then Tool_Of'Result = T_Unknown));
 
@@ -82,6 +87,26 @@ package Frame_Facts_Pkg with SPARK_Mode is
      (Json_Scan_Pkg.Value_Span (Line, Sheet_Key))
      with Pre  => Line'First = 1 and then Line'Length <= 1048576,
           Post => (Sheet_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Sheet_Key).found);
+
+   function Unit_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Unit_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Unit_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Unit_Key).found);
+
+   function Spec_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Spec_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Spec_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Spec_Key).found);
+
+   function Body_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Body_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Body_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Body_Key).found);
+
+   function Level_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Level_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Level_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Level_Key).found);
 
    function Facts_Of (Line : String) return Json_Rpc_Frame_Pkg.Facts_Type is
      ((parse_failed => Parse_Failed (Line), jsonrpc_is_2_0 => Jsonrpc_Is_2_0 (Line), has_id => Has_Id (Line), method => Method_Of (Line), has_params => Has_Params (Line)))

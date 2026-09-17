@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f468ce9fae8b7dfe1a39d410386ac89f3c00357d6ce5773402724b3e665dcc2a
+--  Unstamped source sha256: e7544241ecbc04e9aa0f8f2379eb22376b2f216ab09ea06914839240f88a4d5c
 --
 package Reply_Text_Pkg with SPARK_Mode is
 
@@ -45,6 +45,10 @@ package Reply_Text_Pkg with SPARK_Mode is
    Properties_Key : constant String := Q ("properties") & ":";
    Requested_Key : constant String := Q ("requested") & ":";
    Sheet_Key : constant String := Q ("sheet") & ":";
+   Unit_Key  : constant String := Q ("unit") & ":";
+   Spec_Key  : constant String := Q ("spec") & ":";
+   Body_Key  : constant String := Q ("body") & ":";
+   Level_Key : constant String := Q ("level") & ":";
    Judge_Key : constant String := Q ("judge") & ":";
    Edition_Key : constant String := Q ("edition") & ":";
    Refused_Key : constant String := Q ("refused") & ":";
@@ -85,7 +89,19 @@ package Reply_Text_Pkg with SPARK_Mode is
      Q ("measure a spec sheet and refuse it with named gaps, or permit it to be forged") &
      "," & Input_Schema_Key & Intake_Check_Schema & "}";
 
-   Tools_Inner : constant String := Tools_Key & "[" & Licence_Gate_Tool & "," & Intake_Check_Tool & "]";
+   Unit_Prop  : constant String := Unit_Key & "{" & Type_Key & String_Word & "}";
+   Spec_Prop  : constant String := Spec_Key & "{" & Type_Key & String_Word & "}";
+   Body_Prop  : constant String := Body_Key & "{" & Type_Key & String_Word & "}";
+   Level_Prop : constant String := Level_Key & "{" & Type_Key & String_Word & "}";
+   Prove_Unit_Props  : constant String := Unit_Prop & "," & Spec_Prop & "," & Body_Prop & "," & Level_Prop;
+   Prove_Unit_Schema : constant String :=
+     "{" & Type_Key & Object_Word & "," & Properties_Key & "{" & Prove_Unit_Props & "}" & "}";
+   Prove_Unit_Tool   : constant String :=
+     "{" & Name_Key & Q ("prove_unit") & "," & Description_Key &
+     Q ("prove one unit over the prover rail; the outcome is decided by the proven rail judge") &
+     "," & Input_Schema_Key & Prove_Unit_Schema & "}";
+   First_Two_Tools   : constant String := Licence_Gate_Tool & "," & Intake_Check_Tool;
+   Tools_Inner       : constant String := Tools_Key & "[" & First_Two_Tools & "," & Prove_Unit_Tool & "]";
 
    function Error_Reply (Id_Text : String; Code : Integer; Message : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Error_Key & "{" & Code_Key & Image_Of (Code) & "," & Message_Key & Q (Message) & "}" & "}")
@@ -104,7 +120,7 @@ package Reply_Text_Pkg with SPARK_Mode is
 
    function Tools_List_Result return String
      is ("{" & Tools_Inner & "}")
-     with Post => (Tools_List_Result'Result'Length >= 2 and then Tools_List_Result'Result (Tools_List_Result'Result'First) = '{' and then Tools_List_Result'Result (Tools_List_Result'Result'Last) = '}' and then Tools_List_Result'Result'Length <= 16384);
+     with Post => (Tools_List_Result'Result'Length >= 2 and then Tools_List_Result'Result (Tools_List_Result'Result'First) = '{' and then Tools_List_Result'Result (Tools_List_Result'Result'Last) = '}' and then Tools_List_Result'Result'Length = Tools_Inner'Length + 2);
 
    function Licence_Gate_Text (Edition_Is_Agpl : Boolean; Requested_Word : String; Refused : Boolean; Reason : String) return String
      is ("{" & Edition_Key & (if Edition_Is_Agpl then Agpl_Word else Commercial_Word) & "," & Requested_Key & Q (Requested_Word) & "," & Refused_Key & Json_Bool (Refused) & "," & Reason_Key & Q (Reason) & "}")

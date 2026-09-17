@@ -4,9 +4,9 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: edf12e4feb4a1f32dca05102e2fab284f26bc47f0de7ead6a6e576889b41e50d
+--  Unstamped source sha256: 1abc695692d5f110ed961456e366377ec9a5756f0814d09b9bc29a6ba903e485
 --
---  Crucible_Main v5 -- the door's edge: a read loop, one declare block, one call into the frame
+--  Crucible_Main v6 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
 --  v5 (CRUCIBLE v0.2.0 step 4a) adds the intake_check tool: the sheet argument is decoded by the proven
 --  Json_String_Pkg, split on line feeds into Intake_Measure_Pkg.Sheet (bounded; a sheet that does not fit is
@@ -14,6 +14,9 @@
 --  Intake_Refusal_Pkg.Assemble. The tool result text is the same one line harness/intake_main prints.
 --  Template (seat-written plumbing, v4 unchanged around it) with ONE slot (gaps), filled by a Wu edge round;
 --  brief BRIEF_crucible_step4_wiring_2026-09-17.
+--  v6 (step 4b) adds the prove_unit tool: unit, spec, body and level are read from the call, spec and body decoded
+--  by Json_String_Pkg, and Prover_Rail_Call_Pkg.Prove gathers the rail facts; the outcome is decided by the
+--  proven Prover_Rail_Pkg.Decide. Second slot (outcome_word) turns that outcome into its word.
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
@@ -28,6 +31,8 @@ with Intake_Line_Pkg;
 with Intake_Names_Pkg;
 with Intake_Measure_Pkg;
 with Intake_Refusal_Pkg;
+with Prover_Rail_Pkg;
+with Prover_Rail_Call_Pkg;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -188,6 +193,70 @@ if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          return "{""verdict"":""input_refused"",""reason"":""unreadable""}";
    end Intake_Check_Text;
 
+   --  The prove_unit tool: the one-line outcome text for the unit, spec, body and level arguments of Line.
+   function Prove_Unit_Text (Line : String) return String is
+      type Text_Access is access String;
+
+      --  A string argument's raw contents, or "" when absent, not a string, or empty.
+      function Raw_Of (S : Json_Scan_Pkg.Span_Type) return String is
+      begin
+         if S.found and then S.kind = Json_Scan_Pkg.K_String and then S.first < S.last then
+            declare
+               C : constant Json_Scan_Pkg.Span_Type := Json_Scan_Pkg.String_Contents (Line, S);
+            begin
+               if C.first <= C.last then
+                  return Line (C.first .. C.last);
+               end if;
+            end;
+         end if;
+         return "";
+      end Raw_Of;
+
+      Unit_Raw  : constant String := Raw_Of (Frame_Facts_Pkg.Unit_Span (Line));
+      Spec_Raw  : constant String := Raw_Of (Frame_Facts_Pkg.Spec_Span (Line));
+      Body_Raw  : constant String := Raw_Of (Frame_Facts_Pkg.Body_Span (Line));
+      Level_Raw : constant String := Raw_Of (Frame_Facts_Pkg.Level_Span (Line));
+      Spec_R    : constant String (1 .. Spec_Raw'Length) := Spec_Raw;
+      Body_R    : constant String (1 .. Body_Raw'Length) := Body_Raw;
+      Spec_Buf  : constant Text_Access := new String (1 .. Natural'Max (1, Spec_R'Length));
+      Body_Buf  : constant Text_Access := new String (1 .. Natural'Max (1, Body_R'Length));
+      Spec_Len, Body_Len : Natural;
+      Spec_Ok, Body_Ok   : Boolean;
+      Level     : Natural := 0;
+      O         : Prover_Rail_Pkg.Outcome_Kind;
+   begin
+      Json_String_Pkg.Decode (Spec_R, Spec_Buf.all, Spec_Len, Spec_Ok);
+      Json_String_Pkg.Decode (Body_R, Body_Buf.all, Body_Len, Body_Ok);
+      if not (Spec_Ok and then Body_Ok) then
+         return "{""outcome"":""input_refused"",""reason"":""bad_string""}";
+      end if;
+      begin
+         Level := Natural'Value (Level_Raw);
+      exception
+         when Constraint_Error =>
+            Level := 0;   --  an unreadable level is 0, which the proven May_Send refuses
+      end;
+      O := Prover_Rail_Call_Pkg.Prove (Unit_Raw, Spec_Buf (1 .. Spec_Len), Body_Buf (1 .. Body_Len), Level);
+      declare
+         Word : constant String := (
+         --  SLOT BEGIN (outcome_word)
+case O is
+     when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
+     when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
+     when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
+     when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
+     when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
+     when Prover_Rail_Pkg.Outcome_Proved => "proved"
+         --  SLOT END (outcome_word)
+         );
+      begin
+         return "{""outcome"":""" & Word & """}";
+      end;
+   exception
+      when others =>
+         return "{""outcome"":""input_refused"",""reason"":""unreadable""}";
+   end Prove_Unit_Text;
+
 begin
    while not Ada.Text_IO.End_Of_File loop
       Ada.Text_IO.Get_Line (Buffer.all, Last);
@@ -212,6 +281,8 @@ begin
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Tool_Run_Pkg.Licence_Gate (Crucible_Edition.Current, Line))));
                   elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Intake_Check then
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
+                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Prove_Unit then
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
                   else
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
                   end if;
