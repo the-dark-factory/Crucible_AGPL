@@ -1,20 +1,11 @@
+--  Copyright (C) 2026 Anthony Gair
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
---  Tool_Run_Pkg -- the run of each door tool as a pure function: licence_gate from (edition,
---  line) and self_judge from the binary's self-asserted facts to the reply text, composing the
---  carried judges and the carried reply text; the Refused argument handed to the text IS the
---  licence judge's verdict (BRIEF_crucible_door_split_2026-09-11 §3, unit 3 of the door split).
---  Spec: ANVIL lane, wu-crucible-tool-run round C, 2026-09-12 10:58, planner Rosie
---  qwen3.8-27b-ada:v0.3, proof_gate accepted: 38 unit checks proved, 0 unproved, 0 compile
---  errors, 0 cheat markers, over SIX carried specs (json_scan, json_rpc_frame, frame_facts,
---  edition_licence, sole_interface, reply_text) declared in carried.tsv by digest. Rounds A
---  (seat omitted `use type Reason_Type`) and B (guard tested .found only; seat's F6 Post
---  assumed V came from Assemble) parked and advised (cases 2e98d331, d4f4f561). The job's
---  bench step FAILED on a harness defect (body-fill of a self-completing spec, then a proof
---  project lacking the candidate) -- case 6e5f8c5e, repair_proposed; the spec needs no body and
---  is carried on the round's own evidence, as edition_licence_pkg was on 2026-09-11.
---  Owed: `facts_are_self_asserted` in the self_judge reply (door brief) -- not in Reply_Text v1.
---  The edition is a FORMAL; the edge passes Crucible_Edition.Current. Comment-stripped sha of
---  this spec equals the forged round-C spec.
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: fd7e363ac0a7367047b826a0a82b0875b89d708a3ab199dbdeddc70f34846b5f
+--
 with Json_Scan_Pkg;
 with Frame_Facts_Pkg;
 with Edition_Licence_Pkg;
@@ -43,7 +34,7 @@ package Tool_Run_Pkg with SPARK_Mode is
    None_Word          : constant String := "none";
 
    function Requested_Of (Line : String) return Edition_Licence_Pkg.Requested_Licence_Type with
-     Pre => Line'First = 1 and then Line'Length <= 65536,
+     Pre => Line'First = 1 and then Line'Length <= 1048576,
      Post => (if not Json_Scan_Pkg.Value_Span (Line, Requested_Key).found then Requested_Of'Result = Edition_Licence_Pkg.Other_Licence);
 
    function Requested_Of (Line : String) return Edition_Licence_Pkg.Requested_Licence_Type is
@@ -70,7 +61,7 @@ package Tool_Run_Pkg with SPARK_Mode is
       else Agpl_Only_Word);
 
    function Gate_Refuses (Edition : Edition_Licence_Pkg.Edition_Type; Line : String) return Boolean with
-     Pre => Line'First = 1 and then Line'Length <= 65536,
+     Pre => Line'First = 1 and then Line'Length <= 1048576,
      Post => (Gate_Refuses'Result = (if Edition_Licence_Pkg.Is_Refused (Edition_Licence_Pkg.Decide (Edition, Requested_Of (Line))) then True else False))
              and then (if Edition = Edition_Licence_Pkg.Commercial then not Gate_Refuses'Result)
              and then (if Requested_Of (Line) = Edition_Licence_Pkg.Agpl_Licence then not Gate_Refuses'Result);
@@ -79,7 +70,7 @@ package Tool_Run_Pkg with SPARK_Mode is
      (Edition_Licence_Pkg.Is_Refused (Edition_Licence_Pkg.Decide (Edition, Requested_Of (Line))));
 
    function Licence_Gate (Edition : Edition_Licence_Pkg.Edition_Type; Line : String) return String with
-     Pre => Line'First = 1 and then Line'Length <= 65536,
+     Pre => Line'First = 1 and then Line'Length <= 1048576,
      Post => Licence_Gate'Result'Length >= 2
              and then Licence_Gate'Result (Licence_Gate'Result'First) = '{'
              and then Licence_Gate'Result (Licence_Gate'Result'Last) = '}'

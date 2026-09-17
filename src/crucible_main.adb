@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 8327c352dfcda6ea16765a30819151d34eadce1cf1b637bf914c3e0c9340c616
+--  Unstamped source sha256: edf12e4feb4a1f32dca05102e2fab284f26bc47f0de7ead6a6e576889b41e50d
 --
 --  Crucible_Main v5 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -37,7 +37,9 @@ procedure Crucible_Main is
    Frame_Msg     : constant String := "request refused by the frame decider";
    Server_Name   : constant String :=
      (if Crucible_Edition.Is_Agpl then Server_Agpl else Server_Comm);
-   Buffer        : String (1 .. 65536);
+   Max_Line_Bytes : constant := 1_048_576;  --  one limit across the factory (Tony 2026-09-17: 1 MiB door)
+   type Buffer_Access is access String;
+   Buffer        : constant Buffer_Access := new String (1 .. Max_Line_Bytes);
    Last          : Natural;
 
    use type Json_Rpc_Frame_Pkg.Reply_Type;
@@ -153,11 +155,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-         if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-         if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-         if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-         if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-         if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -188,9 +190,9 @@ procedure Crucible_Main is
 
 begin
    while not Ada.Text_IO.End_Of_File loop
-      Ada.Text_IO.Get_Line (Buffer, Last);
+      Ada.Text_IO.Get_Line (Buffer.all, Last);
       declare
-         Line  : constant String := Buffer (1 .. Last);
+         Line  : constant String := Buffer.all (1 .. Last);
          Facts : constant Json_Rpc_Frame_Pkg.Facts_Type := Frame_Facts_Pkg.Facts_Of (Line);
          V     : constant Json_Rpc_Frame_Pkg.Verdict_Type := Json_Rpc_Frame_Pkg.Assemble (Facts);
          Span  : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Id_Span (Line);
