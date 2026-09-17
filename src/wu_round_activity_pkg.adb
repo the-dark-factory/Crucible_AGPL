@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 43ae2277e8dac4b7b900f4acd9e6f3a6f192cb937b51c612e149dff350aa2ea2
+--  Unstamped source sha256: 23ad3d6fd6c100b18dddbcb945e78f18f5324fbac0ebbe9e41c819c48b2a900e
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -148,7 +148,9 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
               (if Repair then
                  LF & "REPAIR MODE. The previous round emitted the unit shown at the end, and the compiler/prover reported" & LF &
                  "the lines below. Start FROM that unit; do NOT write a new one from scratch. Change ONLY what those lines" & LF &
-                 "or the sheet name; re-emit the whole unit." & LF & LF & "THE PROVER'S LINES:" & LF &
+                 "or the sheet name; re-emit the whole unit." & LF & LF &
+                 "WHY IT WAS REFUSED (" & To_String (Last_Word) & "):" & LF & Gate_Hint (To_String (Last_Word)) & LF &
+                 "THE PROVER'S LINES:" & LF &
                  To_String (Prev_Diag) & LF & "THE UNIT THE PREVIOUS ROUND EMITTED:" & LF & To_String (Prev_Unit) & LF
                else "");
             Prompt : constant String :=
