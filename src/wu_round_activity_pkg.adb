@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 7b3cd9c2899edee7c4516a5b0c6ab6cc3a6c843ab7d79b9ed9c838e29d6665b2
+--  Unstamped source sha256: a0058114fe20a38dd423db57c7606e6bf3ba929e5b21aad2e35316dd6b51cdea
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -189,6 +189,7 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                         Cheats   : Cheat_Marker_Pkg.Tally;
                         Shape    : Spec_Shape_Pkg.Shape;
                         Declared : Natural := 0;
+                        Sheet_Pre : Boolean := False;   --  the SHEET asked for a precondition (Contract_Emission v2)
                         Facts    : Prover_Rail_Pkg.Reply_Facts;
                         PO       : Prover_Rail_Pkg.Outcome_Kind;
                         Diag     : Prover_Rail_Call_Pkg.Text_Access;
@@ -257,17 +258,49 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                         Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
 
                         --  SLOT BEGIN (gate-facts)
-GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => Natural (Cheats.reject));
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
+       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped,
+       cheat_markers => Natural (Cheats.reject));
                         --  SLOT END (gate-facts)
 
                         --  SLOT BEGIN (route)
-Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF),
+           Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, Undeclared);
                         --  SLOT END (route)
 
                         --  Contract_Emission_Pkg.Facts_Type fields, in order: operation_count, operations_with_postcondition,
-                        --  names_used (default 0), names_declared, names_undeclared, vocabulary_is_stated, preconditions_stated.
+                        --  names_used (default 0), names_declared, names_undeclared, vocabulary_is_stated, preconditions_stated,
+                        --  sheet_states_precondition (v2 — set from Sheet_Pre, measured above).
+                        --  Contract_Emission v2 (Tony 2026-09-18): a precondition is a fault ONLY when the SHEET
+                        --  states one. Measured here from the sheet's own lines, never assumed: v1's fault was
+                        --  demanding what the sheet never asked for.
+                        declare
+                           SS : constant String (1 .. Sheet'Length) := Sheet;
+                           K  : Natural := 1;
+                        begin
+                           for P in 1 .. SS'Length + 1 loop
+                              if P = SS'Length + 1 or else SS (P) = Character'Val (10) then
+                                 if P > K then
+                                    declare
+                                       L2 : constant String (1 .. P - K) := SS (K .. P - 1);
+                                    begin
+                                       if L2'Length <= Spec_Shape_Pkg.Max_Line
+                                         and then Spec_Shape_Pkg.Contains_CI (L2, "pre:")
+                                       then
+                                          Sheet_Pre := True;
+                                       end if;
+                                    end;
+                                 end if;
+                                 K := P + 1;
+                              end if;
+                           end loop;
+                        end;
+
                         --  SLOT BEGIN (emission-facts)
-EF := (operation_count => Natural (Shape.operations), operations_with_postcondition => Natural (Shape.operations_with_post), names_used => 0, names_declared => Natural (Shape.operations), names_undeclared => Undeclared_Names, vocabulary_is_stated => Facts.run.unit_compiled, preconditions_stated => Shape.preconditions >= 1);
+EF := (operation_count => Natural (Shape.operations), operations_with_postcondition => Natural (Shape.operations_with_post),
+      names_used => 0, names_declared => Natural (Shape.operations), names_undeclared => Undeclared_Names,
+      vocabulary_is_stated => Facts.run.unit_compiled, preconditions_stated => Shape.preconditions >= 1,
+      sheet_states_precondition => Sheet_Pre);
 May_Emit := Contract_Emission_Pkg.Assemble (EF).may_emit;
                         --  SLOT END (emission-facts)
 
