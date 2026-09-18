@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: cd3465464a32d999896a579768c0c7f34a7e56dd315ee41ada3317c0bf2c3b29
+--  Unstamped source sha256: da9eacdda7274ea64667faa098fb95a8a3c8a48babd6bd957e0696afe4f1d6a2
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -162,11 +162,9 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       end loop;
       Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
       --  SLOT BEGIN (prove-spec-verdict)
-      GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
-             checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
-      Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-               GF.checks_unproved, GF.subprograms_skipped, Undeclared);
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0, GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
       --  SLOT END (prove-spec-verdict)
       R := To_Unbounded_String ("prove_spec: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
@@ -237,7 +235,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
              "Job_Record_Pkg") &
          "," & Json_Of ("gates_passed") & ":" & Json_Of ("intake,decompose,emit_contract,prove_spec,vacuity,fill_body,prove_body,seam,provenance,admission") &
          --  Named, not omitted: a reader must not have to guess why a field is absent.
-         "," & Json_Of ("not_recorded") & ":" & Json_Of ("prover_version,model_name,rail_endpoints — this run does not hold them") &
+         "," & Json_Of ("not_recorded") & ":" & Json_Of ("prover_version, model_name, rail_endpoints: this run does not hold them") &
          "}" & LF, Ok_R);
       if Ok_S and then Ok_B and then Ok_R then
          O := Pipeline_Stage_Pkg.Passed;
@@ -263,7 +261,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
             assembly_compiles        => Compiled);
       V := Seam_Coherence_Pkg.Assemble (F);
       --  SLOT BEGIN (seam-verdict)
-      O := Stage_Outcome_Map_Pkg.From_Verdict (V.fault_count = 0);
+O := Stage_Outcome_Map_Pkg.From_Verdict (V.fault_count = 0);
       --  SLOT END (seam-verdict)
       R := To_Unbounded_String ("seam: units " & Img (F.units_proved) & "/" & Img (F.unit_count) &
                                 ", seams " & Img (F.seam_count) &
@@ -291,7 +289,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
             fields_required            => 6);
       V := Provenance_Record_Pkg.Assemble (F);
       --  SLOT BEGIN (provenance-verdict)
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Provenance_Record_Pkg.Replayable_By_A_Stranger (V));
+O := Stage_Outcome_Map_Pkg.From_Verdict (Provenance_Record_Pkg.Replayable_By_A_Stranger (V));
       --  SLOT END (provenance-verdict)
       R := To_Unbounded_String ("provenance: fields " & Img (F.fields_recorded) & "/" & Img (F.fields_required) &
                                 (if V.fault_count = 0 then "" else ", faults " & Img (V.fault_count)));
@@ -319,7 +317,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
             admitter_is_the_seat        => False);
       V := Admission_Decision_Pkg.Assemble (F);
       --  SLOT BEGIN (admission-verdict)
-      O := Stage_Outcome_Map_Pkg.From_Verdict (V.admitted);
+O := Stage_Outcome_Map_Pkg.From_Verdict (V.admitted);
       --  SLOT END (admission-verdict)
       R := To_Unbounded_String ("admission: " & (if V.admitted then "admitted" else "refused") &
                                 (if V.reason_count = 0 then "" else ", reasons " & Img (V.reason_count)));
@@ -346,7 +344,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       end if;
       V := Vacuity_Facts_Pkg.Assemble (Facts.facts);
       --  SLOT BEGIN (vacuity-verdict)
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then V.contract_is_meaningful);
+O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then V.contract_is_meaningful);
       --  SLOT END (vacuity-verdict)
       R := To_Unbounded_String ("vacuity: " & Ada.Characters.Handling.To_Lower (Vacuity_Rail_Pkg.Outcome_Kind'Image (VO)) &
                                 (if V.contract_is_meaningful then "" else ", faults:" & Fault_Names (V)));
@@ -375,11 +373,9 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
          return;
       end if;
       --  SLOT BEGIN (prove-body-verdict)
-      GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
-             checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
-      Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-               GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0, GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
+O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
       --  SLOT END (prove-body-verdict)
       R := To_Unbounded_String ("prove_body: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
@@ -442,8 +438,8 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
          Last_S := S;
 
          --  SLOT BEGIN (transition)
-         J := Job_Record_Pkg.Record_Outcome (J, S, O);
-         S := Pipeline_Stage_Pkg.Next (S, O);
+J := Job_Record_Pkg.Record_Outcome (J, S, O);
+S := Pipeline_Stage_Pkg.Next (S, O);
          --  SLOT END (transition)
       end loop;
 
