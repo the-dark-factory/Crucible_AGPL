@@ -4,8 +4,10 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 5b206992cb5668b8abbf7773be2ae21b1021e5a43c27ae362c638d6ebf586a66
+--  Unstamped source sha256: d12455a8fc335b5f226bf882f342c14e39897e82d219f0c75dc575169d82aace
 --
+with Palais_Tools_Pkg;
+
 package Reply_Text_Pkg with SPARK_Mode is
 
    function Q (S : String) return String
@@ -22,7 +24,8 @@ package Reply_Text_Pkg with SPARK_Mode is
      with Post => Image_Of'Result'Length <= 12;
 
    function Escape_Quotes (S : String) return String
-     with Pre  => (S'First = 1 and then S'Length <= 4096),
+     with Global => null,
+          Pre  => (S'First = 1 and then S'Length <= 4096),
           Post => (Escape_Quotes'Result'First = 1
                    and then Escape_Quotes'Result'Length >= S'Length
                    and then Escape_Quotes'Result'Length <= 2 * S'Length);
@@ -92,7 +95,7 @@ package Reply_Text_Pkg with SPARK_Mode is
    Unit_Prop  : constant String := Unit_Key & "{" & Type_Key & String_Word & "}";
    Spec_Prop  : constant String := Spec_Key & "{" & Type_Key & String_Word & "}";
    Body_Prop  : constant String := Body_Key & "{" & Type_Key & String_Word & "}";
-   Level_Prop : constant String := Level_Key & "{" & Type_Key & String_Word & "}";
+   Level_Prop  : constant String := Level_Key & "{" & Type_Key & String_Word & "}";
    Prove_Unit_Props  : constant String := Unit_Prop & "," & Spec_Prop & "," & Body_Prop & "," & Level_Prop;
    Prove_Unit_Schema : constant String :=
      "{" & Type_Key & Object_Word & "," & Properties_Key & "{" & Prove_Unit_Props & "}" & "}";
@@ -108,8 +111,7 @@ package Reply_Text_Pkg with SPARK_Mode is
    Forge_Tool   : constant String := "{" & Forge_Name & "," & Forge_Desc & "," & Input_Schema_Key & Forge_Schema & "}";
    First_Two_Tools   : constant String := Licence_Gate_Tool & "," & Intake_Check_Tool;
    Last_Two_Tools : constant String := Prove_Unit_Tool & "," & Forge_Tool;
-   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools;
-
+   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools & "," & Palais_Tools_Pkg.Palais_Tools;
    subtype Reply_String is String with Dynamic_Predicate => Reply_String'Length <= 8192;
    Tools_Inner  : constant Reply_String := Tools_Key & "[" & All_Tools & "]";
 
