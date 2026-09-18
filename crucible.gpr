@@ -8,7 +8,10 @@ project Crucible is
    type Edition_Type is ("agpl", "commercial");
    Edition : Edition_Type := external ("CRUCIBLE_EDITION", "agpl");
 
-   for Source_Dirs use ("src", "src/edition-" & Edition);
+   --  src/generated holds crucible_build.ads, written by scripts/stamp-build.bb from the tree this
+   --  build comes from. Generated rather than hand-written so the binary cannot report a commit it
+   --  was not built from (v0.1.1 reported 0.1.0 because a human typed it).
+   for Source_Dirs use ("src", "src/generated", "src/edition-" & Edition);
    for Object_Dir use "obj/" & Edition;  --  per edition: a shared obj let the commercial build reuse the agpl edition object (found 2026-09-12)
    for Exec_Dir use "bin";
    for Main use ("crucible_main.adb");

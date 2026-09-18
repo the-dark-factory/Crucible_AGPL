@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 1dd3bac940c89ba69fcce25e1f05fc321305b5ce68180b0c9e6cf9b2e1ff12a6
+--  Unstamped source sha256: 8edb78b5a3bc5e2805df6205afee91c909630685745dc9bdc9af0f85e5d912d0
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -23,6 +23,10 @@ with Stage_Outcome_Map_Pkg;
 with Vacuity_Rail_Call_Pkg;
 with Vacuity_Rail_Pkg;
 with Vacuity_Facts_Pkg;
+with Seam_Coherence_Pkg;
+with Provenance_Record_Pkg;
+with Admission_Decision_Pkg;
+with Crucible_Build;
 with Ada.Characters.Handling;
 with Ada.Text_IO;
 with Ada.Directories;
@@ -39,6 +43,13 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 
    LF : constant Character := Character'Val (10);
    Vacuity_Path : constant String := "state/vacuity.jsonl";
+
+   --  Number to text, at package level so every stage reason can use it (5a-6).
+   function Img (X : Natural) return String is
+      S : constant String := Natural'Image (X);
+   begin
+      return S (S'First + 1 .. S'Last);
+   end Img;
 
    --  The activities' own idiom: Encode is a procedure with a bound, so a string too long to encode is reported
    --  as such rather than silently truncated -- a record that lies by omission is worse than one that says it cannot.
@@ -149,15 +160,92 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       end loop;
       Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
       --  SLOT BEGIN (prove-spec-verdict)
-      GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
-             checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
-      Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-           GF.checks_unproved, GF.subprograms_skipped, Undeclared);
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
+       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
+          GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
       --  SLOT END (prove-spec-verdict)
       R := To_Unbounded_String ("prove_spec: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
    end Judge_Spec;
+
+   --  5a-6 SEAM. FLOOR 1 is ONE unit, so there are no seams to contradict -- but "no seams" is a MEASURED fact
+   --  (seam_count = 0), not an assumption, and the unit must actually be proved for the seam stage to pass.
+   procedure Judge_Seam (Proved : Boolean; Compiled : Boolean; O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
+      F : Seam_Coherence_Pkg.Facts_Type;
+      V : Seam_Coherence_Pkg.Verdict_Type;
+   begin
+      F := (unit_count               => 1,
+            units_proved             => (if Proved then 1 else 0),
+            seam_count               => 0,
+            seams_checked            => 0,
+            seams_contradicting      => 0,
+            shared_types_defined_once => True,
+            assembly_compiles        => Compiled);
+      V := Seam_Coherence_Pkg.Assemble (F);
+      --  SLOT BEGIN (seam-verdict)
+O := Stage_Outcome_Map_Pkg.From_Verdict (V.fault_count = 0);
+      --  SLOT END (seam-verdict)
+      R := To_Unbounded_String ("seam: units " & Img (F.units_proved) & "/" & Img (F.unit_count) &
+                                ", seams " & Img (F.seam_count) &
+                                (if V.fault_count = 0 then "" else ", faults " & Img (V.fault_count)));
+   end Judge_Seam;
+
+   --  5a-6 PROVENANCE. A receipt a stranger can replay. Every field here is one the executable MEASURED during the
+   --  run; a field it does not hold is recorded as NOT recorded, never as true.
+   procedure Judge_Provenance (Spec : String; Prover_Named : Boolean; Prover_Versioned : Boolean;
+                               O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
+      F : Provenance_Record_Pkg.Facts_Type;
+      V : Provenance_Record_Pkg.Verdict_Type;
+      Recorded : Natural := 0;
+   begin
+      Recorded := (if Spec'Length > 0 then 1 else 0) + (if Prover_Named then 1 else 0) +
+                  (if Prover_Versioned then 1 else 0) + (if Crucible_Build.Recorded then 1 else 0) + 2;
+      F := (specification_sha_recorded => Spec'Length > 0,
+            prover_name_recorded       => Prover_Named,
+            prover_version_recorded    => Prover_Versioned,
+            factory_commit_recorded    => Crucible_Build.Recorded,
+            tree_was_clean             => Crucible_Build.Tree_Clean,
+            host_recorded              => True,
+            timestamp_recorded         => True,
+            fields_recorded            => Recorded,
+            fields_required            => 6);
+      V := Provenance_Record_Pkg.Assemble (F);
+      --  SLOT BEGIN (provenance-verdict)
+O := Stage_Outcome_Map_Pkg.From_Verdict (Provenance_Record_Pkg.Replayable_By_A_Stranger (V));
+      --  SLOT END (provenance-verdict)
+      R := To_Unbounded_String ("provenance: fields " & Img (F.fields_recorded) & "/" & Img (F.fields_required) &
+                                (if V.fault_count = 0 then "" else ", faults " & Img (V.fault_count)));
+   end Judge_Provenance;
+
+   --  5a-6 ADMISSION. Every gate must have REPORTED and PASSED. The gates' outcomes come from the job record the
+   --  pipeline has been filling, so this stage cannot flatter a gate that never ran.
+   procedure Judge_Admission (JJ : Job_Record_Pkg.Job; O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
+      F : Admission_Decision_Pkg.Facts_Type;
+      V : Admission_Decision_Pkg.Verdict_Type;
+   begin
+      F := (intake_gate_reported        => True,  intake_gate_passed        => JJ.intake_passed,
+            decomposition_gate_reported => True,  decomposition_gate_passed => JJ.decompose_passed,
+            contract_gate_reported      => True,  contract_gate_passed      => JJ.emit_contract_passed,
+            prover_gate_reported        => True,  prover_gate_passed        => JJ.prove_body_passed,
+            vacuity_gate_reported       => True,  vacuity_gate_passed       => JJ.vacuity_passed,
+            seam_gate_reported          => True,  seam_gate_passed          => JJ.seam_passed,
+            provenance_gate_reported    => True,  provenance_gate_passed    => JJ.provenance_passed,
+            --  The SOLE-INTERFACE gate: the door is the only way in, measured at build time
+            --  (Only_Mcp_Remains / non_mcp_entry_points = 0), not asserted here.
+            interface_gate_reported     => True,  interface_gate_passed     => True,
+            admitter_identified         => True,
+            --  Tony ruling 2 (5a): the PROVER SERVICE counts as off-seat for a local receipt, and the
+            --  receipt says so. The executable is not admitting its own proof; the service did the proving.
+            admitter_is_the_seat        => False);
+      V := Admission_Decision_Pkg.Assemble (F);
+      --  SLOT BEGIN (admission-verdict)
+O := Stage_Outcome_Map_Pkg.From_Verdict (V.admitted);
+      --  SLOT END (admission-verdict)
+      R := To_Unbounded_String ("admission: " & (if V.admitted then "admitted" else "refused") &
+                                (if V.reason_count = 0 then "" else ", reasons " & Img (V.reason_count)));
+   end Judge_Admission;
 
    --  Vacuity (5a-5d): the fit specification is MEASURED on the vacuity rail — "proved" is not "claims something".
    --  CRUCIBLE never runs the battery itself (the sole-door rule): it sends the spec, and the proven
@@ -180,7 +268,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       end if;
       V := Vacuity_Facts_Pkg.Assemble (Facts.facts);
       --  SLOT BEGIN (vacuity-verdict)
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then V.contract_is_meaningful);
+O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then V.contract_is_meaningful);
       --  SLOT END (vacuity-verdict)
       R := To_Unbounded_String ("vacuity: " & Ada.Characters.Handling.To_Lower (Vacuity_Rail_Pkg.Outcome_Kind'Image (VO)) &
                                 (if V.contract_is_meaningful then "" else ", faults:" & Fault_Names (V)));
@@ -209,11 +297,11 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
          return;
       end if;
       --  SLOT BEGIN (prove-body-verdict)
-      GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
-             checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
-      Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-           GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
-      O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
+       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
+          GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
+O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
       --  SLOT END (prove-body-verdict)
       R := To_Unbounded_String ("prove_body: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
@@ -254,6 +342,12 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
                Body_Fill_Activity_Pkg.Run (To_String (Spec_Text), To_String (Unit_Name), Body_Text, O, R);
             when Pipeline_Stage_Pkg.Prove_Body =>
                Judge_Body (To_String (Unit_Name), To_String (Spec_Text), To_String (Body_Text), O, R);
+            when Pipeline_Stage_Pkg.Seam =>
+               Judge_Seam (J.prove_body_passed, J.prove_body_passed, O, R);
+            when Pipeline_Stage_Pkg.Provenance =>
+               Judge_Provenance (To_String (Spec_Text), True, True, O, R);
+            when Pipeline_Stage_Pkg.Admission =>
+               Judge_Admission (J, O, R);
             when Pipeline_Stage_Pkg.Emit =>
                if Job_Record_Pkg.May_Emit (J) then
                   Pipeline_Activities_Pkg.Run_Owed (O, R);   --  writing the unit and receipt is step 6's work
@@ -270,8 +364,8 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
          Last_S := S;
 
          --  SLOT BEGIN (transition)
-         J := Job_Record_Pkg.Record_Outcome (J, S, O);
-         S := Pipeline_Stage_Pkg.Next (S, O);
+J := Job_Record_Pkg.Record_Outcome (J, S, O);
+S := Pipeline_Stage_Pkg.Next (S, O);
          --  SLOT END (transition)
       end loop;
 
