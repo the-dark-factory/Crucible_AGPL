@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f6ab35369abd691a82184d65f13f4bb8ebaecde2f653ac323d2795c8a499d214
+--  Unstamped source sha256: 00b17d938db619107534f30a9644fb4a828620c007b81f04087a911c2419c24f
 --
 with Json_Scan_Pkg;
 with Json_Rpc_Frame_Pkg;
@@ -36,8 +36,17 @@ package Frame_Facts_Pkg with SPARK_Mode is
    Body_Key         : constant String := "body";
    Level_Key        : constant String := "level";
    Forge_Lit        : constant String := "forge";
+   Tower_Import_Lit   : constant String := "tower_import";
+   Path_Key           : constant String := "path";
+   Palais_Shelf_Lit   : constant String := "palais.shelf";
+   Palais_Claim_Lit   : constant String := "palais.claim";
+   Palais_Fetch_Lit   : constant String := "palais.fetch";
+   Palais_Attempt_Lit : constant String := "palais.attempt";
+   Palais_Submit_Lit  : constant String := "palais.submit";
+   Digest_Key         : constant String := "digest";
+   Key_Key            : constant String := "key";
 
-   type Tool_Type is (T_Licence_Gate, T_Self_Judge, T_Intake_Check, T_Prove_Unit, T_Forge, T_Unknown);
+   type Tool_Type is (T_Licence_Gate, T_Self_Judge, T_Intake_Check, T_Prove_Unit, T_Forge, T_Tower_Import, T_Palais_Shelf, T_Palais_Claim, T_Palais_Fetch, T_Palais_Attempt, T_Palais_Submit, T_Unknown);
 
    function Parse_Failed (Line : String) return Boolean is
      ((not (Json_Scan_Pkg.Value_Span (Line, Jsonrpc_Key).found and then Json_Scan_Pkg.Value_Span (Line, Jsonrpc_Key).kind = Json_Scan_Pkg.K_String)))
@@ -70,7 +79,7 @@ package Frame_Facts_Pkg with SPARK_Mode is
           Post => ((if not Json_Scan_Pkg.Value_Span (Line, Method_Key).found then Method_Of'Result = Json_Rpc_Frame_Pkg.M_Unknown));
 
    function Tool_Of (Line : String) return Tool_Type is
-     ((if not (Json_Scan_Pkg.Value_Span (Line, Name_Key).found and then Json_Scan_Pkg.Value_Span (Line, Name_Key).kind = Json_Scan_Pkg.K_String) then T_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Licence_Gate_Lit) then T_Licence_Gate elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Self_Judge_Lit) then T_Self_Judge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Intake_Check_Lit) then T_Intake_Check elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Prove_Unit_Lit) then T_Prove_Unit elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Forge_Lit) then T_Forge else T_Unknown))
+     ((if not (Json_Scan_Pkg.Value_Span (Line, Name_Key).found and then Json_Scan_Pkg.Value_Span (Line, Name_Key).kind = Json_Scan_Pkg.K_String) then T_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Licence_Gate_Lit) then T_Licence_Gate elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Self_Judge_Lit) then T_Self_Judge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Intake_Check_Lit) then T_Intake_Check elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Prove_Unit_Lit) then T_Prove_Unit elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Forge_Lit) then T_Forge elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Tower_Import_Lit) then T_Tower_Import elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Palais_Shelf_Lit) then T_Palais_Shelf elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Palais_Claim_Lit) then T_Palais_Claim elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Palais_Fetch_Lit) then T_Palais_Fetch elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Palais_Attempt_Lit) then T_Palais_Attempt elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Name_Key)), Palais_Submit_Lit) then T_Palais_Submit else T_Unknown))
      with Pre  => Line'First = 1 and then Line'Length <= 1048576,
           Post => ((if not Json_Scan_Pkg.Value_Span (Line, Name_Key).found then Tool_Of'Result = T_Unknown));
 
@@ -108,6 +117,21 @@ package Frame_Facts_Pkg with SPARK_Mode is
      (Json_Scan_Pkg.Value_Span (Line, Level_Key))
      with Pre  => Line'First = 1 and then Line'Length <= 1048576,
           Post => (Level_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Level_Key).found);
+
+   function Path_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Path_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Path_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Path_Key).found);
+
+   function Digest_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Digest_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Digest_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Digest_Key).found);
+
+   function Key_Span (Line : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Value_Span (Line, Key_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Key_Span'Result.found = Json_Scan_Pkg.Value_Span (Line, Key_Key).found);
 
    function Facts_Of (Line : String) return Json_Rpc_Frame_Pkg.Facts_Type is
      ((parse_failed => Parse_Failed (Line), jsonrpc_is_2_0 => Jsonrpc_Is_2_0 (Line), has_id => Has_Id (Line), method => Method_Of (Line), has_params => Has_Params (Line)))
