@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 4a0c91e9489db9c807fcc7aa56a92141ad6d99ef36a5840eea6cc3c4e83119a8
+--  Unstamped source sha256: 1dd3bac940c89ba69fcce25e1f05fc321305b5ce68180b0c9e6cf9b2e1ff12a6
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -20,7 +20,13 @@ with Gate_Word_Pkg;
 with Fill_Route_Pkg;
 with Spec_Shape_Pkg;
 with Stage_Outcome_Map_Pkg;
+with Vacuity_Rail_Call_Pkg;
+with Vacuity_Rail_Pkg;
+with Vacuity_Facts_Pkg;
 with Ada.Characters.Handling;
+with Ada.Text_IO;
+with Ada.Directories;
+with Json_String_Pkg;
 
 package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 
@@ -28,8 +34,84 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
    use type Pipeline_Stage_Pkg.Stage;
    use type Fill_Route_Pkg.Route_Kind;
    use type Prover_Rail_Pkg.Outcome_Kind;
+   use type Vacuity_Rail_Pkg.Outcome_Kind;
+   use type Vacuity_Rail_Call_Pkg.Text_Access;
 
    LF : constant Character := Character'Val (10);
+   Vacuity_Path : constant String := "state/vacuity.jsonl";
+
+   --  The activities' own idiom: Encode is a procedure with a bound, so a string too long to encode is reported
+   --  as such rather than silently truncated -- a record that lies by omission is worse than one that says it cannot.
+   function Json_Of (S : String) return String is
+      S1  : constant String (1 .. S'Length) := S;
+      Enc : String (1 .. Natural'Max (1, 2 * S1'Length));
+      Len : Natural;
+      Ok  : Boolean;
+   begin
+      if S1'Length > Json_String_Pkg.Max_Raw then
+         return """too-long-to-encode""";
+      end if;
+      Json_String_Pkg.Encode (S1, Enc, Len, Ok);
+      return (if Ok then """" & Enc (1 .. Len) & """" else """unencodable""");
+   end Json_Of;
+
+   --  The faults by name, so a refusal says WHICH promise was empty rather than only that one was.
+   function Fault_Names (V : Vacuity_Facts_Pkg.Verdict_Type) return String is
+     ((if V.fault_battery_did_not_run then " battery_did_not_run" else "") &
+      (if V.fault_refused then " refused" else "") &
+      (if V.fault_errors then " errors" else "") &
+      (if V.fault_unread then " unread" else "") &
+      (if V.fault_nothing_graded then " nothing_graded" else "") &
+      (if V.fault_not_theorem then " not_theorem" else "") &
+      (if V.fault_inconsistent then " inconsistent" else ""));
+
+   --  One JSON line into state/vacuity.jsonl: the counts the verdict was reached from, and the battery's own grade
+   --  lines. A stage that refuses must leave behind the evidence it refused on.
+   procedure Record_Vacuity (Name   : String;
+                             VO     : Vacuity_Rail_Pkg.Outcome_Kind;
+                             Facts  : Vacuity_Rail_Pkg.Reply_Facts;
+                             Grades : Vacuity_Rail_Call_Pkg.Text_Access) is
+      F : Ada.Text_IO.File_Type;
+      function N (X : Natural) return String is
+         S : constant String := Natural'Image (X);
+      begin
+         return S (S'First + 1 .. S'Last);
+      end N;
+   begin
+      begin
+         Ada.Directories.Create_Path ("state");
+      exception
+         when others => null;
+      end;
+      begin
+         if Ada.Directories.Exists (Vacuity_Path) then
+            Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, Vacuity_Path);
+         else
+            Ada.Text_IO.Create (F, Ada.Text_IO.Out_File, Vacuity_Path);
+         end if;
+         Ada.Text_IO.Put_Line
+           (F,
+            "{""unit"":" & Json_Of (Name) &
+            ",""outcome"":""" & Ada.Characters.Handling.To_Lower (Vacuity_Rail_Pkg.Outcome_Kind'Image (VO)) &
+            """,""battery_ran"":""" & (if Facts.facts.battery_ran then "true" else "false") &
+            """,""functions_read"":""" & N (Facts.facts.functions_read) &
+            """,""functions_graded"":""" & N (Facts.facts.functions_graded) &
+            """,""definitions_only"":""" & N (Facts.facts.definitions_only) &
+            """,""postconditions_declared"":""" & N (Facts.facts.postconditions_declared) &
+            """,""postconditions_read"":""" & N (Facts.facts.postconditions_read) &
+            """,""theorem_count"":""" & N (Facts.facts.theorem_count) &
+            """,""runtime_only_count"":""" & N (Facts.facts.runtime_only_count) &
+            """,""unexercised_count"":""" & N (Facts.facts.unexercised_count) &
+            """,""refused_count"":""" & N (Facts.facts.refused_count) &
+            """,""grades"":" & Json_Of ((if Grades = null then "" else Grades.all)) & "}");
+         Ada.Text_IO.Close (F);
+      exception
+         when others =>
+            if Ada.Text_IO.Is_Open (F) then
+               Ada.Text_IO.Close (F);
+            end if;
+      end;
+   end Record_Vacuity;
 
    --  Prove_Spec (ruling 1, 5a-4): the second, independent judgement of the fit specification is the SAME proven route
    --  Emit_Contract used — fill or fill-deferred, skipped subprograms counted against the unit's own BODY-DEFERRED lines.
@@ -70,12 +152,39 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
              checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
       Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-                GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+           GF.checks_unproved, GF.subprograms_skipped, Undeclared);
       O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
       --  SLOT END (prove-spec-verdict)
       R := To_Unbounded_String ("prove_spec: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
    end Judge_Spec;
+
+   --  Vacuity (5a-5d): the fit specification is MEASURED on the vacuity rail — "proved" is not "claims something".
+   --  CRUCIBLE never runs the battery itself (the sole-door rule): it sends the spec, and the proven
+   --  Vacuity_Rail_Pkg.Decide judges the reply's facts through Vacuity_Facts_Pkg's rules. A rail that could not be
+   --  reached, or a run that did not finish, leaves the stage UNMEASURED — never passed, and never called hollow.
+   procedure Judge_Vacuity (Name, Spec : String; O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
+      N1 : constant String (1 .. Name'Length) := Name;
+      S1 : constant String (1 .. Spec'Length) := Spec;
+      Facts  : Vacuity_Rail_Pkg.Reply_Facts;
+      VO     : Vacuity_Rail_Pkg.Outcome_Kind;
+      Grades : Vacuity_Rail_Call_Pkg.Text_Access;
+      V      : Vacuity_Facts_Pkg.Verdict_Type;
+   begin
+      Vacuity_Rail_Call_Pkg.Judge_Full (N1, S1, VO, Facts, Grades);
+      Record_Vacuity (N1, VO, Facts, Grades);
+      if VO /= Vacuity_Rail_Pkg.Outcome_Meaningful and then VO /= Vacuity_Rail_Pkg.Outcome_Hollow then
+         O := Pipeline_Stage_Pkg.Unmeasured_Here;
+         R := To_Unbounded_String ("vacuity: rail: " & Ada.Characters.Handling.To_Lower (Vacuity_Rail_Pkg.Outcome_Kind'Image (VO)));
+         return;
+      end if;
+      V := Vacuity_Facts_Pkg.Assemble (Facts.facts);
+      --  SLOT BEGIN (vacuity-verdict)
+      O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then V.contract_is_meaningful);
+      --  SLOT END (vacuity-verdict)
+      R := To_Unbounded_String ("vacuity: " & Ada.Characters.Handling.To_Lower (Vacuity_Rail_Pkg.Outcome_Kind'Image (VO)) &
+                                (if V.contract_is_meaningful then "" else ", faults:" & Fault_Names (V)));
+   end Judge_Vacuity;
 
    --  Prove_Body: the prover judges specification + body together; with a body present nothing may remain deferred.
    procedure Judge_Body (Name, Spec, Body_T : String; O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
@@ -103,7 +212,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
              checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
       Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-                GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
+           GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
       O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
       --  SLOT END (prove-body-verdict)
       R := To_Unbounded_String ("prove_body: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
@@ -139,6 +248,8 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
                Wu_Round_Activity_Pkg.Run (Sheet, To_String (Design), Unit_Name, Spec_Text, O, R);
             when Pipeline_Stage_Pkg.Prove_Spec =>
                Judge_Spec (To_String (Unit_Name), To_String (Spec_Text), O, R);
+            when Pipeline_Stage_Pkg.Vacuity =>
+               Judge_Vacuity (To_String (Unit_Name), To_String (Spec_Text), O, R);
             when Pipeline_Stage_Pkg.Fill_Body =>
                Body_Fill_Activity_Pkg.Run (To_String (Spec_Text), To_String (Unit_Name), Body_Text, O, R);
             when Pipeline_Stage_Pkg.Prove_Body =>
