@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 215c16f10919d9af255df4dbf684d8a82da6be1bdf5de4912812768df18a379f
+--  Unstamped source sha256: df8f0656227dd14ebcfd479df1c301a581aa57fc73e1eb502857ca86991f09cb
 --
 --  Decompose_Activity_Pkg -- the Decompose stage of CRUCIBLE's pipeline, in process (step 4c unit 3).
 --  Purpose: ask the model rail for a MASCOT design of the brief, and judge it with the proven MASCOT scanner, measurer
@@ -22,6 +22,9 @@ package Decompose_Activity_Pkg with SPARK_Mode => Off is
    --  5a-0: the instruction states every obligation the MASCOT judge measures (Mascot_Judge_Pkg.Fact_Name), in the
    --  order a designer meets them. The first form listed the keys only; the model omitted element/buffer/producer/
    --  consumer, reports and discharge, and the judge refused (measured 2026-09-17, qwen3.8-27b-ada:v0.5).
+   --  2026-09-19 (Tony): two sentences added after an A/B through this package (Run_Keeping_Design, Rosie v0.3, two
+   --  sheets): data in POOLS with the events channel the ONLY worker-to-sink channel, and an example pool line carrying
+   --  its discharge. Decompose passed 32/50 with neither, 44/50 with the first, 50/50 with both.
    Design_Instruction : constant String :=
      "Emit a MASCOT design as JSON lines: exactly one subsystem per line, each line one flat JSON "
      & "object, every value a double-quoted string (no numbers, no lists, no nesting), no prose, no "
@@ -32,6 +35,9 @@ package Decompose_Activity_Pkg with SPARK_Mode => Off is
      & "(2) every channel line has element (the type carried), buffer (the depth, e.g. 1), producer "
      & "(one activity id) or producers (activity ids separated by spaces), and consumer naming exactly "
      & "ONE activity id. "
+     & "Carry data in POOLS, not channels: every input the operation reads and every result it produces "
+     & "lives in a pool whose accessed names the activities that use it. The events channel is the ONLY "
+     & "channel from the worker to the sink. "
      & "(3) exactly one channel is the events channel: it has reporting set to true, and exactly one "
      & "activity (the sink) consumes it. "
      & "(4) every activity line has reports naming that events channel id, and reads or writes naming "
@@ -44,6 +50,8 @@ package Decompose_Activity_Pkg with SPARK_Mode => Off is
      & "to the same consumer. "
      & "Example line: {""id"":""events"",""kind"":""channel"",""element"":""Event"",""buffer"":""8"","
      & """producer"":""searcher"",""consumer"":""reporter"",""reporting"":""true""} "
+     & "Example pool line (every pool carries its discharge): {""id"":""input"",""kind"":""pool"",""element"":""Input"","
+     & """accessed"":""worker"",""discharge"":""the input is read-only while the worker runs""} "
      & "Brief: ";
 
    procedure Run
