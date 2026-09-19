@@ -4,3 +4,5 @@ config/prover-service.conf
 toolchain/alire/
 config/vacuity-service.conf
 toolchain/config/
+out/
+state/
