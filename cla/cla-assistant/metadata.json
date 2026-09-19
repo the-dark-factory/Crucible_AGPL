@@ -1,0 +1,19 @@
+{
+    "name": {
+        "title": "Full name",
+        "type": "string",
+        "githubKey": "name",
+        "required": true
+    },
+    "email": {
+        "title": "E-mail",
+        "type": "string",
+        "githubKey": "email",
+        "required": true
+    },
+    "onBehalfOfEmployer": {
+        "title": "I am contributing on behalf of my employer or another organisation (if yes, that organisation must also sign the Harmony Entity CLA, cla/CLA-entity.md, by e-mail to tony.gair@thedarkfactory.co.uk)",
+        "type": "boolean",
+        "required": true
+    }
+}

@@ -15,6 +15,8 @@ CLA's sublicense, because a file cannot be half-excluded.
 Refusing the CLA refuses the merge, the commercial tier and a register account. It never
 refuses you the AGPL software.
 
-**On GitHub:** the CLA check on every pull request stays red until your login is in
-`cla/SIGNATURES.tsv`; the pull-request template says how to sign. The templates and the fills
-are in `CLA.md` and `cla/` here.
+**On GitHub:** signing is handled by **CLA Assistant** (cla-assistant.io), the standard signing
+tool many open-source projects use. On your first pull request its bot posts a link; you read the
+Harmony Individual CLA there and sign with your GitHub account, once. If you contribute on behalf
+of an employer or another organisation, say so on that form: the organisation also signs the Harmony
+Entity CLA (`cla/CLA-entity.md`) by e-mail. The templates and the fills are in `CLA.md` and `cla/` here.
