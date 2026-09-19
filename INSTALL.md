@@ -108,12 +108,26 @@ Ask the door to prove a unit that is correct, then one that isn't:
 Both results were seen on macOS arm64 on 2026-09-19. If you get `not_sent`, the door didn't find a valid
 `prover` line in `config/rail.conf`: check which folder it was started from (step 6).
 
+Then the whole pipeline, with all three rails running. Give `forge` a four-line sheet:
+
+```text
+delivers: the index of the first occurrence of a value in a list
+type List: an array of up to 100 integers
+function Find (L : List; V : Integer) return Natural
+post: the result is zero when V is absent, otherwise L at the result equals V
+```
+
+It should answer `"final":"done"` and write `out/find_pkg.ads`, `out/find_pkg.adb` and `out/receipt.json`, with
+`gates_passed` listing intake, decompose, emit_contract, prove_spec, vacuity, fill_body, prove_body, seam,
+provenance and admission. Seen on macOS arm64 on 2026-09-19 with Rosie v0.3, in under two minutes. The
+contract proves exactly what the `post:` line says, so if you want "first" guaranteed, say it in `post:`.
+
 ## What does not work yet
 
 - **The palais tools** (`palais.shelf` and the rest) and `tower_import` are listed, but they answer
   "unknown tool": no rail behind them yet.
-- **The vacuity rail** is built, configured and listening, but not yet checked end to end through `forge`;
-  its battery `check-cores-mcp` is a separate repo you build yourself (Go) until the stand ships it.
-- **The model rail** is configured but hasn't been checked end to end through the door.
+- **The vacuity battery** `check-cores-mcp` is a separate repo you build yourself (Go) until the stand ships it.
+- **The receipt** does not yet record the prover version, the model name or the rail endpoints (it says so
+  itself, under `not_recorded`).
 - **No stand, no published binaries, no `factory.doctor` tool.** The plan is
   `PLAN_release_working_factory_install_2026-09-19` (Dark Factory records).
