@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: bcfcf906a36a37183f65d6da34ab2bcbff13463d6b115a619830719d248c5269
+--  Unstamped source sha256: d94351eeea59d623d3d33c3acacb7db563eef3fe2eb23233097a6d6a9d05cf9d
 --
 with Ada.Text_IO;
 with Ada.Streams;
@@ -19,6 +19,7 @@ with Json_Scan_Pkg;
 with Hex_Text_Pkg;
 with Rail_Request_Pkg;
 with Prove_Tally_Pkg;
+with Prove_Diagnostics_Pkg;
 
 procedure Prover_Service_Main is
    --  The PROVER SERVICE of CRUCIBLE's prover rail (piece 3c).
@@ -142,7 +143,15 @@ procedure Prover_Service_Main is
    --  Feeds every line of a file to the proven classifier. Only_Skipped: count a line only when it is
    --  a skipped-subprogram line (used for gnatprove.out, whose other lines are not check messages).
    --  A line longer than the classifier accepts is counted as an error: fail closed.
-   procedure Tally_File (Path : String; T : in out Prove_Tally_Pkg.Tally; Only_Skipped : Boolean) is
+   --  5a-1b: in the same pass, every line is also offered to the proven bounded collector
+   --  Prove_Diagnostics_Pkg (which keeps only unproved / error / warning lines, at most Max_Lines of at
+   --  most Max_Line_Bytes each, and COUNTS what it drops) — unless Only_Skipped, since gnatprove.out's
+   --  lines are not check messages. A line the classifier cannot accept is never offered to it.
+   procedure Tally_File
+     (Path         : String;
+      T            : in out Prove_Tally_Pkg.Tally;
+      D            : in out Prove_Diagnostics_Pkg.Diagnostics;
+      Only_Skipped : Boolean) is
       F : Ada.Text_IO.File_Type;
    begin
       if not Ada.Directories.Exists (Path) then
@@ -159,6 +168,9 @@ procedure Prover_Service_Main is
                K := Prove_Tally_Pkg.Kind_Error;
             else
                K := Prove_Tally_Pkg.Classify (L1);
+               if not Only_Skipped then
+                  Prove_Diagnostics_Pkg.Add (D, L1);
+               end if;
             end if;
             if not Only_Skipped or else K = Prove_Tally_Pkg.Kind_Skipped then
                T := Prove_Tally_Pkg.Add (T, K);
@@ -176,6 +188,7 @@ procedure Prover_Service_Main is
       Prover  : String;
       Version : String;
       Budget  : Natural;
+      VC_Budget : Natural;   --  5a-1b: gnatprove's per-check --timeout, from the conf (default 30)
       Serial  : Natural;
       Client  : GNAT.Sockets.Socket_Type)
    is
@@ -193,6 +206,7 @@ procedure Prover_Service_Main is
       Exit_Success : Boolean := False;
       Over_Budget  : Boolean := False;
       T            : Prove_Tally_Pkg.Tally;
+      Diag         : Prove_Diagnostics_Pkg.Diagnostics;
    begin
       if Ada.Directories.Exists (Dir) then
          return;   --  a staging directory is never reused
@@ -219,12 +233,14 @@ procedure Prover_Service_Main is
 
       declare
          --  (b) Every VC is bounded by gnatprove itself, so a proof cannot run forever on its own.
+         --  5a-1b: the per-check bound comes from the conf's prover_timeout_seconds (default 30): a failing
+         --  check costs up to that long per prover, so a unit with many failing checks is priced by it.
          Args : GNAT.OS_Lib.Argument_List :=
            (new String'("-P"),
             new String'(Dir & "/proof.gpr"),
             new String'("--level=" & Img (Level)),
             new String'("-j0"),
-            new String'("--timeout=30"),
+            new String'("--timeout=" & Img (VC_Budget)),
             new String'("--report=all"));
          Pid      : GNAT.OS_Lib.Process_Id;
          Done_Pid : GNAT.OS_Lib.Process_Id;
@@ -306,8 +322,8 @@ procedure Prover_Service_Main is
          return;   --  no reply: the client records unmeasured
       end if;
 
-      Tally_File (Dir & "/prove.txt", T, Only_Skipped => False);
-      Tally_File (Dir & "/obj/gnatprove/gnatprove.out", T, Only_Skipped => True);
+      Tally_File (Dir & "/prove.txt", T, Diag, Only_Skipped => False);
+      Tally_File (Dir & "/obj/gnatprove/gnatprove.out", T, Diag, Only_Skipped => True);
 
       declare
          Ran_Fact      : Boolean := False;
@@ -339,7 +355,16 @@ Skp_Fact := T.skipped;
            """,""checks_unproved"":""" & Img (Unp_Fact) &
            """,""checks_justified"":""" & Img (Jus_Fact) &
            """,""subprograms_skipped"":""" & Img (Skp_Fact) &
+           """,""diagnostics_lines"":""" & Img (Natural (Diag.Count)) &
+           """,""diagnostics_dropped"":""" & Img (Natural (Diag.Dropped)) &
            """}" & ASCII.LF);
+         --  5a-1b (Tony 15:06, option c): after the JSON line, exactly diagnostics_lines RAW text lines,
+         --  each a severity line gnatprove printed, in file order, bounded by the proven collector. No
+         --  escaping and no hex: a line never contains LF, and the count above tells the client how many
+         --  to read. The verdict is decided by the facts on the JSON line alone.
+         for I in 1 .. Diag.Count loop
+            Send_Text (Client, Prove_Diagnostics_Pkg.Line_Text (Diag, I) & ASCII.LF);
+         end loop;
       end;
 
       Ada.Directories.Delete_Tree (Dir);
@@ -383,10 +408,17 @@ begin
       Prover       : constant String := Value_Text (Conf, "gnatprove");
       Port, Budget : Natural := 0;
       Port_Ok, Budget_Ok : Boolean := False;
+      VC_Budget    : Natural := 30;
+      VC_Ok        : Boolean := False;
       Server       : GNAT.Sockets.Socket_Type;
    begin
       Read_Natural (Conf, "port", Port, Port_Ok);
       Read_Natural (Conf, "timeout_seconds", Budget, Budget_Ok);
+      --  5a-1b: optional per-check prover timeout; absent, unreadable or zero means the default of 30 s.
+      Read_Natural (Conf, "prover_timeout_seconds", VC_Budget, VC_Ok);
+      if not VC_Ok or else VC_Budget = 0 then
+         VC_Budget := 30;
+      end if;
       if not Port_Ok or else Port = 0 or else Port > 65_535 or else not Budget_Ok or else Budget = 0
         or else Root'Length = 0 or else Prover'Length = 0
       then
@@ -468,6 +500,7 @@ begin
                                 Prover  => Prover,
                                 Version => Version,
                                 Budget  => Budget,
+                                VC_Budget => VC_Budget,
                                 Serial  => Serial,
                                 Client  => Client);
                      end if;
