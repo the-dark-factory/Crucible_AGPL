@@ -26,8 +26,6 @@ You also need an MCP host (Claude Code, or any MCP client) to talk to the door.
 ## 1. Prerequisites
 
 - **Alire** (`alr`), 2.x: <https://alire.ada.dev>
-- **babashka** (`bb`): only needed to build, because the build stamp is written by `scripts/stamp-build.bb`
-  (a forged Ada replacement is on the way).
 - **git**
 - Optional: **ollama**, for the model rail.
 
@@ -51,9 +49,11 @@ gets mixed in (a real failure, 2026-09-16):
 
 ```sh
 TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
-bb scripts/stamp-build.bb                                          # records the commit you are building
+mkdir -p obj/harness bin
+PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
+    harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
+bin/stamp_build_main                                               # records the commit you are building
 PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/crucible-agpl
-mkdir -p obj/harness
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \

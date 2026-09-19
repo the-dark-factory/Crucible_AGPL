@@ -8,7 +8,7 @@ project Crucible is
    type Edition_Type is ("agpl", "commercial");
    Edition : Edition_Type := external ("CRUCIBLE_EDITION", "agpl");
 
-   --  src/generated holds crucible_build.ads, written by scripts/stamp-build.bb from the tree this
+   --  src/generated holds crucible_build.ads, written by bin/stamp_build_main (harness/stamp_build_main.adb) from the tree this
    --  build comes from. Generated rather than hand-written so the binary cannot report a commit it
    --  was not built from (v0.1.1 reported 0.1.0 because a human typed it).
    for Source_Dirs use ("src", "src/generated", "src/edition-" & Edition);
