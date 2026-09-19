@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 47c9aa72a40017f79374699f622565cc31deb51171d99c4556a807eaf8d6ae74
+--  Unstamped source sha256: d57d4e03a44f89d02153e395051fba3c4c67b5b86d0be30c370cff0a2eba07e3
 --
 with Json_Scan_Pkg;
 
@@ -21,11 +21,13 @@ package Rail_Config_Pkg with SPARK_Mode is
    Prover_Word   : constant String := "prover";
    Model_Word    : constant String := "model";
    Vacuity_Word  : constant String := "vacuity";
+   Palais_Word   : constant String := "palais";
+   Reef_Word     : constant String := "reef";
    True_Word     : constant String := "true";
    False_Word    : constant String := "false";
    Max_Line      : constant := 1_048_576;
 
-   type Rail_Kind is (Rail_Prover, Rail_Model, Rail_Vacuity, Rail_Unknown);
+   type Rail_Kind is (Rail_Prover, Rail_Model, Rail_Vacuity, Rail_Palais, Rail_Reef, Rail_Unknown);
 
    No_Span : constant Json_Scan_Pkg.Span_Type := (found => False, kind => Json_Scan_Pkg.K_None, first => 0, last => 0);
 
@@ -91,7 +93,7 @@ package Rail_Config_Pkg with SPARK_Mode is
           Post => ((if Is_IPv4'Result then S.last - S.first + 1 <= 15));
 
    function Rail_Of (Line : String) return Rail_Kind
-     is ((if not Contents (Line, Rail_Key).found then Rail_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Prover_Word) then Rail_Prover elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Model_Word) then Rail_Model elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Vacuity_Word) then Rail_Vacuity else Rail_Unknown))
+     is ((if not Contents (Line, Rail_Key).found then Rail_Unknown elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Prover_Word) then Rail_Prover elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Model_Word) then Rail_Model elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Vacuity_Word) then Rail_Vacuity elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Palais_Word) then Rail_Palais elsif Json_Scan_Pkg.Equals_Literal (Line, Contents (Line, Rail_Key), Reef_Word) then Rail_Reef else Rail_Unknown))
      with Pre  => Line'First = 1 and then Line'Length <= Max_Line,
           Post => ((if not Contents (Line, Rail_Key).found then Rail_Of'Result = Rail_Unknown));
 
