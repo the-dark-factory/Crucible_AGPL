@@ -1,3 +1,4 @@
 obj/
 bin/
 config/prover-service.conf
+toolchain/alire/

@@ -1,0 +1,28 @@
+# CRUCIBLE -- THE PINNED TOOLCHAIN RECIPE (Tony 2026-09-16 15:33: "use alire for fsf tools").
+#
+# This is a separate, empty crate whose only job is to pin the FSF toolchain CRUCIBLE is built and
+# proved with. It exists so that CRUCIBLE's own ../alire.toml can stay dependency-free
+# (mui:crucible-depends-on-no-crate). We redistribute NO GNAT / gprbuild / gnatprove binaries: Alire
+# fetches them from its own index, onto the user's machine.
+#
+# EXACT pins, never ranges: a proof is a fact about one prover version. Changing a pin is a release
+# event -- re-prove CRUCIBLE with the new versions before changing any line below.
+#
+# Use (see README.md):  cd toolchain && alr update && alr exec -- gnatprove --version
+
+name = "crucible_toolchain"
+description = "The pinned FSF toolchain for CRUCIBLE: GNAT, gprbuild, gnatprove"
+version = "0.1.0"
+licenses = "AGPL-3.0-or-later"
+maintainers = ["Anthony Gair <tony.gair@thedarkfactory.co.uk>"]
+maintainers-logins = ["tonygair"]
+auto-gpr-with = false
+
+[[depends-on]]
+gnat_native = "=15.1.2"
+
+[[depends-on]]
+gprbuild = "=26.0.1"
+
+[[depends-on]]
+gnatprove = "=15.1.0"
