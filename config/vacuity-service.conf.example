@@ -1,0 +1,1 @@
+{"port":"8472","staging_root":"<absolute dir, e.g. $HOME/.crucible/vacuity-staging>","battery":"<absolute path to the check-cores-mcp binary>","timeout_seconds":"600"}

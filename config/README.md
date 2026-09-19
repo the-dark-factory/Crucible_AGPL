@@ -33,5 +33,5 @@ take the first one that `Rail_Config_Pkg.Is_Valid` accepts for their rail. `rail
 format above (`"rail":"ollama"`, bare `true`). The door's readers skip it: `ollama` is not a rail word. Until
 2026-09-19 that legacy line was the ONLY line, so every door rail read "no valid line" (found by the release plan).
 
-**No vacuity line yet**: the vacuity service's source is not in this repo and its port is not on the record; it is
-added when the service is vendored into `harness/` (ruling 2026-09-19).
+**The vacuity line** (added 2026-09-19) points at `harness/vacuity_service_main` on 127.0.0.1:8472; that service spawns the
+battery `check-cores-mcp` (a separate repo) and relays its facts.

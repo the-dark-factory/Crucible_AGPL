@@ -7,17 +7,19 @@ Code skill will run the stand for you.
 
 ## What a working CRUCIBLE is
 
-Turning prose into proved Ada takes three local processes, two config files and one toolchain. Nothing
-listens on the network: both services bind `127.0.0.1`.
+Turning prose into proved Ada takes four local processes (door, prover service, vacuity service, model), three config files and one toolchain. Nothing
+listens on the network: every service binds `127.0.0.1`.
 
 | piece | what it does | who supplies it |
 |---|---|---|
 | `bin/crucible-agpl` | the one executable: an MCP server on stdio (the "door") | us — built below |
 | `bin/prover_service_main` | the prover rail: takes one unit at a time, runs gnatprove on it, reports the facts | us — built below |
+| `bin/vacuity_service_main` | the vacuity rail: runs the battery `check-cores-mcp` over a spec and relays whether its contracts say anything | us — built below; the battery is our separate `check-cores-mcp` repo |
 | FSF toolchain | GNAT, gprbuild, gnatprove | you, fetched by our pinned Alire recipe (`toolchain/`). We ship no toolchain binaries. |
 | model endpoint | the model rail (ollama, or any OpenAI-shaped server) | you — any model; ours is Rosie (`qwen3.8-27b-ada:v0.3`) |
 | `config/rail.conf` | where each rail is: one JSON line per rail | us — a working default is in the tree |
 | `config/prover-service.conf` | the prover service's port, staging folder and gnatprove path | you, from `config/prover-service.conf.example` |
+| `config/vacuity-service.conf` | the vacuity service's port, staging folder and battery path | you, from `config/vacuity-service.conf.example` |
 
 You also need an MCP host (Claude Code, or any MCP client) to talk to the door.
 
@@ -54,29 +56,35 @@ PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/cruc
 mkdir -p obj/harness
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
+PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
+    harness/vacuity_service_main.adb -o bin/vacuity_service_main  # -> bin/vacuity_service_main
 ```
 
 ## 4. Configure
 
 ```sh
 cp config/prover-service.conf.example config/prover-service.conf
+cp config/vacuity-service.conf.example config/vacuity-service.conf
 ```
 
-Edit it: set `staging_root` to an absolute folder (for example `$HOME/.crucible/prover-staging`, spelled
-out in full) and `gnatprove` to the absolute path from step 2. This file is per machine and git ignores it.
+Edit both: set `staging_root` to an absolute folder (for example `$HOME/.crucible/prover-staging`, spelled
+out in full) and, in the prover file, `gnatprove` to the absolute path from step 2; in the vacuity file, `battery`
+to your `check-cores-mcp` binary. Both files are per machine and git ignores them.
 
 `config/rail.conf` works as shipped if ollama is on `127.0.0.1:11434` and gnatprove is behind the prover
-service on `127.0.0.1:8471`. To use a different model, edit the `"rail":"model"` line and restart. The
+service on `127.0.0.1:8471` and the vacuity service is on `127.0.0.1:8472`. To use a different model, edit the `"rail":"model"` line and restart. The
 format is in `config/README.md`.
 
-## 5. Start the prover service
+## 5. Start the two services
 
 ```sh
 bin/prover_service_main
 # prover-service: listening on 127.0.0.1:8471 (FSF 15.0)
+bin/vacuity_service_main
+# vacuity-service: listening on 127.0.0.1:8472 (check-cores-mcp)
 ```
 
-Leave it running. It serves one request at a time.
+Leave both running. Each serves one request at a time.
 
 ## 6. Connect your MCP host
 
@@ -104,7 +112,8 @@ Both results were seen on macOS arm64 on 2026-09-19. If you get `not_sent`, the 
 
 - **The palais tools** (`palais.shelf` and the rest) and `tower_import` are listed, but they answer
   "unknown tool": no rail behind them yet.
-- **The vacuity rail** has no service in this repo and no line in `rail.conf`.
+- **The vacuity rail** is built, configured and listening, but not yet checked end to end through `forge`;
+  its battery `check-cores-mcp` is a separate repo you build yourself (Go) until the stand ships it.
 - **The model rail** is configured but hasn't been checked end to end through the door.
 - **No stand, no published binaries, no `factory.doctor` tool.** The plan is
   `PLAN_release_working_factory_install_2026-09-19` (Dark Factory records).
