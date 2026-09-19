@@ -114,7 +114,7 @@ Then the whole pipeline, with all three rails running. Give `forge` a four-line 
 delivers: the index of the first occurrence of a value in a list
 type List: an array of up to 100 integers
 function Find (L : List; V : Integer) return Natural
-post: the result is zero when V is absent, otherwise L at the result equals V
+post: the result is zero exactly when no element of L equals V; otherwise L at the result equals V and no element before the result equals V
 ```
 
 It should answer `"final":"done"` and write `out/find_pkg.ads`, `out/find_pkg.adb` and `out/receipt.json`, with
