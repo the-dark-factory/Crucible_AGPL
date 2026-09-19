@@ -1,0 +1,1 @@
+{"port":"8471","staging_root":"<absolute dir, e.g. $HOME/.crucible/prover-staging>","gnatprove":"<absolute path to gnatprove from the Alire recipe>","timeout_seconds":"600"}
