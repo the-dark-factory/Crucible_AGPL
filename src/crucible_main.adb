@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: eb8b6c9295440f4df37878ea3a2fad2cb1f13523e0cbe7208a1b5297194e7a0f
+--  Unstamped source sha256: f69db0792f07018ae69dbc716a2fcac5fc32f4b3ccdce4c1d7c4a7bc3e0eb796
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -38,6 +38,8 @@ with Prover_Rail_Call_Pkg;
 with Pipeline_Stage_Pkg;
 with Pipeline_Run_Pkg;
 with Ada.Characters.Handling;
+with Ada.Environment_Variables;
+with Palais_Enrol_Pkg;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -165,11 +167,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+      if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+      if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+      if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+      if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+      if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -245,13 +247,13 @@ if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
       declare
          Word : constant String := (
          --  SLOT BEGIN (outcome_word)
-case O is
-     when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
-     when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
-     when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
-     when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
-     when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
-     when Prover_Rail_Pkg.Outcome_Proved => "proved"
+         case O is
+            when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
+            when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
+            when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
+            when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
+            when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
+            when Prover_Rail_Pkg.Outcome_Proved => "proved"
          --  SLOT END (outcome_word)
          );
       begin
@@ -263,6 +265,33 @@ case O is
    end Prove_Unit_Text;
 
    --  The forge tool: the one-line pipeline report for the sheet argument of Line.
+   --  palais.enrol: one step of enrolment with the Reef (DESIGN_palais_enrol_2026-09-19). The edge decides nothing;
+   --  Reef_Key_Claim_Pkg does. The pinned Reef signers digest is 64 zeros until the Reef has a signing key, so every
+   --  enrolment is honestly refused no_reef_key_pinned until then.
+   Pinned_Reef_Signers : constant String := (1 .. 64 => '0');
+
+   function Palais_Enrol_Text (Line : String) return String is
+      Span  : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Codename_Span (Line);
+      Home  : constant String :=
+        (if Ada.Environment_Variables.Exists ("HOME") then Ada.Environment_Variables.Value ("HOME") else ".");
+      Reply : Palais_Enrol_Pkg.Text_Access;
+      Name  : constant String :=
+        (if Span.found and then Span.kind = Json_Scan_Pkg.K_String and then Span.first < Span.last
+         then Line (Json_Scan_Pkg.String_Contents (Line, Span).first .. Json_Scan_Pkg.String_Contents (Line, Span).last)
+         else "");
+   begin
+      Palais_Enrol_Pkg.Step
+        (Codename => Name,
+         Where    => (Conf_Path      => new String'("config/rail.conf"),
+                      Key_Dir        => new String'(Home & "/.crucible/key"),
+                      State_Dir      => new String'("state"),
+                      Signers_Path   => new String'("config/reef-allowed-signers"),
+                      Signers_Digest => new String'(Pinned_Reef_Signers),
+                      Ssh_Keygen     => new String'("/usr/bin/ssh-keygen")),
+         Reply    => Reply);
+      return Reply.all;
+   end Palais_Enrol_Text;
+
    function Forge_Text (Line : String) return String is
       use Ada.Strings.Unbounded;
       function Low (S : String) return String renames Ada.Characters.Handling.To_Lower;
@@ -331,6 +360,8 @@ begin
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
                   elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Forge then
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Forge_Text (Line))));
+                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Palais_Enrol then
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
                   else
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
                   end if;
