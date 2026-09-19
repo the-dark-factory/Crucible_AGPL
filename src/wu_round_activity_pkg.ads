@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 6e950036e759143df3f3ebdce925567dddc0970f1399a4a068417d98a91af45f
+--  Unstamped source sha256: a8b9a2b73731edf092e9b50c78f71ad73c7982bcb629dda3b6e190aeae219e92
 --
 --  Wu_Round_Activity_Pkg -- the Emit_Contract stage of CRUCIBLE's pipeline, in process (step 5a-2f).
 --  Purpose: the Wu SPECIFICATION ROUND inside the executable. Per round: the house form + the sheet + the accepted
@@ -56,6 +56,17 @@ package Wu_Round_Activity_Pkg with SPARK_Mode => Off is
      "index). A unit whose prover run generates NO checks (only declared-only operations) is refused as hollow." & LF &
      "No package body, no pragma, no access type, no I/O, no pragma Assume, no Annotate, no SPARK_Mode => Off," & LF &
      "no Warnings (Off), no Import: those refuse the unit." & LF & LF &
+     "COUNTING. When the sheet asks for the NUMBER of elements with some property, a Boolean helper cannot" & LF &
+     "say it. Then write ONE counting helper instead: a recursive expression function returning Natural over" & LF &
+     "the structure from an index, with a Pre, a Post that RESTATES its expression AND bounds it, and a" & LF &
+     "Subprogram_Variant, in this form (a Post that only bounds the result is refused as hollow):" & LF &
+     "      function Zeros_From (L : List; From : Positive) return Natural is" & LF &
+     "        (if From > L'Last then 0 else (if L (From) = 0 then 1 else 0) + Zeros_From (L, From + 1))" & LF &
+     "      with Pre  => L'Last < Positive'Last and then From >= L'First," & LF &
+     "           Post => Zeros_From'Result = (if From > L'Last then 0 else (if L (From) = 0 then 1 else 0) + Zeros_From (L, From + 1))" & LF &
+     "                   and then Zeros_From'Result <= (if From > L'Last then 0 else L'Last - From + 1)," & LF &
+     "           Subprogram_Variant => (Increases => From);" & LF &
+     "    and state the walking operation's Post as  Name'Result = <Helper> (<structure>, ..., <structure>'First)." & LF & LF &
      "WHAT TO WRITE. The specification sheet below states what is delivered, the types, the operation and its" & LF &
      "postcondition in words. The design below (one subsystem per JSON line) says what each leaf discharges. Write" & LF &
      "the types the sheet names, then the helper(s), then the walking operation with the postcondition the sheet" & LF &

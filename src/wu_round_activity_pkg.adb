@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: a0058114fe20a38dd423db57c7606e6bf3ba929e5b21aad2e35316dd6b51cdea
+--  Unstamped source sha256: f6a7a8cf952d36d86d28ce13be69f02c93c940c276ff8a7e85fab939e05a8b94
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -258,14 +258,11 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                         Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
 
                         --  SLOT BEGIN (gate-facts)
-GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
-       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped,
-       cheat_markers => Natural (Cheats.reject));
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => Natural (Cheats.reject));
                         --  SLOT END (gate-facts)
 
                         --  SLOT BEGIN (route)
-Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF),
-           Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, Undeclared);
                         --  SLOT END (route)
 
                         --  Contract_Emission_Pkg.Facts_Type fields, in order: operation_count, operations_with_postcondition,
@@ -297,10 +294,7 @@ Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compil
                         end;
 
                         --  SLOT BEGIN (emission-facts)
-EF := (operation_count => Natural (Shape.operations), operations_with_postcondition => Natural (Shape.operations_with_post),
-      names_used => 0, names_declared => Natural (Shape.operations), names_undeclared => Undeclared_Names,
-      vocabulary_is_stated => Facts.run.unit_compiled, preconditions_stated => Shape.preconditions >= 1,
-      sheet_states_precondition => Sheet_Pre);
+EF := (operation_count => Natural (Shape.operations), operations_with_postcondition => Natural (Shape.operations_with_post), names_used => 0, names_declared => Natural (Shape.operations), names_undeclared => Undeclared_Names, vocabulary_is_stated => Facts.run.unit_compiled, preconditions_stated => Shape.preconditions >= 1, sheet_states_precondition => Sheet_Pre);
 May_Emit := Contract_Emission_Pkg.Assemble (EF).may_emit;
                         --  SLOT END (emission-facts)
 
