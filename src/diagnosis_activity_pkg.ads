@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: b75fe76e10bc97e5ec10492e19525b06702c12ed1768a92755e9278ae1392051
+--  Unstamped source sha256: f919a9f9ab3568e039056d213c08b55d807f34679659b1493dcdeba957250e3a
 --
 --  Diagnosis_Activity_Pkg -- the diagnosis step of CRUCIBLE's repair rounds (step 5a-3d/e), in process.
 --  Purpose: from the prover's lines, the unit's spec and its body, produce ONE diagnosis paragraph for the next round —
@@ -29,7 +29,7 @@ package Diagnosis_Activity_Pkg with SPARK_Mode => Off is
      (case H is
         when Diagnosis_Class_Pkg.Initialization =>
           "INITIALIZATION: a variable might be read before every component of it is written. Give it a complete value" & LF &
-          "AT ITS DECLARATION, before any loop fills it — for a String, X : String (1 .. N) := (others => ' '); for another" & LF &
+          "AT ITS DECLARATION, before any loop fills it -- for a String, X : String (1 .. N) := (others => ' '); for another" & LF &
           "array, (others => <a value of the component type>). Filling it element by element is not initialisation.",
         when Diagnosis_Class_Pkg.Termination =>
           "TERMINATION: a while or plain loop cannot be shown to terminate here. Add pragma Loop_Variant" & LF &
@@ -44,7 +44,7 @@ package Diagnosis_Activity_Pkg with SPARK_Mode => Off is
           "so that, assuming it before the body, it holds again after: name every variable the body changes, with the" & LF &
           "relation between them the postcondition needs.",
         when Diagnosis_Class_Pkg.Wrong_Extremum =>
-          "WRONG EXTREMUM: the invariants hold, only the postcondition fails — the loop exits with the wrong element." & LF &
+          "WRONG EXTREMUM: the invariants hold, only the postcondition fails -- the loop exits with the wrong element." & LF &
           "The contract asks for the LAST (or FIRST) occurrence and the body finds the other: scan in the opposite" & LF &
           "direction (for I in reverse ...), exit at the first match met, and state the invariant over the part scanned.",
         when Diagnosis_Class_Pkg.Missing_Prefix_Invariant =>

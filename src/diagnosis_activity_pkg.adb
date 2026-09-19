@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 2ba7d59f4ff4f0bb972ef0bb1e5aad425fe81f781c81f2d1f48b7c134a842361
+--  Unstamped source sha256: 8e0bcdd48d0b4ec9d63533733cf01fecfd31bd5703d7fedb04814255e97ca7a2
 --
 --  Diagnosis_Activity_Pkg body -- template (seat-written plumbing) with ONE slot (source-word), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step5a3_diagnosis_layer_2026-09-17 (5a-3d/e).
@@ -144,7 +144,11 @@ package body Diagnosis_Activity_Pkg with SPARK_Mode => Off is
       end if;
 
       --  SLOT BEGIN (source-word)
-      Source_Word := To_Unbounded_String (if Ch.source = Diagnosis_Select_Pkg.Deterministic then "deterministic" elsif Ch.source = Diagnosis_Select_Pkg.Reasoner then (if To_String (Catalogue_Word) = "unclassified" then "reasoner-unclassified" else "reasoner-agreed") else "none");
+      Source_Word := To_Unbounded_String
+        (if Ch.source = Diagnosis_Select_Pkg.Deterministic then "deterministic"
+         elsif Ch.source = Diagnosis_Select_Pkg.Reasoner then
+           (if To_String (Catalogue_Word) = "unclassified" then "reasoner-unclassified" else "reasoner-agreed")
+         else "none");
       --  SLOT END (source-word)
 
       State := Diagnosis_Select_Pkg.Record_Sent (State, Ch);
