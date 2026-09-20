@@ -18,7 +18,7 @@ listens on the network: every service binds `127.0.0.1`.
 | `bin/reef_relay_main` | the reef rail: carries one line to the Reef over TLS and brings one line back, for `palais.enrol` only | us — built below; OPTIONAL, and not needed to forge anything |
 | FSF toolchain | GNAT, gprbuild, gnatprove | you, fetched by our pinned Alire recipe (`toolchain/`). We ship no toolchain binaries. |
 | model endpoint | the model rail (ollama, or any OpenAI-shaped server) | you — any model; ours is Rosie (`qwen3.8-27b-ada:v0.3`) |
-| `tower/base.bundle` | the base tower bundle the binary is built with. Two lines: line 1 is one JSON object (`version` first), line 2 says how it is protected. Today it is EMPTY (`"entries":[]`) and unsigned: it is pinned into the binary by the SHA-256 of line 1 (`src/generated/crucible_tower.ads`, written by `bin/stamp_tower_main`). A missing or malformed file stops the build; an empty one is a real base. Nothing in the door reads the pin yet. | us — in the tree |
+| `tower/base.bundle` | the base tower bundle the binary is built with. Two lines: line 1 is one JSON object (`version` first), line 2 says how it is protected. Today it is EMPTY (`"entries":[]`) and unsigned: it is pinned into the binary by the SHA-256 of line 1 (`src/generated/crucible_tower.ads`, written by `bin/stamp_tower_main`). A missing or malformed file stops the build; an empty one is a real base. **The door reads the pin:** on every `forge` call, before it looks at your sheet, it measures `tower/base.bundle` in the folder it was started in and refuses if the file is missing, is not exactly two lines, or line 1 does not match the digest built into the binary (step 6). | us — in the tree |
 | `config/rail.conf` | where each rail is: one JSON line per rail | us — a working default is in the tree |
 | `config/prover-service.conf` | the prover service's port, staging folder and gnatprove path | you, from `config/prover-service.conf.example` |
 | `config/vacuity-service.conf` | the vacuity service's port, staging folder and battery path | you, from `config/vacuity-service.conf.example` |
@@ -101,8 +101,9 @@ pointing at its port, and run `bin/reef_relay_main`. Until then `palais.enrol` r
 
 ## 6. Connect your MCP host
 
-⚠ CRUCIBLE finds `config/rail.conf` **relative to the folder it is started in**. It must be started from
-this directory. With Claude Code:
+⚠ CRUCIBLE finds `config/rail.conf` **and `tower/base.bundle`** **relative to the folder it is started in**.
+It must be started from this directory. Started anywhere else, `prove_unit` answers `not_sent` and every
+`forge` call is refused with `"stopped_at":"tower"`, `"reason":"tower_base_missing"`. With Claude Code:
 
 ```sh
 claude mcp add crucible -- sh -c 'cd /absolute/path/to/crucible && exec bin/crucible-agpl'
@@ -120,6 +121,17 @@ Ask the door to prove a unit that is correct, then one that isn't:
 
 Both results were seen on macOS arm64 on 2026-09-19. If you get `not_sent`, the door didn't find a valid
 `prover` line in `config/rail.conf`: check which folder it was started from (step 6).
+
+If `forge` answers `"final":"refused","stopped_at":"tower"`, the door stopped before it read your sheet:
+
+- `"reason":"tower_base_missing"` — there is no `tower/base.bundle` in the folder the door was started in, or
+  the file is not exactly two lines (line 1 not empty, line 2 not blank). Check the folder first (step 6).
+- `"reason":"tower_base_tampered"` — line 1 of `tower/base.bundle` is not the line this binary was built
+  with. **Editing the bundle cannot fix this**: the digest is compiled into the binary. Restore the file from
+  the tree you built from, or rebuild (step 3) so the binary pins the bundle you now have.
+
+`intake_check` and `prove_unit` do not read the bundle and answer as before. The door checks line 1 only;
+it does not verify line 2's signature yet — today's base is unsigned and says so.
 
 Then the whole pipeline, with all three rails running. Give `forge` a four-line sheet:
 

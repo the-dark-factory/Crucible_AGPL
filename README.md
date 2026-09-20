@@ -53,6 +53,12 @@ CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p     # bin/crucible-comme
 Each binary answers MCP over stdio and reports its own edition in the `initialize` result, so you
 can always tell which one you are talking to.
 
+Each binary is also pinned to the base tower bundle it was built with: `tower/base.bundle`, by the
+SHA-256 of its first line. Start the door from this directory. On every `forge` call it measures that
+file before it reads your sheet, and refuses — `"stopped_at":"tower"` — if the file is missing or is
+not the one it was built with. Editing the bundle cannot help; restore it or rebuild. `INSTALL.md`
+has the full build (the two stamp tools run first) and what each refusal means.
+
 ## Prove it
 
 ```sh
