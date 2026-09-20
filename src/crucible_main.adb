@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f69db0792f07018ae69dbc716a2fcac5fc32f4b3ccdce4c1d7c4a7bc3e0eb796
+--  Unstamped source sha256: 86cfd4b36770c8cdf57d948f59868cfad08220c3e972f1b99d34cb25e3856b07
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -19,6 +19,12 @@
 --  proven Prover_Rail_Pkg.Decide. Second slot (outcome_word) turns that outcome into its word.
 --  v7 (step 4c) adds the forge tool: the sheet is decoded as for intake_check and carried through Pipeline_Run_Pkg, whose
 --  every step is decided by proven cores (Pipeline_Stage_Pkg, Job_Record_Pkg, Stage_Outcome_Map_Pkg); the reply is its report.
+--  v9 (release plan T1; Tony's ruling 1 of 2026-09-19, "base missing or tampered => the door STOPS") makes the forge tool
+--  USE the pin: before the sheet is even looked for, on EVERY forge call, Tower_Base_Check_Edge.Check measures
+--  tower/base.bundle against the compiled-in Crucible_Tower.Base_Digest and the admitted Tower_Base_Verdict_Pkg decides.
+--  A refusal is reported as stopped_at "tower" (Tony's ruling of 2026-09-20 15:16) with the decider's own reason word.
+--  intake_check, prove_unit, licence_gate and the palais tools do not call it and behave exactly as in v8.
+--  Seat-written plumbing, no new slot; brief BRIEF_door_base_check_wiring_2026-09-20.
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
@@ -40,6 +46,8 @@ with Pipeline_Run_Pkg;
 with Ada.Characters.Handling;
 with Ada.Environment_Variables;
 with Palais_Enrol_Pkg;
+with Tower_Base_Verdict_Pkg;
+with Tower_Base_Check_Edge;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -167,11 +175,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-      if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-      if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-      if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-      if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-      if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+         if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+         if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+         if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+         if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+         if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -247,13 +255,13 @@ procedure Crucible_Main is
       declare
          Word : constant String := (
          --  SLOT BEGIN (outcome_word)
-         case O is
-            when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
-            when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
-            when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
-            when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
-            when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
-            when Prover_Rail_Pkg.Outcome_Proved => "proved"
+            case O is
+               when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
+               when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
+               when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
+               when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
+               when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
+               when Prover_Rail_Pkg.Outcome_Proved => "proved"
          --  SLOT END (outcome_word)
          );
       begin
@@ -297,6 +305,20 @@ procedure Crucible_Main is
       function Low (S : String) return String renames Ada.Characters.Handling.To_Lower;
       Span : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Sheet_Span (Line);
    begin
+      --  v9: the tower base is checked FIRST, before the sheet is looked for. The door decides nothing here:
+      --  the edge measures, Tower_Base_Verdict_Pkg.May_Forge permits or refuses, Reason_Word names the refusal.
+      declare
+         Base_Verdict : Tower_Base_Verdict_Pkg.Verdict_Kind;
+         Tower_Facts  : Tower_Base_Verdict_Pkg.Base_Facts;
+         Base_Line_1  : Unbounded_String;
+      begin
+         Tower_Base_Check_Edge.Check (Verdict => Base_Verdict, Facts => Tower_Facts, Line_1 => Base_Line_1);
+         if not Tower_Base_Verdict_Pkg.May_Forge (Base_Verdict) then
+            return "{""final"":""refused"",""stopped_at"":""tower"",""reason"":""" &
+              Tower_Base_Verdict_Pkg.Reason_Word (Base_Verdict) &
+              """,""hint"":""restore the base bundle this binary was built with, or replace the binary""}";
+         end if;
+      end;
       if not (Span.found and then Span.kind = Json_Scan_Pkg.K_String and then Span.first < Span.last) then
          return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""no sheet""}";
       end if;
