@@ -35,3 +35,13 @@ format above (`"rail":"ollama"`, bare `true`). The door's readers skip it: `olla
 
 **The vacuity line** (added 2026-09-19) points at `harness/vacuity_service_main` on 127.0.0.1:8472; that service spawns the
 battery `check-cores-mcp` (a separate repo) and relays its facts.
+
+**The reef line** — `Rail_Config_Pkg` also accepts `palais` and `reef` (v4, 2026-09-19), so the sentence above naming
+only three rail words is out of date: the five are `model prover vacuity palais reef`. A `reef` line points at
+`harness/reef_relay_main`, which carries one line to the Reef over TLS and brings one line back:
+
+    {"rail":"reef","host":"127.0.0.1","port":"8473","timeout_seconds":"60","max_reply_bytes":"65536","sovereign":"false"}
+
+**NO reef line ships**, deliberately: there is no Reef to talk to yet, and `palais.enrol` refusing with `no_reef_rail`
+is the correct answer until there is. `sovereign` is `false` because this rail leaves the estate — it is the only one
+that does.

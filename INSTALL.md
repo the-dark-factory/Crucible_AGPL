@@ -15,6 +15,7 @@ listens on the network: every service binds `127.0.0.1`.
 | `bin/crucible-agpl` | the one executable: an MCP server on stdio (the "door") | us — built below |
 | `bin/prover_service_main` | the prover rail: takes one unit at a time, runs gnatprove on it, reports the facts | us — built below |
 | `bin/vacuity_service_main` | the vacuity rail: runs the battery `check-cores-mcp` over a spec and relays whether its contracts say anything | us — built below; the battery is our separate `check-cores-mcp` repo |
+| `bin/reef_relay_main` | the reef rail: carries one line to the Reef over TLS and brings one line back, for `palais.enrol` only | us — built below; OPTIONAL, and not needed to forge anything |
 | FSF toolchain | GNAT, gprbuild, gnatprove | you, fetched by our pinned Alire recipe (`toolchain/`). We ship no toolchain binaries. |
 | model endpoint | the model rail (ollama, or any OpenAI-shaped server) | you — any model; ours is Rosie (`qwen3.8-27b-ada:v0.3`) |
 | `config/rail.conf` | where each rail is: one JSON line per rail | us — a working default is in the tree |
@@ -58,6 +59,8 @@ PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edit
     harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/vacuity_service_main.adb -o bin/vacuity_service_main  # -> bin/vacuity_service_main
+PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
+    harness/reef_relay_main.adb -o bin/reef_relay_main            # -> bin/reef_relay_main (optional)
 ```
 
 ## 4. Configure
@@ -85,6 +88,12 @@ bin/vacuity_service_main
 ```
 
 Leave both running. Each serves one request at a time.
+
+The reef relay is OPTIONAL and serves `palais.enrol` alone: nothing else needs it, and CRUCIBLE forges
+exactly as well without it. There is no Reef to talk to yet, so it is not started here — when there is,
+copy `config/reef-relay.conf.example` to `config/reef-relay.conf`, add a `reef` line to `config/rail.conf`
+pointing at its port, and run `bin/reef_relay_main`. Until then `palais.enrol` refuses honestly with
+`no_reef_rail`, which is the correct answer.
 
 ## 6. Connect your MCP host
 
