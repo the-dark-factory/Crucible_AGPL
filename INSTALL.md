@@ -18,6 +18,7 @@ listens on the network: every service binds `127.0.0.1`.
 | `bin/reef_relay_main` | the reef rail: carries one line to the Reef over TLS and brings one line back, for `palais.enrol` only | us — built below; OPTIONAL, and not needed to forge anything |
 | FSF toolchain | GNAT, gprbuild, gnatprove | you, fetched by our pinned Alire recipe (`toolchain/`). We ship no toolchain binaries. |
 | model endpoint | the model rail (ollama, or any OpenAI-shaped server) | you — any model; ours is Rosie (`qwen3.8-27b-ada:v0.3`) |
+| `tower/base.bundle` | the base tower bundle the binary is built with. Two lines: line 1 is one JSON object (`version` first), line 2 says how it is protected. Today it is EMPTY (`"entries":[]`) and unsigned: it is pinned into the binary by the SHA-256 of line 1 (`src/generated/crucible_tower.ads`, written by `bin/stamp_tower_main`). A missing or malformed file stops the build; an empty one is a real base. Nothing in the door reads the pin yet. | us — in the tree |
 | `config/rail.conf` | where each rail is: one JSON line per rail | us — a working default is in the tree |
 | `config/prover-service.conf` | the prover service's port, staging folder and gnatprove path | you, from `config/prover-service.conf.example` |
 | `config/vacuity-service.conf` | the vacuity service's port, staging folder and battery path | you, from `config/vacuity-service.conf.example` |
@@ -54,6 +55,9 @@ mkdir -p obj/harness bin
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
 bin/stamp_build_main                                               # records the commit you are building
+PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
+    harness/stamp_tower_main.adb -o bin/stamp_tower_main          # the tower stamp tool (Ada)
+bin/stamp_tower_main || exit 1                                     # pins tower/base.bundle by digest and version; STOP if it refuses
 PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/crucible-agpl
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
