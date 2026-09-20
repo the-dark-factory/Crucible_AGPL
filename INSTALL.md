@@ -54,7 +54,7 @@ TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
 mkdir -p obj/harness bin
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
-bin/stamp_build_main                                               # records the commit you are building
+bin/stamp_build_main || exit 1                                     # records the commit you are building; STOP if it refuses (exit 4: the commit is dated in the future, or its time cannot be recorded)
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_tower_main.adb -o bin/stamp_tower_main          # the tower stamp tool (Ada)
 bin/stamp_tower_main || exit 1                                     # pins tower/base.bundle by digest and version; STOP if it refuses
