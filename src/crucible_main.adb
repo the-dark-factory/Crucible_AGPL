@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 86cfd4b36770c8cdf57d948f59868cfad08220c3e972f1b99d34cb25e3856b07
+--  Unstamped source sha256: 0fdf0934104be8d2073d39851e98cbb76f24a16ed4edfe22eae2a5d64efc4e24
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -25,6 +25,14 @@
 --  A refusal is reported as stopped_at "tower" (Tony's ruling of 2026-09-20 15:16) with the decider's own reason word.
 --  intake_check, prove_unit, licence_gate and the palais tools do not call it and behave exactly as in v8.
 --  Seat-written plumbing, no new slot; brief BRIEF_door_base_check_wiring_2026-09-20.
+--  v10 (release plan T3, piece 4 wired) makes the forge tool IMPORT the sharer bundle: once per forge call, AFTER the
+--  base check has let the door through and BEFORE the sheet is looked for, Tower_Import_Pkg.Import measures
+--  tower/sharer.bundle, the proven Tower_Admission_Pkg decides, the proven Tower_Ledger_Fold_Pkg folds the ledger, and
+--  the word is recorded in state/tower.jsonl. THE IMPORT NEVER BLOCKS THE FORGE (the design ruling this lineage
+--  carries): whatever the word -- absent, unchanged, accepted, declined_by_policy, refused_receipt, refused_integrity,
+--  unrecorded -- the forge proceeds on the ledger as it stands; only the base check stops it. The word surfaces as ONE
+--  line on standard error (the MCP stdio server's logging channel), never in the reply. Seat-written plumbing, no new
+--  slot; brief BRIEF_door_import_wiring_2026-09-21.
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
@@ -48,6 +56,7 @@ with Ada.Environment_Variables;
 with Palais_Enrol_Pkg;
 with Tower_Base_Verdict_Pkg;
 with Tower_Base_Check_Edge;
+with Tower_Import_Pkg;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -175,11 +184,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-         if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-         if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-         if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-         if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-         if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -255,13 +264,13 @@ procedure Crucible_Main is
       declare
          Word : constant String := (
          --  SLOT BEGIN (outcome_word)
-            case O is
-               when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
-               when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
-               when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
-               when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
-               when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
-               when Prover_Rail_Pkg.Outcome_Proved => "proved"
+case O is
+   when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
+   when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
+   when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
+   when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
+   when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
+   when Prover_Rail_Pkg.Outcome_Proved => "proved"
          --  SLOT END (outcome_word)
          );
       begin
@@ -318,6 +327,20 @@ procedure Crucible_Main is
               Tower_Base_Verdict_Pkg.Reason_Word (Base_Verdict) &
               """,""hint"":""restore the base bundle this binary was built with, or replace the binary""}";
          end if;
+      end;
+      --  v10: the SHARER bundle is imported, best effort, once the base has let the door through and before the
+      --  sheet is looked for. Tower_Import_Pkg measures, the proven Tower_Admission_Pkg decides, the proven
+      --  Tower_Ledger_Fold_Pkg folds the ledger, and the word is recorded in state/tower.jsonl. THE FORGE NEVER WAITS
+      --  ON IT: whatever the word, the forge proceeds on the ledger as it stands. The word goes to standard error,
+      --  one line, so it is seen and can never be mistaken for the reply. Import never raises; the handler is a belt.
+      declare
+         Import_Word : Unbounded_String;
+      begin
+         Tower_Import_Pkg.Import (Word => Import_Word);
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_import: " & To_String (Import_Word));
+      exception
+         when others =>
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_import: unreadable");
       end;
       if not (Span.found and then Span.kind = Json_Scan_Pkg.K_String and then Span.first < Span.last) then
          return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""no sheet""}";
