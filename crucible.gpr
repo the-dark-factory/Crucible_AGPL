@@ -11,13 +11,20 @@ project Crucible is
    --  src/generated holds crucible_build.ads, written by bin/stamp_build_main (harness/stamp_build_main.adb) from the tree this
    --  build comes from. Generated rather than hand-written so the binary cannot report a commit it
    --  was not built from (v0.1.1 reported 0.1.0 because a human typed it).
-   for Source_Dirs use ("src", "src/generated", "src/edition-" & Edition);
+   --  harness/ holds the standalone command mains. Only the mains listed below are built from it (gprbuild builds
+   --  the closure of Main); the service and stamp mains there are still built by hand as INSTALL.md says.
+   for Source_Dirs use ("src", "src/generated", "src/edition-" & Edition, "harness");
    for Object_Dir use "obj/" & Edition;  --  per edition: a shared obj let the commercial build reuse the agpl edition object (found 2026-09-12)
    for Exec_Dir use "bin";
-   for Main use ("crucible_main.adb");
+   --  The two share-side commands (the owner's ruling, 2026-09-21: two standalone commands, two keys):
+   --  pack_tower (the packer's) and certify_tower (the admitter's). Neither depends on the edition, so both
+   --  editions write the same bin/pack_tower and bin/certify_tower.
+   for Main use ("crucible_main.adb", "pack_tower_main.adb", "certify_tower_main.adb");
 
    package Builder is
       for Executable ("crucible_main.adb") use "crucible-" & Edition;
+      for Executable ("pack_tower_main.adb") use "pack_tower";
+      for Executable ("certify_tower_main.adb") use "certify_tower";
    end Builder;
 
    package Compiler is
