@@ -58,7 +58,8 @@ bin/stamp_build_main || exit 1                                     # records the
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_tower_main.adb -o bin/stamp_tower_main          # the tower stamp tool (Ada)
 bin/stamp_tower_main || exit 1                                     # pins tower/base.bundle by digest and version; STOP if it refuses
-PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/crucible-agpl
+PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/crucible-agpl, bin/pack_tower, bin/certify_tower, bin/stamp_signers
+bin/stamp_signers || exit 1                                        # writes bin/allowed_signers (the trust file beside the binary) from the keys pinned in src/tower_keys_pkg.ads; never hand-write it. It WARNS on standard error for every STAND-IN key it writes -- read those lines.
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \

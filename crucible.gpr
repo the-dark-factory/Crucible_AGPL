@@ -19,12 +19,16 @@ project Crucible is
    --  The two share-side commands (the owner's ruling, 2026-09-21: two standalone commands, two keys):
    --  pack_tower (the packer's) and certify_tower (the admitter's). Neither depends on the edition, so both
    --  editions write the same bin/pack_tower and bin/certify_tower.
-   for Main use ("crucible_main.adb", "pack_tower_main.adb", "certify_tower_main.adb");
+   --  stamp_signers (2026-09-21, the loopback transport slice, piece A) writes bin/allowed_signers -- the trust file
+   --  beside the binary -- from the keys pinned in src/tower_keys_pkg.ads. Run it AFTER this build (INSTALL.md):
+   --  the trust file is generated, never hand-written.
+   for Main use ("crucible_main.adb", "pack_tower_main.adb", "certify_tower_main.adb", "stamp_signers_main.adb");
 
    package Builder is
       for Executable ("crucible_main.adb") use "crucible-" & Edition;
       for Executable ("pack_tower_main.adb") use "pack_tower";
       for Executable ("certify_tower_main.adb") use "certify_tower";
+      for Executable ("stamp_signers_main.adb") use "stamp_signers";
    end Builder;
 
    package Compiler is

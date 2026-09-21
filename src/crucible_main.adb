@@ -57,6 +57,7 @@ with Palais_Enrol_Pkg;
 with Tower_Base_Verdict_Pkg;
 with Tower_Base_Check_Edge;
 with Tower_Import_Pkg;
+with Tower_Fetch_Pkg;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -327,6 +328,21 @@ case O is
               Tower_Base_Verdict_Pkg.Reason_Word (Base_Verdict) &
               """,""hint"":""restore the base bundle this binary was built with, or replace the binary""}";
          end if;
+      end;
+      --  v11 (the loopback transport slice, 2026-09-21, piece B): BEFORE the import, the FETCH edge asks the Reef
+      --  (through the reef rail's relay) what catalog is current and, if the proven Tower_Index_Pkg finds a version
+      --  above the running one, brings that ONE file down into tower/sharer.bundle. The edge decides nothing: every
+      --  judgement about the index text is Tower_Index_Pkg's, the file's acceptance is the import's. Rate-limited by
+      --  a row in state/tower-fetch.jsonl; no reef rail, no Reef, a stale or unverified index all leave the forge to
+      --  continue on what it has. The word goes to standard error, one line, like the import's. Never raises; belt.
+      declare
+         Fetch_Word : Unbounded_String;
+      begin
+         Tower_Fetch_Pkg.Fetch (Word => Fetch_Word);
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: " & To_String (Fetch_Word));
+      exception
+         when others =>
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: unreadable");
       end;
       --  v10: the SHARER bundle is imported, best effort, once the base has let the door through and before the
       --  sheet is looked for. Tower_Import_Pkg measures, the proven Tower_Admission_Pkg decides, the proven

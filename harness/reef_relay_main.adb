@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 142d596f69567b0c2ee877794bf7320ebad15688a0faddda3cea53c566c9b168
+--  Unstamped source sha256: 3dcadc33a9ce36e1e41bac8268ff95eb69d6c8af7674613a76d23501b9dfd986
 --
 with Ada.Text_IO;
 with Ada.Streams;
@@ -43,9 +43,15 @@ procedure Reef_Relay_Main is
    use type Ada.Calendar.Time;
 
    Max_Conf : constant := 65_536;
-   Max_Line : constant := 65_536;
+   --  LINEAGE 2 (2026-09-21, the owner's ruling D8(a)): the line bound is raised from 65_536 to 4_194_304 so a
+   --  hex-encoded catalog fits -- the payload cap is 1 MiB, hex doubles it, the wire wraps it, and the rest is
+   --  headroom. One code path, the same wire, the same slot. The two line buffers move to the heap, allocated
+   --  ONCE: two 4 MiB arrays on the stack would exceed macOS's 8 MiB main-thread stack. Fixed text; not the slot.
+   Max_Line : constant := 4_194_304;
 
-   Request_Buf : String (1 .. Max_Line);
+   type Line_Access is access String;
+   Request_Buf : constant Line_Access := new String (1 .. Max_Line);
+   Answer_Buf  : constant Line_Access := new String (1 .. Max_Line);
    Serial      : Natural := 0;
 
    function Value_Text (Line : String; Key : String) return String is
@@ -222,7 +228,7 @@ procedure Reef_Relay_Main is
       Exit_Success : Boolean := False;
       Timed_Out    : Boolean := False;
 
-      Answer     : String (1 .. Max_Line);
+      Answer     : String renames Answer_Buf.all;   --  the one heap buffer; connections are served one at a time
       Out_Len    : Natural := 0;
       Over_Bound : Boolean := False;
       Line_Feeds : Natural := 0;

@@ -1,0 +1,52 @@
+--  Copyright (C) 2026 Anthony Gair
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: 05ed25dbe15544943a8596f4c948cab704f8b62a7a77c8b5d6bacd9861ac1ff1
+--
+--  Tower_Keys_Pkg -- the two catalog public keys a puller trusts under ONE stream, PINNED IN THE BUILD, plus the
+--  index signer's public key. Seat-written constants, no code: the way Crucible_Tower.Base_Digest and the door's
+--  Pinned_Reef_Signers are pinned (BRIEF_tower_transport_2026-09-21 section 4, lean under ONE stream; the loopback
+--  build brief of 2026-09-21, piece A). The trust file beside the binary (allowed_signers) is GENERATED from these
+--  by bin/stamp_signers at build time -- never hand-written, never written by the agent or by the fetch edge.
+--  An own-network operator substitutes their own keys here and rebuilds.
+--
+--  WHICH LINE IS REAL AND WHICH IS A STAND-IN, said plainly so nobody has to guess:
+--    Df_Tower_Public      REAL. The df-tower signer's public half, captured from ~/.df-tower/df-tower.pub on Bill
+--                         (the owner's key ceremony, decision_o3_df_tower_key_ceremony_2026_09_21).
+--    Df_Admission_Public  STAND-IN. The admitter's public half is on gertrude and was NOT on Bill when this slice
+--                         was built; this is a throwaway key made for the probe, its private half deleted. A record
+--                         sealed by the real admitter does NOT verify against it. Replace when the real public half
+--                         is captured, and set Df_Admission_Is_Stand_In to False.
+--    Df_Index_Public      STAND-IN. The Reef's index signer (namespace df-index) does not exist yet: it is the
+--                         owner's Linode ceremony (transport brief decision 5). Throwaway, private half deleted.
+--  bin/stamp_signers prints a warning naming every stand-in it writes, so a release with one cannot be quiet.
+package Tower_Keys_Pkg with SPARK_Mode is
+
+   --  The principal written on every line of the trust file (the -I label ssh-keygen verifies under).
+   --  The seat's lean; the owner's to confirm (open item O-3 "principal", 2026-09-21).
+   Principal : constant String := "tower@thedarkfactory.co.uk";
+
+   --  The namespaces the three seals are made under (the owner's rulings O4 and R1, 2026-09-20; D5 lean 2026-09-21).
+   Tower_Namespace     : constant String := "df-tower";
+   Admission_Namespace : constant String := "df-admission";
+   Index_Namespace     : constant String := "df-index";
+
+   Df_Tower_Public : constant String :=
+     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDVIPmT2iwt5H4ZCbBw3orkMeqD2GizfYsi7m2LV/AFs";
+   Df_Tower_Is_Stand_In : constant Boolean := False;
+
+   Df_Admission_Public : constant String :=
+     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJJS38HAcp0hvf3oG1laNhq54ZfxywA5LfwZQyQsNwuN";
+   Df_Admission_Is_Stand_In : constant Boolean := True;
+
+   Df_Index_Public : constant String :=
+     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmj+LkU5M3Lx4X7MBhzpUSViEjc9nFL+CCo4tLI5kAa";
+   Df_Index_Is_Stand_In : constant Boolean := True;
+
+   --  CONSTANTS ONLY (the owner's lean, 2026-09-21: no shape predicates here; the stamp tool writes the pins blindly,
+   --  and whether the written file is one ssh-keygen accepts is the probe's row A2, not a theorem of this unit).
+
+end Tower_Keys_Pkg;
