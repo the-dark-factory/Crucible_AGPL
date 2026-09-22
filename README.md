@@ -2,9 +2,9 @@
 
 🌐 [简体中文](README.zh-Hans.md) · [Français](README.fr.md) — quick guides: [中文](GUIDE.zh-Hans.md) · [FR](GUIDE.fr.md). Translations; the English text governs.
 
-CRUCIBLE is a single, monolithic Ada/SPARK executable. It turns a written specification into Ada/SPARK with a
-machine-checked proof, refuses to deliver anything it could not prove, and — in this release — can send what it
-could not close up to a networked tower and take down what others have.
+A factory that turns a written specification into Ada/SPARK with a machine-checked proof, refuses to deliver
+anything it could not prove, and — in this release — can send what it could not close up to a networked tower and
+take down what others have.
 
 **What this release is, plainly.** You write a specification in prose. Crucible reads it, decides whether it is
 fit to forge, designs the unit, writes the contract and the body through a language model you point it at, and
@@ -48,13 +48,13 @@ When a round leaves loop checks unproved, the residue is classified (omission, i
 frame) and exactly one diagnosis goes back to the model. Two idioms are rewritten deterministically and cost no
 round: `'Old` inside a loop invariant becomes `'Loop_Entry`, and `exists |` becomes `for some =>`.
 
-The widening opens no new way to fake a proof. `pragma Assume`, `SPARK_Mode Off`, `Annotate` and `Warnings Off`
-are refused whether the specification asks for them or not.
+The widening opens no new way to fake a proof. `pragma Assume`, `SPARK_Mode Off`, `Annotate` and
+`Warnings Off` are refused whether the specification asks for them or not.
 
 ## What parks by design
 
-Some classes of specification **park by design**. Crucible does not spend its round budget on them and does not
-pretend; it says which class it met.
+Some classes of specification **park by design**. Crucible does not spend its round budget on them and does
+not pretend; it says which class it met.
 
 | class | what it is | what you get |
 |---|---|---|
@@ -68,13 +68,14 @@ sent up the tower for someone else to close.
 
 ## What we measured, and what it does not show
 
-**The examples were in the planner model's training data.** The planner model we used was fine-tuned on a corpus
-that includes AdaCore's `spark-examples`. The FLOOR example we quote most (`Linear_Search`) is from that tree:
-**the model had seen it.** A pass on it shows the pipeline works end to end. It does **not** show that the model
-can design a proof it has never met. We have not yet published a result on unseen code, and until we do, read
-every FLOOR figure as a floor.
+**The examples were in the model's training data.** The planner model we used — a qwen3.8-27b model — was
+fine-tuned on a corpus that includes AdaCore's `spark-examples`. FLOOR 1, the example we quote most
+(`Linear_Search`), is from that tree: **the model had seen it.** A pass on FLOOR 1 shows the pipeline works end
+to end. It does **not** show that the model can design a proof it has never met. We have not yet published a
+result on unseen code, and until we do, read every FLOOR figure as a floor.
 
-Measured on our own machines, 2026-09-19, through the shipped door with all three rails:
+Measured on our own machines, 2026-09-19, through the shipped door with all three rails, with a qwen3.8-27b
+model:
 
 | what | result |
 |---|---|
@@ -86,12 +87,22 @@ Measured on our own machines, 2026-09-19, through the shipped door with all thre
 The main stopper is contract emission: the model runs out of rounds before it writes a contract the prover
 accepts.
 
+Re-checked on the release binary (macOS arm64, `crucible-agpl` `04ca4c6c…`, pinned toolchain, 2026-09-22): a
+spot-check of whole-pipeline forges gave FLOOR 1 **three of four** proved and Count_Above **zero of two** — the
+same minority the table shows, now on the shipped binary.
+
+A stranger's-machine run, done for the first time on 2026-09-22: a clean `ubuntu:24.04` container holding only
+the shipped Linux x86_64 binaries (`crucible-agpl` `89e93449…`) and a public toolchain — nothing copied from our
+machines — ran the pipeline end to end against a public model on localhost. **Zero of seven** runs reached a
+proved unit. The pipeline runs on a clean machine with nothing of ours; finishing a proof reliably needs the
+model it was tuned against, which we do not ship.
+
 **A proof is only as good as its contract — and nothing yet checks the contract against your specification.**
 Twice in two days the model wrote a contract *weaker* than the sheet asked for. One passed every gate we have,
-including the check for contracts that say nothing. The other dropped a single `not`. A check that compares a
-contract's strength to a ground truth is designed and not built. **Until it is, read the emitted contract
-yourself.** "Proved" means the body meets the contract Crucible wrote. It does not mean the contract is the one
-you meant.
+including the check for contracts that say nothing. The other dropped a single `not`, which would have left a
+case pending for ever; a syntax error elsewhere caught it by luck. A check that compares a contract's strength
+to a ground truth is designed and not built. **Until it is, read the emitted contract yourself.** "Proved"
+means the body meets the contract Crucible wrote. It does not mean the contract is the one you meant.
 
 ---
 
@@ -99,35 +110,59 @@ you meant.
 
 This release is **networked**, and the transport is real. A factory that parks a case can pack it into a signed
 catalog and send it up a tower rail; another factory pulls the index, fetches the catalog, and imports it. The
-path is proven end to end over the public network: a certified catalog was packed on one machine, certified by
-the admitter on a second, placed on a public rail, and pulled and imported **`accepted`** by a third — digest
-matched, forward-only against the base held. Nothing was copied by hand; every door was named by the tool.
+path is proven end to end over the public network as of **2026-09-21**: a certified catalog was packed on one
+machine, certified by the admitter on a second, placed on the reef `/rail`, and pulled and imported **`accepted`**
+by a third — digest matched, forward-only against the base held. Nothing was copied by hand; every door was named
+by the tool.
 
 What is true today, and what is not:
 
 - **What crosses is a provenanced CLAIM, not a proof.** The provenance record attests the catalog is
   **well-formed and came from a known packer** — it does **not** attest that the components inside were proved on
-  the receiver's terms. **A shared catalog is a CLAIM until it is reproduced.** The reproduction bench that turns
-  a shared claim into a verified entry is **designed and not built** — it is the first work of the economy layer.
-- **What leaves your machine.** Only what the factory measured or emitted. No absolute path, no hostname, none of
-  your own prose. Every withheld field is *named*, with its reason.
+  the receiver's terms. **A shared catalog is a CLAIM until it is reproduced.** The reproduction bench that turns a
+  shared claim into a verified entry is **designed and not built** — it is the first work of the economy layer.
+- **What leaves your machine.** Only what the factory measured or emitted. No absolute path, no hostname, none
+  of your own prose. Every withheld field is *named*, with its reason.
+- **Nothing in the executable listens.** An external `lsof` scan of the running binary — macOS arm64
+  (`04ca4c6c…`) and Linux x86_64 (`89e93449…`) — found **zero sockets in LISTEN state** at handshake, during
+  operation, and at drain, four of four measured rows on each, established from the kernel's view rather than the
+  binary's own say-so.
 - **Forward-only, and integrity-checked.** A catalog below the running version, or whose digest does not match
-  its receipt, or sealed by an untrusted key, is refused and recorded — verified across the import edge's probe
-  suite.
+  its receipt, or sealed by an untrusted key, is refused and recorded — verified across 35 probe cases on the
+  import edge.
 
-**The economy layer is NOT running.** The market — claiming a case for a bounty, the reproduction bench that
-verifies a submitted proof, credits, sharer standing, and reciprocity (a factory that sends none pulls nothing)
-— is the **next** phase and no part of it runs today. This release exchanges provenanced claims; it does not yet
-settle them. Enrolment for *solving* cases will require signing the CLA; sending them will not.
+The economy layer is **not running**. The Palais de Problème market — claiming a case for a
+bounty, the reproduction bench that verifies a submitted proof, Bawbee credits, sharer standing, reciprocity
+(a factory that sends none pulls nothing) — is **v0.3**, the next phase, and no part of it runs today. This
+release exchanges provenanced claims; it does not yet settle them. When those pieces ship they will say so in
+their own ledger rows (a Bawbee is a best-effort claim with no issuer yet), and enrolment for *solving* cases
+will require signing the CLA (sending them will not).
 
 ---
 
 ## The model
 
 Crucible does not ship a model and does not need ours. The `model` line of `config/rail.conf` takes any endpoint
-you run.
+you run. Install ollama and pull a model for your platform — `ollama pull qwen3-coder:30b` is the public model
+this release was demonstrated with — and point Crucible at it on localhost; the rail speaks plain HTTP to a local
+endpoint by design, so nothing leaves the box but what you send. The house figures above were measured with a
+qwen3.8-27b model tuned for the dialect.
 
 ---
+
+## Get it
+
+This tagged release ships factory-built signed binaries — a macOS arm64 binary and a Linux x86_64 binary — with a
+`SHA256SUMS` and one detached signature (namespace `df-release`). The macOS binary is Developer-ID signed and
+notarized, so it opens without the unidentified-developer prompt on first online run. Verify the checksums, then
+the signature, against the `allowed_signers` shipped beside them:
+
+```sh
+sha256sum -c SHA256SUMS
+ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
+```
+
+There are no other binaries. Anyone who wants to build their own network reads `INSTALL.md` and builds from source.
 
 ## Build it
 
@@ -139,8 +174,7 @@ CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p     # bin/crucible-comme
 ```
 
 Each binary answers MCP over stdio and reports its own edition in the `initialize` result, so you can always
-tell which one you are talking to. Signed prebuilt binaries (Mac arm64, Linux x86_64, with `SHA256SUMS` and a
-detached signature) will accompany tagged releases; until then, build from source.
+tell which one you are talking to.
 
 Each binary is also pinned to the base tower bundle it was built with: `tower/base.bundle`, by the SHA-256 of its
 first line. Start the door from this directory. On every `forge` call it measures that file before it reads your
@@ -179,9 +213,9 @@ refusal tells you what this binary is, it does not stop you.
 
 - **Produced by an agentic AI system**, with a human holding the gate and reading before release.
 - **It finishes a minority of runs.** See the table. We would rather you knew.
-- **The examples we quote were in the planner model's training data.** See above.
-- **A proof establishes that the code meets the contract we wrote. It cannot establish that the contract is the
-  right one**, and we have caught our own pipeline writing the wrong one. The check for that is not built.
+- **The examples we quote were in the model's training data.** See above.
+- **A proof establishes that the code meets the contract we wrote. It cannot establish that the contract is
+  the right one**, and we have caught our own pipeline writing the wrong one. The check for that is not built.
 - **What crosses the network is a CLAIM until reproduced.** The transport is proven live; the bench that would
   verify a shared claim on your terms is not built. Do not treat an imported catalog as proved code.
 - **The chain of custody is MEASURED, not ATTESTED.** The machine that re-proves each core is separate from the
