@@ -92,6 +92,6 @@ begin
    if Tower_Keys_Pkg.Df_Index_Is_Stand_In then
       Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
                             "stamp_signers: WARNING df-index line is a STAND-IN key; the Reef's index signer"
-                            & " does not exist yet (the owner's Linode ceremony)");
+                            & " does not exist yet (the operator's host ceremony)");
    end if;
 end Stamp_Signers_Main;

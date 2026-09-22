@@ -26,6 +26,6 @@ The prover service needs the **absolute path** that `alr exec -- which gnatprove
 CRUCIBLE's own `alire.toml` deliberately has no `[[depends-on]]` (`mui:crucible-depends-on-no-crate`).
 Pinning the toolchain here keeps that true, and gives a stranger one command that installs the same
 toolchain on every machine, instead of whatever `/usr/bin` happens to hold (the 2026-09-16
-Pro-18 / GCC-13 mixing failure on gertrude).
+Pro-18 / GCC-13 mixing failure on one build host).
 
 Changing a pin is a release event: re-prove CRUCIBLE with the new versions first.

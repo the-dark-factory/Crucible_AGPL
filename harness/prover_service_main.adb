@@ -247,7 +247,7 @@ procedure Prover_Service_Main is
          Started  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
 
          --  (c) Kill a process AND every descendant, children first. GNAT's Kill_Process_Tree walks /proc, which
-         --  macOS does not have: on Bill it left why3server orphaned (3d probe, 2026-09-16). pgrep -P lists the
+         --  macOS does not have: on one build host it left why3server orphaned (3d probe, 2026-09-16). pgrep -P lists the
          --  direct children of a pid; kill -KILL ends one. Both exit non-zero harmlessly when there is nothing.
          procedure Kill_Tree (Pid_Text : String) is
             List_File : constant String := Dir & "/children-" & Pid_Text & ".txt";
