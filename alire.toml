@@ -1,6 +1,6 @@
 name = "crucible"
 description = "CRUCIBLE — the release factory. Monolithic Ada SPARK; judges its own work."
-version = "0.1.0"
+version = "0.2.1"
 licenses = "AGPL-3.0-or-later"
 maintainers = ["Anthony Gair <tony.gair@thedarkfactory.co.uk>"]
 maintainers-logins = ["tonygair"]

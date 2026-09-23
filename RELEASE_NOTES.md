@@ -1,4 +1,8 @@
-# Crucible v0.2.0
+# Crucible v0.2.1
+
+> v0.2.1 is v0.2.0 with the install made honest: the tarball unpacks into a working directory that
+> connects to the tower out of the box, the version string reports itself correctly, a shipped
+> launcher starts all three rails, and the verify steps below match what you actually downloaded.
 
 Crucible turns a written specification into Ada/SPARK with a machine-checked proof. It refuses to deliver
 anything it could not prove. This release adds the tower: what it cannot close, it sends up; what another
@@ -64,16 +68,41 @@ what you send.
 
 ## Get it and check it
 
-Release assets are factory-built: a macOS arm64 binary and a Linux x86_64 binary, a `SHA256SUMS`, and one detached
-signature. The macOS binary is signed with a Developer ID and notarized — it opens without the unidentified-
-developer prompt on first online run. Verify the checksums, then verify the signature:
+Release assets are factory-built, signed tarballs — one per platform — plus one checksum file:
 
-```
+- `crucible-v0.2.1-macos-arm64.tar.gz`
+- `crucible-v0.2.1-linux-x86_64.tar.gz`
+- `RELEASE_TARBALLS.sha256`
+
+The macOS binary is signed with a Developer ID and notarized. (It is a bare CLI executable, so
+Gatekeeper cannot staple a ticket to it; if macOS blocks it on a browser download, clear the
+quarantine attribute — `xattr -d com.apple.quarantine bin/crucible-agpl` — or approve it once in
+System Settings. `spctl -t execute` reports a bare tool as "not an app" even though the signature is
+valid; that is expected for a CLI binary.)
+
+Check what you downloaded, unpack it, then verify the signed set inside:
+
+```sh
+# 1. integrity of the download
+sha256sum -c RELEASE_TARBALLS.sha256
+
+# 2. unpack, and step into the working directory
+tar xzf crucible-v0.2.1-<platform>.tar.gz
+cd crucible-v0.2.1
+
+# 3. verify the signed file set inside the tarball (the df-release signature)
 sha256sum -c SHA256SUMS
-ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
+ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk \
+    -n df-release -s SHA256SUMS.sig < SHA256SUMS
 ```
 
-There are no other binaries. Anyone who wants to build their own reads INSTALL.md and builds from source.
+Step 1 proves the tarball is the one we published. Step 3 proves every file inside it is the one we
+signed; a good run prints `Good "df-release" signature for tower@thedarkfactory.co.uk`.
+
+The tarball unpacks to `crucible-v0.2.1/`, holding `crucible-launch.sh`, `bin/`, `config/` and
+`tower/`. Point your MCP host at `crucible-launch.sh` — it starts the rails and serves the door from
+the right directory — see INSTALL.md and CONNECTING.md. There are no other binaries; anyone who wants
+to build their own reads INSTALL.md.
 
 ## Licence
 

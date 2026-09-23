@@ -152,17 +152,23 @@ qwen3.8-27b model tuned for the dialect.
 
 ## Get it
 
-This tagged release ships factory-built signed binaries — a macOS arm64 binary and a Linux x86_64 binary — with a
-`SHA256SUMS` and one detached signature (namespace `df-release`). The macOS binary is Developer-ID signed and
-notarized, so it opens without the unidentified-developer prompt on first online run. Verify the checksums, then
-the signature, against the `allowed_signers` shipped beside them:
+This tagged release ships factory-built, signed tarballs — one per platform — plus one checksum file:
+`crucible-v0.2.1-macos-arm64.tar.gz`, `crucible-v0.2.1-linux-x86_64.tar.gz`, and
+`RELEASE_TARBALLS.sha256`. Each tarball unpacks to `crucible-v0.2.1/` — a working directory with a
+`crucible-launch.sh`, `bin/`, `config/` and `tower/` — that connects to the tower out of the box. The
+macOS binary is Developer-ID signed and notarized (a bare CLI tool, so it cannot be stapled; clear the
+quarantine attribute if a browser download is blocked). Check the download, unpack, then verify the
+signed set inside:
 
 ```sh
+sha256sum -c RELEASE_TARBALLS.sha256
+tar xzf crucible-v0.2.1-<platform>.tar.gz && cd crucible-v0.2.1
 sha256sum -c SHA256SUMS
 ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
 ```
 
-There are no other binaries. Anyone who wants to build their own network reads `INSTALL.md` and builds from source.
+Then point your MCP host at `crucible-launch.sh` (see `CONNECTING.md`). There are no other binaries.
+Anyone who wants to build their own network reads `INSTALL.md` and builds from source.
 
 ## Build it
 

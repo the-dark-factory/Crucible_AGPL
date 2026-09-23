@@ -1,37 +1,116 @@
 # Installing CRUCIBLE
 
-**Honest status (2026-09-19): there is no one-step install yet.** There are no published binaries for any
-platform, and "the stand" (the installer) doesn't exist yet. What follows builds a working CRUCIBLE from
-source, on macOS (Apple silicon) or Linux (x86_64). The stand will automate these same steps, and a Claude
-Code skill will run the stand for you.
+## The short path (a published release)
 
-## What a working CRUCIBLE is
+v0.2.1 ships prebuilt, signed tarballs. You do not need a toolchain to run the door — only to
+build it yourself (see "Build from source" below).
 
-Turning prose into proved Ada takes four local processes (door, prover service, vacuity service, model), three config files and one toolchain. Nothing
-listens on the network: every service binds `127.0.0.1`.
+1. Download the tarball for your platform and the checksum file from the release page:
+   - `crucible-v0.2.1-macos-arm64.tar.gz` (macOS, Apple silicon)
+   - `crucible-v0.2.1-linux-x86_64.tar.gz` (Linux, x86_64)
+   - `RELEASE_TARBALLS.sha256`
+
+2. Check what you downloaded, then unpack:
+   ```sh
+   sha256sum -c RELEASE_TARBALLS.sha256
+   tar xzf crucible-v0.2.1-<platform>.tar.gz
+   cd crucible-v0.2.1
+   ```
+
+3. Verify the signed file set INSIDE the tarball (this is the df-release signature):
+   ```sh
+   sha256sum -c SHA256SUMS
+   ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk \
+       -n df-release -s SHA256SUMS.sig < SHA256SUMS
+   ```
+   A good run prints `Good "df-release" signature for tower@thedarkfactory.co.uk`.
+
+The tarball unpacks to `crucible-v0.2.1/` with this layout — everything is relative to that
+directory:
+```
+crucible-v0.2.1/
+  crucible-launch.sh   the one-command launcher (starts the rails, serves the door, cleans up)
+  bin/     crucible-agpl, prover_service_main, vacuity_service_main, reef_relay_main,
+           check-cores-mcp, allowed_signers
+  config/  rail.conf, reef-relay.conf, tower.conf
+  tower/   base.bundle, sharer.bundle
+  SHA256SUMS, SHA256SUMS.sig, SHA256SUMS.allowed_signers
+```
+
+> The door finds `config/rail.conf` and `tower/base.bundle` **relative to the directory it is
+> started in**. Start it from the `crucible-v0.2.1/` directory (not from inside `bin/`). The
+> launcher does this for you.
+
+### What each piece is
 
 | piece | what it does | who supplies it |
 |---|---|---|
-| `bin/crucible-agpl` | the one executable: an MCP server on stdio (the "door") | us — built below |
-| `bin/prover_service_main` | the prover rail: takes one unit at a time, runs gnatprove on it, reports the facts | us — built below |
-| `bin/vacuity_service_main` | the vacuity rail: runs the battery `check-cores-mcp` over a spec and relays whether its contracts say anything | us — built below; the battery is our separate `check-cores-mcp` repo |
-| `bin/reef_relay_main` | the reef rail: carries one line to the Reef over TLS and brings one line back, for `palais.enrol` only | us — built below; OPTIONAL, and not needed to forge anything |
-| FSF toolchain | GNAT, gprbuild, gnatprove | you, fetched by our pinned Alire recipe (`toolchain/`). We ship no toolchain binaries. |
-| model endpoint | the model rail (ollama, or any OpenAI-shaped server) | you — any model; ours is Rosie (`qwen3.8-27b-ada:v0.3`) |
-| `tower/base.bundle` | the base tower bundle the binary is built with. Two lines: line 1 is one JSON object (`version` first), line 2 says how it is protected. Today it is EMPTY (`"entries":[]`) and unsigned: it is pinned into the binary by the SHA-256 of line 1 (`src/generated/crucible_tower.ads`, written by `bin/stamp_tower_main`). A missing or malformed file stops the build; an empty one is a real base. **The door reads the pin:** on every `forge` call, before it looks at your sheet, it measures `tower/base.bundle` in the folder it was started in and refuses if the file is missing, is not exactly two lines, or line 1 does not match the digest built into the binary (step 6). | us — in the tree |
-| `config/rail.conf` | where each rail is: one JSON line per rail | us — a working default is in the tree |
-| `config/prover-service.conf` | the prover service's port, staging folder and gnatprove path | you, from `config/prover-service.conf.example` |
-| `config/vacuity-service.conf` | the vacuity service's port, staging folder and battery path | you, from `config/vacuity-service.conf.example` |
+| `crucible-launch.sh` | the launcher: cds into the install dir, starts the three rails (prover, vacuity, reef relay), serves the door, and stops the rails on exit. Writes `config/prover-service.conf` and `config/vacuity-service.conf` on first start (this machine's gnatprove path, the shipped battery) if they are absent — inside the install dir only | us — in the tarball |
+| `bin/crucible-agpl` | the one executable: an MCP server on stdio (the "door") | us — in the tarball |
+| `bin/prover_service_main` | the prover rail: runs gnatprove on one unit at a time | us — in the tarball |
+| `bin/vacuity_service_main` | the vacuity rail: runs the `check-cores-mcp` battery | us — in the tarball |
+| `bin/check-cores-mcp` | the vacuity battery the vacuity rail runs | us — in the tarball |
+| `bin/reef_relay_main` | the reef rail: carries one line to thereef.ink over TLS and brings one back, so the door can ask the tower what catalog is current and fetch it | us — in the tarball |
+| `bin/allowed_signers` | the trust file beside the binary. Names the tower's signing keys (df-tower, df-admission, df-index). The df-index key is what verifies the tower's signed catalog index on fetch. | us — in the tarball |
+| `config/rail.conf` | where each rail is: one JSON line per rail, including the `reef` line pointing at the local relay | us — a working default is in the tarball |
+| `config/reef-relay.conf` | the relay's port, the tower URL (`https://thereef.ink/rail`), and its staging dir | us — a working default is in the tarball |
+| gnatprove | behind the prover service, so it can prove locally | you — install a GNAT/SPARK toolchain; the launcher finds it. The release runs without it (reef + vacuity still work); the prover rail needs it |
+| model endpoint | the model rail (ollama, or any OpenAI-shaped server) on `127.0.0.1` | you — any model; we ship none |
 
-You also need an MCP host (Claude Code, or any MCP client) to talk to the door.
+Nothing listens off-host: every service binds `127.0.0.1`. The reef relay is the one component
+that leaves the box, and only to `https://thereef.ink/rail`, and only to ask for and fetch the
+public catalog — it sends no unit of yours.
 
-## 1. Prerequisites
+## Start it
+
+Point your model line in `config/rail.conf` at a model you run on `127.0.0.1` (for example ollama
+with `qwen3-coder:30b`), then connect your MCP host to the launcher — it starts the prover rail, the
+vacuity rail, and the reef relay (which reaches the tower), serves the door on stdio, and stops the
+rails when the door exits:
+
+```sh
+claude mcp add crucible -- /absolute/path/to/crucible-v0.2.1/crucible-launch.sh
+```
+
+That is the whole start. You do not start the rails by hand and you do not need a `cd` wrapper —
+the launcher cds into the install directory for you. A quick self-check:
+
+```sh
+/absolute/path/to/crucible-v0.2.1/crucible-launch.sh --check
+#   prover  8471 up
+#   vacuity 8472 up
+#   reef    8473 up
+```
+
+(If you have not installed a GNAT/SPARK toolchain, the prover rail reports itself off and the
+launcher says so; the reef relay and vacuity rail still come up, and the tower connect still works.)
+
+See `CONNECTING.md` for Claude Desktop and for the by-hand equivalent if you prefer not to use the
+launcher.
+
+## What connecting to the tower does
+
+At the start of every `forge`, the door asks thereef.ink (through the local relay) what catalog is
+current. If the tower names a newer catalog than the one you hold, the door brings that ONE file
+down into `tower/sharer.bundle`, verifies its seal against the df-index key in `bin/allowed_signers`,
+and re-checks it locally before anything is trusted. It never blocks a forge: no relay, an
+unreachable tower, or a stale/unverified index all leave the forge to run on what you already have.
+This fetch is anonymous — you do not enrol, hold a key, or send anything of yours to fetch the
+public catalog. (Enrolment — `palais.enrol` — is the next phase's keyed economy layer and is
+refused honestly until the tower publishes a signing key.)
+
+## Build from source (optional)
+
+A stranger who wants to build their own — a different platform, or their own network — builds from
+source. It is one tree; both editions build from it.
+
+### 1. Prerequisites
 
 - **Alire** (`alr`), 2.x: <https://alire.ada.dev>
 - **git**
 - Optional: **ollama**, for the model rail.
 
-## 2. Fetch the pinned toolchain
+### 2. Fetch the pinned toolchain
 
 ```sh
 cd toolchain
@@ -43,96 +122,68 @@ cd ..
 
 The pins are exact: GNAT 15.1.2, gprbuild 26.0.1, gnatprove 15.1.0. These builds report themselves as
 "GNAT 15.0.1 (prerelease)", "GPRBUILD 26.0.0" and "FSF 15.0". That's expected; the check is the path.
+The tree needs GNAT 15 (a 13.x toolchain will not compile it).
 
-## 3. Build
+### 3. Guard the version, then build
 
-Run every build command through the pinned toolchain, so that no other `gprbuild`/`gnat` on your `PATH`
-gets mixed in (a real failure, 2026-09-16):
+Run the version guard first — it fails the build if the source version, `alire.toml`, and the tag you
+intend disagree (the regression that once shipped a binary reporting the wrong version):
+
+```sh
+scripts/check-version.sh v0.2.1     # prints OK; STOP on a mismatch
+```
+
+Run every build command through the pinned toolchain, so that no other `gprbuild`/`gnat` on your
+`PATH` gets mixed in (a real failure, 2026-09-16):
 
 ```sh
 TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
 mkdir -p obj/harness bin
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
-bin/stamp_build_main || exit 1                                     # records the commit you are building; STOP if it refuses (exit 4: the commit is dated in the future, or its time cannot be recorded)
+bin/stamp_build_main || exit 1                                     # records the commit you are building; STOP if it refuses
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_tower_main.adb -o bin/stamp_tower_main          # the tower stamp tool (Ada)
 bin/stamp_tower_main || exit 1                                     # pins tower/base.bundle by digest and version; STOP if it refuses
 PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/crucible-agpl, bin/pack_tower, bin/certify_tower, bin/stamp_signers
-bin/stamp_signers || exit 1                                        # writes bin/allowed_signers (the trust file beside the binary) from the keys pinned in src/tower_keys_pkg.ads; never hand-write it. It WARNS on standard error for every STAND-IN key it writes -- read those lines.
+bin/stamp_signers || exit 1                                        # writes bin/allowed_signers from the keys pinned in src/tower_keys_pkg.ads; never hand-write it. It WARNS for every STAND-IN key -- read those lines.
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/vacuity_service_main.adb -o bin/vacuity_service_main  # -> bin/vacuity_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
-    harness/reef_relay_main.adb -o bin/reef_relay_main            # -> bin/reef_relay_main (optional)
+    harness/reef_relay_main.adb -o bin/reef_relay_main            # -> bin/reef_relay_main (the reef rail)
 ```
 
-## 4. Configure
+The vacuity battery `check-cores-mcp` is a separate Go repo; build it (`go build`) and place the
+binary where `config/vacuity-service.conf` names it (the launcher, and the release tarball, put it in
+`bin/`).
+
+### 4. Configure and start
+
+The shipped launcher writes `config/prover-service.conf` and `config/vacuity-service.conf` for you on
+first start. Building by hand, you can instead copy the examples and set the absolute paths:
 
 ```sh
-cp config/prover-service.conf.example config/prover-service.conf
-cp config/vacuity-service.conf.example config/vacuity-service.conf
+cp config/prover-service.conf.example config/prover-service.conf     # set gnatprove + staging_root
+cp config/vacuity-service.conf.example config/vacuity-service.conf   # set battery + staging_root
 ```
 
-Edit both: set `staging_root` to an absolute folder (for example `$HOME/.crucible/prover-staging`, spelled
-out in full) and, in the prover file, `gnatprove` to the absolute path from step 2; in the vacuity file, `battery`
-to your `check-cores-mcp` binary. Both files are per machine and git ignores them.
-
-`config/rail.conf` works as shipped if ollama is on `127.0.0.1:11434` and gnatprove is behind the prover
-service on `127.0.0.1:8471` and the vacuity service is on `127.0.0.1:8472`. To use a different model, edit the `"rail":"model"` line and restart. The
-format is in `config/README.md`.
-
-## 5. Start the two services
+`config/rail.conf` ships a `reef` line by default (pointing at the local relay) and works as shipped
+if ollama is on `127.0.0.1:11434`, the prover service on `:8471`, the vacuity service on `:8472`, and
+the reef relay on `:8473`. Then start everything with the launcher:
 
 ```sh
-bin/prover_service_main
-# prover-service: listening on 127.0.0.1:8471 (FSF 15.0)
-bin/vacuity_service_main
-# vacuity-service: listening on 127.0.0.1:8472 (check-cores-mcp)
+./crucible-launch.sh --check        # prover / vacuity / reef all up
+claude mcp add crucible -- /absolute/path/to/crucible/crucible-launch.sh
 ```
 
-Leave both running. Each serves one request at a time.
-
-The reef relay is OPTIONAL and serves `palais.enrol` alone: nothing else needs it, and CRUCIBLE forges
-exactly as well without it. There is no Reef to talk to yet, so it is not started here — when there is,
-copy `config/reef-relay.conf.example` to `config/reef-relay.conf`, add a `reef` line to `config/rail.conf`
-pointing at its port, and run `bin/reef_relay_main`. Until then `palais.enrol` refuses honestly with
-`no_reef_rail`, which is the correct answer.
-
-## 6. Connect your MCP host
-
-⚠ CRUCIBLE finds `config/rail.conf` **and `tower/base.bundle`** **relative to the folder it is started in**.
-It must be started from this directory. Started anywhere else, `prove_unit` answers `not_sent` and every
-`forge` call is refused with `"stopped_at":"tower"`, `"reason":"tower_base_missing"`. With Claude Code:
-
-```sh
-claude mcp add crucible -- sh -c 'cd /absolute/path/to/crucible && exec bin/crucible-agpl'
-```
-
-(The stand's launcher will do this for you.)
-
-## 7. Check it works
+### 5. Check it works
 
 Ask the door to prove a unit that is correct, then one that isn't:
 
-- `prove_unit` with unit `add_one`, a spec whose `Inc` has `Post => Inc'Result = X + 1`, and a body
-  `(X + 1)` should answer **`proved`**.
-- The same spec with a body of `(X + 2)` should answer **`not_proved`**.
-
-Both results were seen on macOS arm64 on 2026-09-19. If you get `not_sent`, the door didn't find a valid
-`prover` line in `config/rail.conf`: check which folder it was started from (step 6).
-
-If `forge` answers `"final":"refused","stopped_at":"tower"`, the door stopped before it read your sheet:
-
-- `"reason":"tower_base_missing"` — there is no `tower/base.bundle` in the folder the door was started in, or
-  the file is not exactly two lines (line 1 not empty, line 2 not blank). Check the folder first (step 6).
-- `"reason":"tower_base_tampered"` — line 1 of `tower/base.bundle` is not the line this binary was built
-  with. **Editing the bundle cannot fix this**: the digest is compiled into the binary. Restore the file from
-  the tree you built from, or rebuild (step 3) so the binary pins the bundle you now have.
-
-`intake_check` and `prove_unit` do not read the bundle and answer as before. The door checks line 1 only;
-it does not verify line 2's signature yet — today's base is unsigned and says so.
+- `prove_unit` with a spec whose `Inc` has `Post => Inc'Result = X + 1` and a body `(X + 1)` should
+  answer **`proved`**; the same spec with a body of `(X + 2)` should answer **`not_proved`**.
 
 Then the whole pipeline, with all three rails running. Give `forge` a four-line sheet:
 
@@ -143,17 +194,15 @@ function Find (L : List; V : Integer) return Natural
 post: the result is zero exactly when no element of L equals V; otherwise L at the result equals V and no element before the result equals V
 ```
 
-It should answer `"final":"done"` and write `out/find_pkg.ads`, `out/find_pkg.adb` and `out/receipt.json`, with
-`gates_passed` listing intake, decompose, emit_contract, prove_spec, vacuity, fill_body, prove_body, seam,
-provenance and admission. Seen on macOS arm64 on 2026-09-19 with Rosie v0.3, in under two minutes. The
-contract proves exactly what the `post:` line says, so if you want "first" guaranteed, say it in `post:`.
+It should answer `"final":"done"` and write `out/find_pkg.ads`, `out/find_pkg.adb` and
+`out/receipt.json`, with `gates_passed` listing intake, decompose, emit_contract, prove_spec,
+vacuity, fill_body, prove_body, seam, provenance and admission. If `forge` answers
+`"stopped_at":"tower"`, the door was started from the wrong directory — use the launcher.
 
 ## What does not work yet
 
-- **The palais tools** (`palais.shelf` and the rest) and `tower_import` are listed, but they answer
-  "unknown tool": no rail behind them yet.
-- **The vacuity battery** `check-cores-mcp` is a separate repo you build yourself (Go) until the stand ships it.
-- **The receipt** does not yet record the prover version, the model name or the rail endpoints (it says so
-  itself, under `not_recorded`).
-- **No stand, no published binaries, no `factory.doctor` tool.** The plan is
-  `PLAN_release_working_factory_install_2026-09-19` (Dark Factory records).
+- **Enrolment and the palais market** (`palais.enrol`, `palais.shelf`, and the rest) — the keyed
+  economy layer. `palais.enrol` refuses `no_reef_key_pinned` until the tower publishes a signing
+  key. Fetching the public catalog needs none of this.
+- **The receipt** does not yet record the prover version, model name, or rail endpoints.
+- **No one-step installer / `factory.doctor` tool** yet.
