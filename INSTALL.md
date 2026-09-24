@@ -99,6 +99,23 @@ This fetch is anonymous — you do not enrol, hold a key, or send anything of yo
 public catalog. (Enrolment — `palais.enrol` — is the next phase's keyed economy layer and is
 refused honestly until the tower publishes a signing key.)
 
+### Confirm the connect
+
+The door records the outcome of that exchange — one row per attempt — in `state/tower-fetch.jsonl`,
+relative to your `crucible-v0.2.1/` directory. Run any `forge`, then read the newest row:
+
+```sh
+tail -n1 state/tower-fetch.jsonl
+#   {"fetch":"fetched", …}  reached the tower, pulled a newer catalog   -> connected
+#   {"fetch":"current", …}  reached the tower, already current          -> connected
+#   {"fetch":"reef_unreachable", …}  relay up but tower not reached      -> offline; forge ran anyway
+```
+
+A `fetched` or `current` row is the proof a fresh install connects out of the box. The `"fetch"`
+word is written by the door's machine-checked freshness decider (`Tower_Index_Pkg`), not a hand-rolled
+log line — so the row is evidence. No row at all means the `reef` rail was not declared or the attempt
+was rate-limited (at most one an hour); start the relay via the launcher and forge again.
+
 ## Build from source (optional)
 
 A stranger who wants to build their own — a different platform, or their own network — builds from

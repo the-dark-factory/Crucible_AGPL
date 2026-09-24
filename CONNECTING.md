@@ -93,3 +93,24 @@ and the rest). Ask it to `prove_unit` a small correct unit — a spec whose `Inc
 `Post => Inc'Result = X + 1` and a body `(X + 1)` should answer **`proved`**; the same spec with a
 body of `(X + 2)` should answer **`not_proved`**. If you get `not_sent`, the door was started from
 the wrong directory (use the launcher) or `config/rail.conf` has no valid `prover` line.
+
+## Confirm it reached the tower
+
+Every `forge` begins by asking the tower what catalogue is current, and the door records the outcome
+of that one exchange — one row per attempt — in `state/tower-fetch.jsonl` (relative to your
+`crucible-v0.2.1/` directory). Run any `forge`, then read the newest row:
+
+```sh
+tail -n1 state/tower-fetch.jsonl
+```
+
+The `"fetch"` field is the door's own verdict on the exchange:
+
+- `{"fetch":"fetched", …}` — it reached the tower and brought a newer catalogue file down. **Connected.**
+- `{"fetch":"current", …}` — it reached the tower; you already hold the current catalogue. **Connected.**
+- `{"fetch":"reef_unreachable", …}` — the relay was up but the tower could not be reached (offline, or
+  the tower is down). The forge still ran on what you already have.
+
+A `fetched` or `current` row is the confirmation that a fresh install connects out of the box. The
+word is not ours to fudge — it is written by the door's machine-checked freshness decider
+(`Tower_Index_Pkg`), so the row is evidence, not a log line.
