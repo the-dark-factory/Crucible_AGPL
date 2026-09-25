@@ -61,11 +61,30 @@ rail_port() {
     | sed -n 's/.*"port":"\([0-9][0-9]*\)".*/\1/p'
 }
 
-# port_up PORT -> 0 if something already listens on 127.0.0.1:PORT. nc is used when present; without
-# it we assume the port is free (a second bind attempt fails and that rail exits, leaving the first).
+# PROBE_KIND -- how, if at all, this machine can ask whether a port is listening. Computed once.
+# A stock ubuntu:24.04 container has NONE of nc, ss, netstat, or a bash with /dev/tcp, so there is
+# no way to answer the question there at all. That is why this is a named state and not a boolean:
+# reporting DOWN when the truth is "cannot tell" accuses a running rail of being dead, which is
+# exactly what it used to do.
+PROBE_KIND=""
+if command -v nc >/dev/null 2>&1; then PROBE_KIND=nc
+elif command -v ss >/dev/null 2>&1; then PROBE_KIND=ss
+elif command -v netstat >/dev/null 2>&1; then PROBE_KIND=netstat
+elif command -v bash >/dev/null 2>&1 &&
+     ! bash -c ': </dev/tcp/127.0.0.1/1' 2>&1 | grep -q 'No such file'; then PROBE_KIND=bash
+fi
+
+# port_up PORT -> 0 listening, 1 not listening, 2 CANNOT TELL (no probe exists on this box).
+# 2 is not a failure. Callers must distinguish it from 1: "I could not look" is a different fact
+# from "I looked and nothing is there", and only one of them is a reason to worry.
 port_up() {
-  if command -v nc >/dev/null 2>&1; then nc -z 127.0.0.1 "$1" >/dev/null 2>&1; return $?; fi
-  return 1
+  case "$PROBE_KIND" in
+    nc)      nc -z 127.0.0.1 "$1" >/dev/null 2>&1 ;;
+    ss)      ss -ltn 2>/dev/null | grep -q "[:.]$1[[:space:]]" ;;
+    netstat) netstat -ltn 2>/dev/null | grep -q "[:.]$1[[:space:]]" ;;
+    bash)    bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" >/dev/null 2>&1 ;;
+    *)       return 2 ;;
+  esac
 }
 
 # ---- local-rail configuration (install-time, written HERE, only inside this dir) -----------------
@@ -124,8 +143,17 @@ ensure_prover_conf  || true
 ensure_vacuity_conf || true
 
 PIDS=""
+RAIL_PIDS=""   # "name=pid name=pid" -- which rail each pid belongs to, so --check can report on a
+               # rail it started even when this machine cannot probe the port.
 cleanup() {
   for p in $PIDS; do kill "$p" 2>/dev/null || true; done
+}
+
+# rail_pid NAME -> the pid this launcher started for that rail, or empty if it started none.
+rail_pid() {
+  for e in $RAIL_PIDS; do
+    case "$e" in "$1="*) echo "${e#*=}"; return ;; esac
+  done
 }
 trap cleanup EXIT INT TERM
 
@@ -153,6 +181,7 @@ start_rail() {
   echo "starting $name on $port" >&2
   "$exe" </dev/null >&2 2>&1 &
   PIDS="$PIDS $!"
+  RAIL_PIDS="$RAIL_PIDS $name=$!"
 }
 
 start_rail prover  prover_service_main
@@ -161,16 +190,34 @@ start_rail reef    reef_relay_main
 
 # The model rail is the user's own -- Crucible ships no model -- so it is never started here.
 mp="$(rail_port model)"; [ -n "$mp" ] || mp="$(rail_port ollama)"
-if [ -n "$mp" ] && ! port_up "$mp"; then
-  echo "model rail declared on $mp but nothing is answering there." >&2
-  echo "Crucible ships no model. Point the model line in config/rail.conf at the endpoint you run." >&2
+if [ -n "$mp" ]; then
+  port_up "$mp"; mstate=$?
+  if [ "$mstate" = 1 ]; then
+    echo "model rail declared on $mp but nothing is answering there." >&2
+    echo "Crucible ships no model. Point the model line in config/rail.conf at the endpoint you run." >&2
+  elif [ "$mstate" = 2 ]; then
+    echo "model rail declared on $mp; this machine cannot check it (no nc, ss, netstat or bash here)." >&2
+    echo "Crucible ships no model -- make sure that line in config/rail.conf names an endpoint you run." >&2
+  fi
 fi
 
 if [ "${1:-}" = "--check" ]; then
   sleep 1
+  [ -n "$PROBE_KIND" ] ||
+    echo "  (no nc, ss, netstat or bash on this machine: ports cannot be probed here)" >&2
   for r in prover vacuity reef; do
     p="$(rail_port "$r")"; [ -n "$p" ] || continue
-    if port_up "$p"; then echo "  $r $p up" >&2; else echo "  $r $p DOWN" >&2; fi
+    port_up "$p"; st=$?
+    pid="$(rail_pid "$r")"
+    if [ "$st" = 0 ]; then
+      echo "  $r $p up" >&2
+    elif [ "$st" = 1 ]; then
+      echo "  $r $p DOWN" >&2
+    elif [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "  $r $p started here, still running (pid $pid); port not probeable on this machine" >&2
+    else
+      echo "  $r $p UNKNOWN: not started here, and no way to probe" >&2
+    fi
   done
   exit 0
 fi
