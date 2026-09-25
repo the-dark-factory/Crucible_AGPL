@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 4c4ab32926d162d4682a518885437c8ed22837eef1b6f2462a809c161a4c70a1
+--  Unstamped source sha256: 67eda8518af5e298af908ecdb9a942c1965c77bfbd2e58f9abe51d4998672934
 --
 with Palais_Tools_Pkg;
 
@@ -113,9 +113,15 @@ package Reply_Text_Pkg with SPARK_Mode is
    Rail_Show_Name   : constant String := Name_Key & Q ("rail.show");
    Rail_Show_Desc   : constant String := Description_Key & Q ("say which models this factory is pointed at: for each tier the model, protocol, host and whether the route is on-estate; reads the config, changes nothing");
    Rail_Show_Tool   : constant String := "{" & Rail_Show_Name & "," & Rail_Show_Desc & "," & Input_Schema_Key & Rail_Show_Schema & "}";
+   Tier_Arg_Prop    : constant String := Q ("tier") & ":" & "{" & Type_Key & String_Word & "}";
+   Model_Arg_Prop   : constant String := Q ("model") & ":" & "{" & Type_Key & String_Word & "}";
+   Rail_Set_Schema  : constant String := "{" & Forge_Obj & "{" & Tier_Arg_Prop & "," & Model_Arg_Prop & "}" & "}";
+   Rail_Set_Name    : constant String := Name_Key & Q ("rail.set");
+   Rail_Set_Desc    : constant String := Description_Key & Q ("point a tier (standard or elevated) at another model line this factory already declares; refuses host, port and sovereign; the estate boundary never moves from here");
+   Rail_Set_Tool    : constant String := "{" & Rail_Set_Name & "," & Rail_Set_Desc & "," & Input_Schema_Key & Rail_Set_Schema & "}";
    First_Two_Tools   : constant String := Licence_Gate_Tool & "," & Intake_Check_Tool;
    Last_Two_Tools : constant String := Prove_Unit_Tool & "," & Forge_Tool;
-   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools & "," & Palais_Tools_Pkg.Enrol_Tool & "," & Rail_Show_Tool;
+   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools & "," & Palais_Tools_Pkg.Enrol_Tool & "," & Rail_Show_Tool & "," & Rail_Set_Tool;
    subtype Reply_String is String with Dynamic_Predicate => Reply_String'Length <= 8192;
    Tools_Inner  : constant Reply_String := Tools_Key & "[" & All_Tools & "]";
 

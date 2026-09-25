@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 3c780e81ddca5ef85d2ad6aac104b12616ffc7964a5353dfa0666c0761fc3b95
+--  Unstamped source sha256: 71ee5bc42ad97dd528217e92c4951d82a34183672258a39317ec83ffc64bc882
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -63,6 +63,9 @@ with Rail_Config_Pkg;
 with Model_Rail_Fields_Pkg;
 with Model_Tier_Select_Pkg;
 with Sovereign_Gate_Pkg;
+with Rail_Verb_Pkg;
+with Ada.Strings.Fixed;
+with GNAT.OS_Lib;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -190,11 +193,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-         if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-         if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-         if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-         if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-         if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -270,13 +273,13 @@ procedure Crucible_Main is
       declare
          Word : constant String := (
          --  SLOT BEGIN (outcome_word)
-         case O is
-            when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
-            when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
-            when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
-            when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
-            when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
-            when Prover_Rail_Pkg.Outcome_Proved => "proved"
+case O is
+     when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
+     when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
+     when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
+     when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
+     when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
+     when Prover_Rail_Pkg.Outcome_Proved => "proved"
          --  SLOT END (outcome_word)
          );
       begin
@@ -389,6 +392,284 @@ procedure Crucible_Main is
              """,""models"":[" & To_String (Rows) & "]" &
              (if More then ",""more"":""true""" else "") & "}";
    end Rail_Show_Text;
+
+   --  ★ RAIL.SET (lineage 13, v0.3 Phase 7; Tony 2026-09-25: "go with that boundary"). An operator may reassign
+   --  WHICH model line rail.conf ALREADY declares serves a tier -- nothing else. The admitted Rail_Verb_Pkg.Decide
+   --  makes every decision from facts this door measures with proven judges; the door acts ONLY on Set_Swap (swap
+   --  the two declared model lines' tier values) or Set_Unchanged (write nothing). Arguments naming any other
+   --  rail.conf key -- rail, host, port, sovereign, protocol, timeout_seconds, max_reply_bytes, max_tokens -- are
+   --  refused_estate_boundary before anything else is looked at; an argument given twice counts as not given; a
+   --  model name must match exactly one declared line. A swap is written to a temp file, re-judged by the proven
+   --  cores (select_ok, and every model line's model, host, port, protocol and sovereignty byte-identical), the
+   --  live file must still be exactly what was read, the previous file is kept as config/rail.conf.pre-set, and
+   --  only then does the temp file replace it. Any failed check refuses and leaves rail.conf untouched.
+   function Rail_Set_Text (Line : String) return String is
+      use Ada.Strings.Unbounded;
+      use type Rail_Config_Pkg.Rail_Kind;
+      use type Model_Tier_Select_Pkg.Select_Verdict;
+      use type Model_Rail_Fields_Pkg.Tier_Kind;
+      use type Model_Rail_Fields_Pkg.Protocol_Kind;
+      use type Rail_Verb_Pkg.Verdict_Type;
+      use type Rail_Verb_Pkg.Tier_Request;
+      Conf     : constant String := "config/rail.conf";
+      Tmp      : constant String := "config/rail.conf.set-tmp";
+      Backup   : constant String := "config/rail.conf.pre-set";
+      Max_L    : constant := 64;
+      type Line_Array is array (1 .. Max_L) of Unbounded_String;
+      L1       : constant String (1 .. Line'Length) := Line;
+      Q        : constant String := """";
+
+      function Arg (Key : String; Given : out Boolean) return String is
+         K1 : constant String (1 .. Key'Length) := Key;
+         S  : Json_Scan_Pkg.Span_Type;
+         C  : Json_Scan_Pkg.Span_Type;
+      begin
+         Given := False;
+         if L1'Length > 1_048_576 or else Ada.Strings.Fixed.Count (L1, Q & K1 & Q) /= 1 then
+            return "";   --  absent, or given more than once: never guessed
+         end if;
+         S := Json_Scan_Pkg.Value_Span (L1, K1);
+         if not S.found or else S.kind /= Json_Scan_Pkg.K_String then
+            return "";
+         end if;
+         C := Json_Scan_Pkg.String_Contents (L1, S);
+         if not C.found or else C.last < C.first then
+            return "";
+         end if;
+         Given := True;
+         return L1 (C.first .. C.last);
+      end Arg;
+
+      function Has (Key : String) return Boolean is
+         K1 : constant String (1 .. Key'Length) := Key;
+      begin
+         return L1'Length <= 1_048_576 and then Json_Scan_Pkg.Has_Key (L1, K1);
+      end Has;
+
+      function Read (Path : String; Lines : out Line_Array; N : out Natural; All_Text : out Unbounded_String)
+        return Boolean
+      is
+         F : Ada.Text_IO.File_Type;
+      begin
+         N := 0;
+         All_Text := Null_Unbounded_String;
+         Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Path);
+         while not Ada.Text_IO.End_Of_File (F) loop
+            declare
+               S : constant String := Ada.Text_IO.Get_Line (F);
+            begin
+               if N = Max_L or else S'Length > 4096 then
+                  Ada.Text_IO.Close (F);
+                  return False;
+               end if;
+               N := N + 1;
+               Lines (N) := To_Unbounded_String (S);
+               All_Text := All_Text & S & ASCII.LF;
+            end;
+         end loop;
+         Ada.Text_IO.Close (F);
+         return True;
+      exception
+         when others =>
+            if Ada.Text_IO.Is_Open (F) then
+               Ada.Text_IO.Close (F);
+            end if;
+            return False;
+      end Read;
+
+      function Is_Model (S : String) return Boolean is
+         S1 : constant String (1 .. S'Length) := S;
+      begin
+         return Rail_Config_Pkg.Rail_Of (S1) = Rail_Config_Pkg.Rail_Model;
+      end Is_Model;
+
+      function Valid (S : String) return Boolean is
+         S1 : constant String (1 .. S'Length) := S;
+      begin
+         return Rail_Config_Pkg.Is_Valid (S1) and then Model_Rail_Fields_Pkg.Is_Valid_Model_Line (S1);
+      end Valid;
+
+      function Field (S : String; Key : String) return String is
+         S1 : constant String (1 .. S'Length) := S;
+         K1 : constant String (1 .. Key'Length) := Key;
+         C  : constant Json_Scan_Pkg.Span_Type := Rail_Config_Pkg.Contents (S1, K1);
+      begin
+         return (if C.found and then C.first <= C.last then S1 (C.first .. C.last) else "");
+      end Field;
+
+      function Tier (S : String) return Model_Rail_Fields_Pkg.Tier_Kind is
+         S1 : constant String (1 .. S'Length) := S;
+      begin
+         return Model_Rail_Fields_Pkg.Tier_Of (S1);
+      end Tier;
+
+      function Verdict_Of (Lines : Line_Array; N : Natural) return Model_Tier_Select_Pkg.Select_Verdict is
+         T : Model_Tier_Select_Pkg.Tier_Tally := Model_Tier_Select_Pkg.Empty;
+      begin
+         for I in 1 .. N loop
+            declare
+               S : constant String := To_String (Lines (I));
+            begin
+               if Is_Model (S) then
+                  T := (if Valid (S) then Model_Tier_Select_Pkg.Add (T, Tier (S)) else Model_Tier_Select_Pkg.Add_Invalid (T));
+               end if;
+            end;
+         end loop;
+         return Model_Tier_Select_Pkg.Verdict (T);
+      end Verdict_Of;
+
+      --  The tier value of one model line set to Word: the "tier" string replaced in place, or (no tier key --
+      --  standard by absence) appended before the line's closing brace. Nothing else in the line is touched.
+      function With_Tier (S : String; Word : String) return String is
+         S1 : constant String (1 .. S'Length) := S;
+         C  : constant Json_Scan_Pkg.Span_Type := Rail_Config_Pkg.Contents (S1, Model_Rail_Fields_Pkg.Tier_Key);
+         P  : constant Natural := Ada.Strings.Fixed.Index (S1, "}", Ada.Strings.Backward);
+      begin
+         if C.found and then C.first <= C.last then
+            return S1 (1 .. C.first - 1) & Word & S1 (C.last + 1 .. S1'Last);
+         elsif P > 0 then
+            return S1 (1 .. P - 1) & "," & Q & "tier" & Q & ":" & Q & Word & Q & S1 (P .. S1'Last);
+         else
+            return S1;
+         end if;
+      end With_Tier;
+
+      function Reply (V : String; More : String := "") return String is
+        ("{" & Q & "verdict" & Q & ":" & Q & V & Q & More & "}");
+
+      Tier_Given, Model_Given : Boolean;
+      Tier_Arg  : constant String := Arg ("tier", Tier_Given);
+      Model_Arg : constant String := Arg ("model", Model_Given);
+      F         : Rail_Verb_Pkg.Facts_Type;
+      Lines     : Line_Array;
+      N         : Natural;
+      Before    : Unbounded_String;
+      Target, Other, Matches, Models : Natural := 0;
+   begin
+      F.forbidden_key := Has ("rail") or else Has ("host") or else Has ("port") or else Has ("sovereign")
+        or else Has ("protocol") or else Has ("timeout_seconds") or else Has ("max_reply_bytes")
+        or else Has ("max_tokens");
+      F.tier_given  := Tier_Given;
+      F.model_given := Model_Given;
+      F.requested   := (if Tier_Arg = "standard" then Rail_Verb_Pkg.Want_Standard
+                        elsif Tier_Arg = "elevated" then Rail_Verb_Pkg.Want_Elevated
+                        else Rail_Verb_Pkg.Want_Unknown);
+      if not Read (Conf, Lines, N, Before) then
+         F.conf_ok := False;
+      else
+         F.conf_ok := Verdict_Of (Lines, N) = Model_Tier_Select_Pkg.Select_Ok;
+         for I in 1 .. N loop
+            declare
+               S : constant String := To_String (Lines (I));
+            begin
+               if Is_Model (S) and then Valid (S) then
+                  Models := Models + 1;
+                  if Model_Given and then Field (S, Model_Rail_Fields_Pkg.Model_Key) = Model_Arg then
+                     Matches := Matches + 1;
+                     Target := I;
+                  else
+                     Other := I;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end if;
+      F.target_found      := Matches = 1;
+      F.target_serves     := F.target_found and then
+        ((F.requested = Rail_Verb_Pkg.Want_Standard and then Tier (To_String (Lines (Target))) = Model_Rail_Fields_Pkg.Tier_Standard)
+         or else (F.requested = Rail_Verb_Pkg.Want_Elevated and then Tier (To_String (Lines (Target))) = Model_Rail_Fields_Pkg.Tier_Elevated));
+      F.other_line_exists := F.target_found and then Models = 2 and then Other /= 0;
+
+      declare
+         V : constant Rail_Verb_Pkg.Verdict_Type := Rail_Verb_Pkg.Decide (F);
+         W : constant String := Rail_Verb_Pkg.Word_Of (V);
+      begin
+         if V = Rail_Verb_Pkg.Set_Unchanged then
+            return Reply (W, "," & Q & "tier" & Q & ":" & Q & Tier_Arg & Q & "," & Q & "model" & Q & ":" & Q & Model_Arg & Q);
+         elsif V /= Rail_Verb_Pkg.Set_Swap then
+            return Reply (W);
+         end if;
+      end;
+
+      --  Set_Swap: the two declared model lines exchange tier values; everything else byte-identical.
+      declare
+         Want  : constant String := Tier_Arg;
+         Other_Word : constant String := (if Want = "standard" then "elevated" else "standard");
+         New_Lines  : Line_Array := Lines;
+         After_Lines : Line_Array;
+         After_N     : Natural;
+         Now_Text, Scratch : Unbounded_String;
+         Ok     : Boolean := True;
+         Out_F  : Ada.Text_IO.File_Type;
+         Renamed : Boolean;
+      begin
+         New_Lines (Target) := To_Unbounded_String (With_Tier (To_String (Lines (Target)), Want));
+         New_Lines (Other)  := To_Unbounded_String (With_Tier (To_String (Lines (Other)), Other_Word));
+         begin
+            Ada.Text_IO.Create (Out_F, Ada.Text_IO.Out_File, Tmp);
+            for I in 1 .. N loop
+               Ada.Text_IO.Put_Line (Out_F, To_String (New_Lines (I)));
+            end loop;
+            Ada.Text_IO.Close (Out_F);
+         exception
+            when others =>
+               return Reply ("refused_write_failed");
+         end;
+         --  Re-judge the temp file with the proven cores, line by line against what was read.
+         Ok := Read (Tmp, After_Lines, After_N, Scratch) and then After_N = N
+           and then Verdict_Of (After_Lines, After_N) = Model_Tier_Select_Pkg.Select_Ok;
+         if Ok then
+            for I in 1 .. N loop
+               declare
+                  B : constant String := To_String (Lines (I));
+                  A : constant String := To_String (After_Lines (I));
+               begin
+                  if not (Is_Model (B) and then Valid (B)) then
+                     Ok := Ok and then A = B;
+                  else
+                     Ok := Ok and then Is_Model (A) and then Valid (A)
+                       and then Field (A, Model_Rail_Fields_Pkg.Model_Key) = Field (B, Model_Rail_Fields_Pkg.Model_Key)
+                       and then Field (A, "host") = Field (B, "host")
+                       and then Field (A, "port") = Field (B, "port")
+                       and then Field (A, "sovereign") = Field (B, "sovereign")
+                       and then Field (A, "protocol") = Field (B, "protocol");
+                  end if;
+               end;
+            end loop;
+            Ok := Ok and then Tier (To_String (After_Lines (Target))) =
+              (if Want = "standard" then Model_Rail_Fields_Pkg.Tier_Standard else Model_Rail_Fields_Pkg.Tier_Elevated);
+         end if;
+         --  The live file must still be exactly what was read (nobody edited it underneath us).
+         Ok := Ok and then Read (Conf, After_Lines, After_N, Now_Text) and then Now_Text = Before;
+         if not Ok then
+            GNAT.OS_Lib.Delete_File (Tmp, Renamed);
+            return Reply ("refused_write_check");
+         end if;
+         --  Keep the previous file, then replace it (rename over the old name; where the OS will not
+         --  rename over an existing file, remove it first -- the backup already holds it).
+         begin
+            Ada.Text_IO.Create (Out_F, Ada.Text_IO.Out_File, Backup);
+            for I in 1 .. N loop   --  line by line: one Put of the whole text let Close add a SECOND terminator
+               Ada.Text_IO.Put_Line (Out_F, To_String (Lines (I)));
+            end loop;
+            Ada.Text_IO.Close (Out_F);
+         exception
+            when others =>
+               GNAT.OS_Lib.Delete_File (Tmp, Renamed);
+               return Reply ("refused_write_failed");
+         end;
+         GNAT.OS_Lib.Rename_File (Tmp, Conf, Renamed);
+         if not Renamed then
+            GNAT.OS_Lib.Delete_File (Conf, Renamed);
+            GNAT.OS_Lib.Rename_File (Tmp, Conf, Renamed);
+         end if;
+         if not Renamed then
+            return Reply ("refused_write_failed", "," & Q & "backup" & Q & ":" & Q & Backup & Q);
+         end if;
+         return Reply ("set_swap", "," & Q & "tier" & Q & ":" & Q & Want & Q & "," & Q & "model" & Q & ":" & Q & Model_Arg & Q &
+                       "," & Q & "backup" & Q & ":" & Q & Backup & Q);
+      end;
+   end Rail_Set_Text;
 
    function Palais_Enrol_Text (Line : String) return String is
       Span  : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Codename_Span (Line);
@@ -549,6 +830,8 @@ begin
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
                   elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Show then
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Show_Text)));
+                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Set then
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Set_Text (Line))));
                   else
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
                   end if;
