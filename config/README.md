@@ -56,5 +56,9 @@ Judged by `Model_Rail_Fields_Pkg` (lineage 2: `Tier_Of`, `Is_Valid_Tiered_Model_
 The elevated model is reached through a gateway on **loopback** (the host must be a dotted IPv4 — `Rail_Config_Pkg.Host_Ok`),
 speaking the `openai` protocol; the gateway does DNS and TLS itself. So the elevated line stays `"sovereign":"true"`.
 
-⚠ **Until the model rail chooses by tier** (board: `a-second-model-line-is-never-silently-ignored`), the door still
-uses the FIRST valid `model` line and ignores the rest. Keep the standard line first.
+**How the model rail uses them.** It reads EVERY line. The one `standard` line is the model it calls, wherever it
+sits in the file. It REFUSES to call any model -- and says why, on stderr and as a row in `state/model-rail.jsonl`
+-- when the file has two lines for the same tier (`duplicate_tier`), a tier it does not know (`unknown_tier`), no
+standard line (`no_standard_line`), a line saying `"rail":"model"` that is not a valid model line
+(`invalid_model_line`), or a line it cannot read (`conf_unreadable`). Decided by the proven `Model_Tier_Select_Pkg`.
+An `elevated` line is accepted and NOTED (`elevated_declared_not_used`): escalation is not built yet (v0.3 plan I2).

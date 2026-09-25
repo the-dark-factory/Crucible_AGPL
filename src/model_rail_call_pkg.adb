@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: e9809840b99bc95175035c9c3bf0c9d6050792dd3c57f35ec8ff46d88fcec1a9
+--  Unstamped source sha256: 15a9e70f88b88faec397446275ed7b1f93bc03f3fef3df1d4fd35bc1e271daaf
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
@@ -13,6 +13,7 @@ with Json_Scan_Pkg;
 with Json_String_Pkg;
 with Rail_Config_Pkg;
 with Model_Rail_Fields_Pkg;
+with Model_Tier_Select_Pkg;
 with Model_Request_Pkg;
 with Http_Reply_Pkg;
 with Rail_Socket_Edge;
@@ -23,6 +24,35 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
    use type Rail_Config_Pkg.Rail_Kind;
    use type Model_Rail_Fields_Pkg.Protocol_Kind;
    use type Sovereign_Gate_Pkg.Route_Kind;
+   use type Model_Rail_Fields_Pkg.Tier_Kind;
+   use type Model_Tier_Select_Pkg.Select_Verdict;
+
+   --  v0.3 I-tiers: the tier verdict, SAID. A rail.conf the proven fold refuses never reaches the model, and the
+   --  operator is told why -- on stderr and as one row in state/model-rail.jsonl -- instead of the edit doing nothing.
+   function Verdict_Word (V : Model_Tier_Select_Pkg.Select_Verdict) return String is
+     (case V is
+         when Model_Tier_Select_Pkg.Select_Ok        => "select_ok",
+         when Model_Tier_Select_Pkg.Invalid_Model_Line => "invalid_model_line",
+         when Model_Tier_Select_Pkg.Unknown_Tier     => "unknown_tier",
+         when Model_Tier_Select_Pkg.Duplicate_Tier   => "duplicate_tier",
+         when Model_Tier_Select_Pkg.No_Standard_Line => "no_standard_line");
+
+   procedure Say (Row : String) is
+      F : Ada.Text_IO.File_Type;
+   begin
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, Row);
+      begin
+         Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, "state/model-rail.jsonl");
+      exception
+         when Ada.Text_IO.Name_Error =>
+            Ada.Text_IO.Create (F, Ada.Text_IO.Out_File, "state/model-rail.jsonl");
+      end;
+      Ada.Text_IO.Put_Line (F, Row);
+      Ada.Text_IO.Close (F);
+   exception
+      when others =>
+         null;   --  a file failure never changes the rail outcome
+   end Say;
 
    Max_Conf_Line : constant := 4096;
    CRLF          : constant String := Character'Val (13) & Character'Val (10);
@@ -42,6 +72,9 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
       Conf_Buf : String (1 .. Max_Conf_Line);
       Conf_Len : Natural := 0;
       Found    : Boolean := False;   --  a line valid for Rail_Config_Pkg (rail model) AND Model_Rail_Fields_Pkg
+      Tally    : Model_Tier_Select_Pkg.Tier_Tally := Model_Tier_Select_Pkg.Empty;   --  v0.3 I-tiers: EVERY valid model line, by tier
+      Std_Seen : Boolean := False;   --  the first STANDARD line is held in Conf_Buf; any other line only counts
+      Conf_Err : Boolean := False;   --  the file could not be read to its end: a partial tally is never trusted
    begin
       Text := null;
 
@@ -49,28 +82,54 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          File : Ada.Text_IO.File_Type;
       begin
          Ada.Text_IO.Open (File, Ada.Text_IO.In_File, Conf_Path);
-         while not Found and then not Ada.Text_IO.End_Of_File (File) loop
+         while not Ada.Text_IO.End_Of_File (File) loop   --  every line: a second model line is never silently ignored
             declare
                L  : constant String := Ada.Text_IO.Get_Line (File);
                L1 : constant String (1 .. L'Length) := L;
             begin
-               if L1'Length <= Max_Conf_Line
-                 and then Rail_Config_Pkg.Is_Valid (L1)
-                 and then Rail_Config_Pkg.Rail_Of (L1) = Rail_Config_Pkg.Rail_Model
+               if L1'Length > Max_Conf_Line then
+                  raise Ada.Text_IO.Data_Error;   --  a line too long to judge: the file is refused as unreadable, never half-read
+               elsif Rail_Config_Pkg.Rail_Of (L1) /= Rail_Config_Pkg.Rail_Model then
+                  null;   --  another rail's line: not the model rail's to judge
+               elsif Rail_Config_Pkg.Is_Valid (L1)
                  and then Model_Rail_Fields_Pkg.Is_Valid_Model_Line (L1)
                then
-                  Conf_Buf (1 .. L1'Length) := L1;
-                  Conf_Len := L1'Length;
-                  Found := True;
+                  Tally := Model_Tier_Select_Pkg.Add (Tally, Model_Rail_Fields_Pkg.Tier_Of (L1));
+                  if not Std_Seen and then Model_Rail_Fields_Pkg.Tier_Of (L1) = Model_Rail_Fields_Pkg.Tier_Standard then
+                     Conf_Buf (1 .. L1'Length) := L1;
+                     Conf_Len := L1'Length;
+                     Std_Seen := True;
+                  end if;
+               else
+                  --  a line that says it is the model rail but that the proven judges refuse (bad host, port,
+                  --  model, protocol, ...): counted, never silently skipped
+                  Tally := Model_Tier_Select_Pkg.Add_Invalid (Tally);
                end if;
             end;
          end loop;
          Ada.Text_IO.Close (File);
       exception
          when others =>
-            Found := False;
+            if Ada.Text_IO.Is_Open (File) then
+               Ada.Text_IO.Close (File);
+            end if;
+            Std_Seen := False;
+            Conf_Err := True;
             Conf_Len := 0;
       end;
+
+      --  The proven fold decides; this only acts on its verdict and says it.
+      Found := not Conf_Err and then Std_Seen and then Model_Tier_Select_Pkg.Verdict (Tally) = Model_Tier_Select_Pkg.Select_Ok;
+      if Conf_Err then
+         Say ("{""rail"":""model"",""refused"":""conf_unreadable"",""path"":""" & Conf_Path & """}");
+      elsif Model_Tier_Select_Pkg.Verdict (Tally) /= Model_Tier_Select_Pkg.Select_Ok then
+         Say ("{""rail"":""model"",""refused"":""" & Verdict_Word (Model_Tier_Select_Pkg.Verdict (Tally)) &
+              """,""standard_lines"":""" & Img (Tally.standard_lines) & """,""elevated_lines"":""" &
+              Img (Tally.elevated_lines) & """,""unknown_lines"":""" & Img (Tally.unknown_lines) &
+              """,""invalid_lines"":""" & Img (Tally.invalid_lines) & """,""counts"":""2 means two or more""}");
+      elsif Model_Tier_Select_Pkg.Elevated_Declared (Tally) then
+         Say ("{""rail"":""model"",""note"":""elevated_declared_not_used"",""why"":""escalation is not built yet""}");
+      end if;
 
       declare
          Conf       : constant String (1 .. Conf_Len) := Conf_Buf (1 .. Conf_Len);
@@ -93,7 +152,7 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          end if;
 
          --  SLOT BEGIN (sent_fact)
-F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok;
+      F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok;
          --  SLOT END (sent_fact)
 
          if F.sent then
@@ -172,14 +231,14 @@ F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok;
                end if;
 
                --  SLOT BEGIN (reply_facts)
-F.reached := Reached;
-F.timed_out := Timed_Out;
-F.over_bound := Over_Bound;
-F.http_usable := Http_Ok;
-F.truncated := Truncated_Ok;
-F.content_present := Content_Ok;
-F.complete := Complete_Ok;
-F.decoded_ok := Decoded_Ok;
+         F.reached := Reached;
+         F.timed_out := Timed_Out;
+         F.over_bound := Over_Bound;
+         F.http_usable := Http_Ok;
+         F.truncated := Truncated_Ok;
+         F.content_present := Content_Ok;
+         F.complete := Complete_Ok;
+         F.decoded_ok := Decoded_Ok;
                --  SLOT END (reply_facts)
             end;
          end if;
