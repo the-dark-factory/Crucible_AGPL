@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f6a7a8cf952d36d86d28ce13be69f02c93c940c276ff8a7e85fab939e05a8b94
+--  Unstamped source sha256: f3f8d0e5e69b9c8a4f10c26b2fb8cdcbf2e90f43aada4acbfe1d95b4b00619b0
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -114,6 +114,19 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Json_String_Pkg.Encode (S1, Enc, Len, Ok);
       return (if Ok then Enc (1 .. Len) else "unencodable");
    end Json_Of;
+
+   --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
+   --  refusal on the record names WHICH check failed. Encoded by the proven Json_String_Pkg; when the text
+   --  is not encodable the row says so and carries no text -- never a stand-in string.
+   function Diag_Field (D : String) return String is
+      D1  : constant String (1 .. D'Length) := D;
+      Enc : String (1 .. Natural'Max (1, 2 * D1'Length));
+      Len : Natural;
+      Ok  : Boolean;
+   begin
+      Json_String_Pkg.Encode (D1, Enc, Len, Ok);
+      return (if Ok then ",""diagnostics"":""" & Enc (1 .. Len) & """" else ",""diagnostics_encoded"":""false""");
+   end Diag_Field;
 
    procedure Run
      (Sheet     : String;
@@ -318,7 +331,8 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                                    """,""pre"":""" & Img (Natural (Shape.preconditions)) &
                                    """,""undeclared_names"":""" & Img (Undeclared_Names) &
                                    """,""may_emit"":""" & Bool (May_Emit) &
-                                   """,""fit"":""" & Bool (Fit) & """}");
+                                   """,""fit"":""" & Bool (Fit) & """" &
+                                   Diag_Field (To_String (Prev_Diag)) & "}");
                         Last_Word := To_Unbounded_String (Gate_Word_Pkg.Word_Of (GF));
 
                         if Fit then
