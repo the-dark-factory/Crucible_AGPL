@@ -6,3 +6,5 @@ config/vacuity-service.conf
 toolchain/config/
 out/
 state/
+release/
+src/generated/crucible_build.ads

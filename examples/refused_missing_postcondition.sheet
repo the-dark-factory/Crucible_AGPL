@@ -1,0 +1,2 @@
+delivers: Thing
+function F (A : Integer) return Integer

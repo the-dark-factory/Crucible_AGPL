@@ -1,0 +1,4 @@
+delivers: Thing
+type Widget
+function F (A : Widget) return Integer
+post: returns something

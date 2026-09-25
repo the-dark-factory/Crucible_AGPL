@@ -1,0 +1,3 @@
+delivers: Saturating_Add
+function Saturating_Add (A, B : Integer) return Integer
+post: saturates to Integer'Last on overflow and Integer'First on underflow, else equals A + B
