@@ -45,3 +45,16 @@ only three rail words is out of date: the five are `model prover vacuity palais 
 **NO reef line ships**, deliberately: there is no Reef to talk to yet, and `palais.enrol` refusing with `no_reef_rail`
 is the correct answer until there is. `sovereign` is `false` because this rail leaves the estate — it is the only one
 that does.
+
+## Tiers — a standard model and an elevated one (v0.3, `rail.conf.example`)
+
+A `model` line may carry `"tier":"standard"` or `"tier":"elevated"`. A line with **no** `tier` key is **standard**, so
+every `rail.conf` written before tiers keeps its meaning. A `tier` whose value is anything else — another word, a
+different case, a number, an unquoted word — is **unknown**, and a line with an unknown tier is not a valid tiered line.
+Judged by `Model_Rail_Fields_Pkg` (lineage 2: `Tier_Of`, `Is_Valid_Tiered_Model_Line`).
+
+The elevated model is reached through a gateway on **loopback** (the host must be a dotted IPv4 — `Rail_Config_Pkg.Host_Ok`),
+speaking the `openai` protocol; the gateway does DNS and TLS itself. So the elevated line stays `"sovereign":"true"`.
+
+⚠ **Until the model rail chooses by tier** (board: `a-second-model-line-is-never-silently-ignored`), the door still
+uses the FIRST valid `model` line and ignores the rest. Keep the standard line first.
