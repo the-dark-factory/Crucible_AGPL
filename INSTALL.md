@@ -176,6 +176,14 @@ The vacuity battery `check-cores-mcp` is a separate Go repo; build it (`go build
 binary where `config/vacuity-service.conf` names it (the launcher, and the release tarball, put it in
 `bin/`).
 
+**★ It needs a SECOND binary beside it: `vacuity_verdict_main`.** The battery decides no grade itself —
+every grade comes from the proven core `Vacuity_Verdict_Pkg` through its Ada edge, and the battery locates
+that edge as a SIBLING of its own executable (`VACUITY_EDGE` overrides the path). If the edge is absent,
+the battery refuses everything — `functions_read: 0`, `package_grade: refused` — and the door then reports
+`vacuity: outcome_hollow` and emits nothing. **A missing edge looks exactly like a hollow contract, so this
+failure is silent and easy to misread.** Build it from `wu-vacuity-verdict-3/edge/`
+(`gnatmake -gnat2022 vacuity_verdict_main.adb`) and put it in `bin/` next to `check-cores-mcp`.
+
 ### 4. Configure and start
 
 The shipped launcher writes `config/prover-service.conf` and `config/vacuity-service.conf` for you on
