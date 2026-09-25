@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 0fdf0934104be8d2073d39851e98cbb76f24a16ed4edfe22eae2a5d64efc4e24
+--  Unstamped source sha256: 728da7784d3a9d2da0c8f073e31af02b1da16618ed03faf736392df359926ba4
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -53,11 +53,12 @@ with Pipeline_Stage_Pkg;
 with Pipeline_Run_Pkg;
 with Ada.Characters.Handling;
 with Ada.Environment_Variables;
+with Ada.Command_Line;
+with Ada.Directories;
 with Palais_Enrol_Pkg;
 with Tower_Base_Verdict_Pkg;
 with Tower_Base_Check_Edge;
 with Tower_Import_Pkg;
-with Tower_Fetch_Pkg;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -185,11 +186,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+         if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+         if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+         if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+         if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+         if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -265,13 +266,13 @@ if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
       declare
          Word : constant String := (
          --  SLOT BEGIN (outcome_word)
-case O is
-   when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
-   when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
-   when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
-   when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
-   when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
-   when Prover_Rail_Pkg.Outcome_Proved => "proved"
+         case O is
+            when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
+            when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
+            when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
+            when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
+            when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
+            when Prover_Rail_Pkg.Outcome_Proved => "proved"
          --  SLOT END (outcome_word)
          );
       begin
@@ -329,21 +330,6 @@ case O is
               """,""hint"":""restore the base bundle this binary was built with, or replace the binary""}";
          end if;
       end;
-      --  v11 (the loopback transport slice, 2026-09-21, piece B): BEFORE the import, the FETCH edge asks the Reef
-      --  (through the reef rail's relay) what catalog is current and, if the proven Tower_Index_Pkg finds a version
-      --  above the running one, brings that ONE file down into tower/sharer.bundle. The edge decides nothing: every
-      --  judgement about the index text is Tower_Index_Pkg's, the file's acceptance is the import's. Rate-limited by
-      --  a row in state/tower-fetch.jsonl; no reef rail, no Reef, a stale or unverified index all leave the forge to
-      --  continue on what it has. The word goes to standard error, one line, like the import's. Never raises; belt.
-      declare
-         Fetch_Word : Unbounded_String;
-      begin
-         Tower_Fetch_Pkg.Fetch (Word => Fetch_Word);
-         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: " & To_String (Fetch_Word));
-      exception
-         when others =>
-            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: unreadable");
-      end;
       --  v10: the SHARER bundle is imported, best effort, once the base has let the door through and before the
       --  sheet is looked for. Tower_Import_Pkg measures, the proven Tower_Admission_Pkg decides, the proven
       --  Tower_Ledger_Fold_Pkg folds the ledger, and the word is recorded in state/tower.jsonl. THE FORGE NEVER WAITS
@@ -394,6 +380,43 @@ case O is
    end Forge_Text;
 
 begin
+   --  ★ SELF-ROOT (lineage 11). The door resolves config/, tower/ and state/ RELATIVE to the
+   --  directory it is started in, so started anywhere else it refused every forge with
+   --  tower_base_missing, and a launcher had to cd for it. A launcher cannot: Windows has no
+   --  /bin/sh. So the door now puts itself in its own install directory, which is what the
+   --  owners ruling of 2026-09-23 -- Crucible ships as ONE executable -- asks for.
+   --  BOTH path separators count: on Windows Command_Name carries backslashes, and testing
+   --  for / alone made an absolute path look like a bare name (the stamp_signers defect,
+   --  measured 2026-09-25). If the directory cannot be determined the door leaves the working
+   --  directory alone and behaves exactly as before: this step can help, never refuse.
+   declare
+      Name : constant String := Ada.Command_Line.Command_Name;
+      Sep  : Boolean := False;
+   begin
+      for C of Name loop
+         if C = '/' or else C = '\' then
+            Sep := True;
+         end if;
+      end loop;
+      if Sep then
+         declare
+            Bin_Dir : constant String :=
+              Ada.Directories.Containing_Directory (Ada.Directories.Full_Name (Name));
+            Root    : constant String := Ada.Directories.Containing_Directory (Bin_Dir);
+         begin
+            --  The install root is the PARENT of bin/, because config/, tower/ and state/
+            --  sit beside bin/ and not inside it. Move only if that parent really is an
+            --  install: tower/base.bundle is the file the door would otherwise refuse for.
+            if Ada.Directories.Exists
+                 (Ada.Directories.Compose (Root, "tower") & "/base.bundle")
+            then
+               Ada.Directories.Set_Directory (Root);
+            end if;
+         end;
+      end if;
+   exception
+      when others => null;
+   end;
    while not Ada.Text_IO.End_Of_File loop
       Ada.Text_IO.Get_Line (Buffer.all, Last);
       declare
