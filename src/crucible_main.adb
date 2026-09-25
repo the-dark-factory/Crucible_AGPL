@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 728da7784d3a9d2da0c8f073e31af02b1da16618ed03faf736392df359926ba4
+--  Unstamped source sha256: 3c780e81ddca5ef85d2ad6aac104b12616ffc7964a5353dfa0666c0761fc3b95
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -59,6 +59,10 @@ with Palais_Enrol_Pkg;
 with Tower_Base_Verdict_Pkg;
 with Tower_Base_Check_Edge;
 with Tower_Import_Pkg;
+with Rail_Config_Pkg;
+with Model_Rail_Fields_Pkg;
+with Model_Tier_Select_Pkg;
+with Sovereign_Gate_Pkg;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -289,6 +293,103 @@ procedure Crucible_Main is
    --  enrolment is honestly refused no_reef_key_pinned until then.
    Pinned_Reef_Signers : constant String := (1 .. 64 => '0');
 
+   --  ★ RAIL.SHOW (lineage 12, v0.3 Phase 7). Read-only: which models this factory is pointed at. The door
+   --  reads config/rail.conf (the self-root has already put it in its install root) and, for every line
+   --  that says it is the model rail, reports what the PROVEN judges say about it -- valid or not
+   --  (Rail_Config_Pkg + Model_Rail_Fields_Pkg), its tier (Tier_Of), its model, protocol and host, and
+   --  its route (Sovereign_Gate_Pkg.Route_Of) -- plus the whole file's verdict from the admitted
+   --  Model_Tier_Select_Pkg fold, the same fold the model rail obeys. It decides nothing itself and
+   --  changes nothing. Every value it copies is a character class the judges already confine (model
+   --  names, dotted IPv4 hosts), so no escaping is needed; an unreadable file says so.
+   function Rail_Show_Text return String is
+      use Ada.Strings.Unbounded;
+      use type Rail_Config_Pkg.Rail_Kind;
+      use type Model_Tier_Select_Pkg.Select_Verdict;
+      use type Model_Rail_Fields_Pkg.Protocol_Kind;
+      Max_Rows : constant := 6;   --  6 x ~220 chars, doubled by Tool_Call_Result, stays inside Result_Reply's 4096
+      Tally    : Model_Tier_Select_Pkg.Tier_Tally := Model_Tier_Select_Pkg.Empty;
+      Rows     : Unbounded_String;
+      Count    : Natural := 0;
+      More     : Boolean := False;
+      Err      : Boolean := False;
+      F        : Ada.Text_IO.File_Type;
+      function Lo (S : String) return String renames Ada.Characters.Handling.To_Lower;
+      function Word (V : Model_Tier_Select_Pkg.Select_Verdict) return String is
+        (case V is
+            when Model_Tier_Select_Pkg.Select_Ok          => "select_ok",
+            when Model_Tier_Select_Pkg.Invalid_Model_Line => "invalid_model_line",
+            when Model_Tier_Select_Pkg.Unknown_Tier       => "unknown_tier",
+            when Model_Tier_Select_Pkg.Duplicate_Tier     => "duplicate_tier",
+            when Model_Tier_Select_Pkg.No_Standard_Line   => "no_standard_line");
+      function Tier_Word (K : Model_Rail_Fields_Pkg.Tier_Kind) return String is
+        (case K is
+            when Model_Rail_Fields_Pkg.Tier_Standard => "standard",
+            when Model_Rail_Fields_Pkg.Tier_Elevated => "elevated",
+            when Model_Rail_Fields_Pkg.Tier_Unknown  => "unknown");
+      procedure Add_Row (Row : String) is
+      begin
+         if Count < Max_Rows then
+            Rows := Rows & (if Count > 0 then "," else "") & Row;
+            Count := Count + 1;
+         else
+            More := True;
+         end if;
+      end Add_Row;
+   begin
+      begin
+         Ada.Text_IO.Open (F, Ada.Text_IO.In_File, "config/rail.conf");
+         while not Ada.Text_IO.End_Of_File (F) loop
+            declare
+               L  : constant String := Ada.Text_IO.Get_Line (F);
+               L1 : constant String (1 .. L'Length) := L;
+            begin
+               if L1'Length > 4096 then
+                  raise Ada.Text_IO.Data_Error;
+               elsif Rail_Config_Pkg.Rail_Of (L1) /= Rail_Config_Pkg.Rail_Model then
+                  null;
+               elsif Rail_Config_Pkg.Is_Valid (L1) and then Model_Rail_Fields_Pkg.Is_Valid_Model_Line (L1) then
+                  Tally := Model_Tier_Select_Pkg.Add (Tally, Model_Rail_Fields_Pkg.Tier_Of (L1));
+                  declare
+                     M  : constant Json_Scan_Pkg.Span_Type := Model_Rail_Fields_Pkg.Model_Span (L1);
+                     H  : constant Json_Scan_Pkg.Span_Type := Rail_Config_Pkg.Host_Span (L1);
+                     Hs : constant String := L1 (H.first .. H.last);
+                     Ep : constant String := "http://" & Hs;
+                     E1 : constant String (1 .. Ep'Length) := Ep;
+                     Rt : constant String :=
+                       (if E1'Length <= Sovereign_Gate_Pkg.Max_Endpoint
+                        then Lo (Sovereign_Gate_Pkg.Route_Kind'Image
+                                   (Sovereign_Gate_Pkg.Route_Of (E1, Rail_Config_Pkg.Sovereign_Of (L1))))
+                        else "unmeasured");
+                  begin
+                     Add_Row ("{""tier"":""" & Tier_Word (Model_Rail_Fields_Pkg.Tier_Of (L1)) &
+                              """,""model"":""" & L1 (M.first .. M.last) &
+                              """,""protocol"":""" &
+                              (if Model_Rail_Fields_Pkg.Protocol_Of (L1) = Model_Rail_Fields_Pkg.Protocol_Openai
+                               then "openai" else "ollama") &
+                              """,""host"":""" & Hs & """,""route"":""" & Rt & """}");
+                  end;
+               else
+                  Tally := Model_Tier_Select_Pkg.Add_Invalid (Tally);
+                  Add_Row ("{""tier"":""invalid"",""why"":""a model rail line the proven judges refuse""}");
+               end if;
+            end;
+         end loop;
+         Ada.Text_IO.Close (F);
+      exception
+         when others =>
+            Err := True;
+            if Ada.Text_IO.Is_Open (F) then
+               Ada.Text_IO.Close (F);
+            end if;
+      end;
+      if Err then
+         return "{""verdict"":""conf_unreadable"",""path"":""config/rail.conf""}";
+      end if;
+      return "{""verdict"":""" & Word (Model_Tier_Select_Pkg.Verdict (Tally)) &
+             """,""models"":[" & To_String (Rows) & "]" &
+             (if More then ",""more"":""true""" else "") & "}";
+   end Rail_Show_Text;
+
    function Palais_Enrol_Text (Line : String) return String is
       Span  : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Codename_Span (Line);
       Home  : constant String :=
@@ -446,6 +547,8 @@ begin
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Forge_Text (Line))));
                   elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Palais_Enrol then
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
+                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Show then
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Show_Text)));
                   else
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
                   end if;

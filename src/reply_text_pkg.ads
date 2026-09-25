@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 4a6af7cb2218309e4c44d6dce39c2f808a5f2b9cc5aadf63a835bf185ed54a72
+--  Unstamped source sha256: 4c4ab32926d162d4682a518885437c8ed22837eef1b6f2462a809c161a4c70a1
 --
 with Palais_Tools_Pkg;
 
@@ -109,9 +109,13 @@ package Reply_Text_Pkg with SPARK_Mode is
    Forge_Name   : constant String := Name_Key & Q ("forge");
    Forge_Desc   : constant String := Description_Key & Q ("carry one spec sheet through the pipeline; nothing emitted unless every gate passed");
    Forge_Tool   : constant String := "{" & Forge_Name & "," & Forge_Desc & "," & Input_Schema_Key & Forge_Schema & "}";
+   Rail_Show_Schema : constant String := "{" & Forge_Obj & "{}" & "}";
+   Rail_Show_Name   : constant String := Name_Key & Q ("rail.show");
+   Rail_Show_Desc   : constant String := Description_Key & Q ("say which models this factory is pointed at: for each tier the model, protocol, host and whether the route is on-estate; reads the config, changes nothing");
+   Rail_Show_Tool   : constant String := "{" & Rail_Show_Name & "," & Rail_Show_Desc & "," & Input_Schema_Key & Rail_Show_Schema & "}";
    First_Two_Tools   : constant String := Licence_Gate_Tool & "," & Intake_Check_Tool;
    Last_Two_Tools : constant String := Prove_Unit_Tool & "," & Forge_Tool;
-   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools & "," & Palais_Tools_Pkg.Enrol_Tool;
+   All_Tools    : constant String := First_Two_Tools & "," & Last_Two_Tools & "," & Palais_Tools_Pkg.Enrol_Tool & "," & Rail_Show_Tool;
    subtype Reply_String is String with Dynamic_Predicate => Reply_String'Length <= 8192;
    Tools_Inner  : constant Reply_String := Tools_Key & "[" & All_Tools & "]";
 
