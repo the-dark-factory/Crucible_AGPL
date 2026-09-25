@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: fa42031539452ab9261f2a59a3e89872ded8fa51425d4dbd5372064d46472309
+--  Unstamped source sha256: e7f495a70a8ea07c2e03671478582d69cc2131b56262353ca279170a6280d7aa
 --
 --  Body_Fill_Activity_Pkg body — the template: plumbing fixed by the seat; the FOUR slots are the planner's.
 with Ada.Text_IO;
@@ -25,6 +25,7 @@ with Round_Budget_Pkg;
 with Diagnosis_Select_Pkg;
 with Diagnosis_Activity_Pkg;
 with Stage_Outcome_Map_Pkg;
+with Json_String_Pkg;
 
 package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
 
@@ -63,6 +64,19 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
       when others =>
          null;   --  a file failure never changes a stage outcome
    end Log_Round;
+
+   --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
+   --  refusal on the record names WHICH check failed. Encoded by the proven Json_String_Pkg; when the text
+   --  is not encodable the row says so and carries no text -- never a stand-in string.
+   function Diag_Field (D : String) return String is
+      D1  : constant String (1 .. D'Length) := D;
+      Enc : String (1 .. Natural'Max (1, 2 * D1'Length));
+      Len : Natural;
+      Ok  : Boolean;
+   begin
+      Json_String_Pkg.Encode (D1, Enc, Len, Ok);
+      return (if Ok then ",""diagnostics"":""" & Enc (1 .. Len) & """" else ",""diagnostics_encoded"":""false""");
+   end Diag_Field;
 
    procedure Write_Body (Text : String) is
       F : Ada.Text_IO.File_Type;
@@ -315,11 +329,14 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
                               end;
 
                               --  SLOT BEGIN (gate-facts)
-GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => Natural (Cheats.reject));
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
+       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped,
+       cheat_markers => Natural (Cheats.reject));
                               --  SLOT END (gate-facts)
 
                               --  SLOT BEGIN (route)
-Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF),
+          Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
                               --  SLOT END (route)
 
                               --  SLOT BEGIN (fit)
@@ -351,7 +368,8 @@ Diagnosis_Activity_Pkg.Diagnose (Diag.all, Spec, Unit, DS, D_Text, D_Class, D_Ca
                                          """,""diagnosis_class"":""" & To_String (D_Class) &
                                          """,""catalogue"":""" & To_String (D_Cat) &
                                          """,""source"":""" & To_String (D_Source) &
-                                         """,""fit"":""" & Bool (Fit) & """}");
+                                         """,""fit"":""" & Bool (Fit) & """" &
+                                         Diag_Field (To_String (Prev_Diag)) & "}");
                               if Fit then
                                  Body_Text := To_Unbounded_String (Unit);
                                  Write_Body (Unit);
