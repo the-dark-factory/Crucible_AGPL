@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: d668d290e9f59c72ed20dd73b3d9b563c0c9b48e2ccd10c4c16df31f16325544
+--  Unstamped source sha256: e0b0a3af65d9f964bed9b32240203a58e16d1a030beb8f7050173c80c2123837
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -168,7 +168,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
        checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
 Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-           GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+          GF.checks_unproved, GF.subprograms_skipped, Undeclared);
 O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
       --  SLOT END (prove-spec-verdict)
       R := To_Unbounded_String ("prove_spec: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
@@ -217,18 +217,35 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
                          O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
       Ok_S, Ok_B, Ok_R : Boolean := False;
       Lower_Unit : constant String := Ada.Characters.Handling.To_Lower (Unit);
+      --  2026-09-26: a unit with NO body reaches Emit only when Prove_Body passed it through Body_Requirement_Pkg (every
+      --  operation completed in the specification, the specification's own proof standing). Emit used to refuse it here
+      --  ("nothing proved to write") -- a second bare refusal one stage after the one Body_Requirement_Pkg replaced. It
+      --  now writes the specification alone and the receipt SAYS there is no body and why; the job record's own
+      --  prove_body verdict is checked again, so an empty body can never be written on any other route.
+      Has_Body : constant Boolean := Body_T'Length > 0;
    begin
-      if Spec'Length = 0 or else Body_T'Length = 0 then
+      if Spec'Length = 0 then
          O := Pipeline_Stage_Pkg.Refused_Here;
-         R := To_Unbounded_String ("emit refused: nothing proved to write");
+         R := To_Unbounded_String ("emit refused: no specification to write");
+         return;
+      end if;
+      if not Has_Body and then not JJ.prove_body_passed then
+         O := Pipeline_Stage_Pkg.Refused_Here;
+         R := To_Unbounded_String ("emit refused: no body, and prove_body did not pass the unit without one");
          return;
       end if;
       Write_Text (Emit_Dir & "/" & Lower_Unit & ".ads", Spec, Ok_S);
-      Write_Text (Emit_Dir & "/" & Lower_Unit & ".adb", Body_T, Ok_B);
+      if Has_Body then
+         Write_Text (Emit_Dir & "/" & Lower_Unit & ".adb", Body_T, Ok_B);
+      else
+         Ok_B := True;
+      end if;
       Write_Text (Receipt_Path,
          "{" & Json_Of ("unit") & ":" & Json_Of (Unit) &
          "," & Json_Of ("spec_sha256") & ":" & Json_Of (Sha256_Of (Spec)) &
-         "," & Json_Of ("body_sha256") & ":" & Json_Of (Sha256_Of (Body_T)) &
+         "," & Json_Of ("body_sha256") & ":" &
+            Json_Of ((if Has_Body then Sha256_Of (Body_T)
+                      else "none: every operation is completed in the specification (Body_Requirement_Pkg)")) &
          "," & Json_Of ("built_from_commit") & ":" & Json_Of (Crucible_Build.Commit) &
          "," & Json_Of ("tree_clean") & ":" & Json_Of ((if Crucible_Build.Tree_Clean then "true" else "false")) &
          "," & Json_Of ("edition") & ":" & Json_Of ((if Crucible_Edition.Is_Agpl then "agpl" else "commercial")) &
@@ -237,14 +254,15 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
          "," & Json_Of ("judged_by") & ":" & Json_Of
             ("Fill_Route_Pkg,Gate_Word_Pkg,Contract_Emission_Pkg,Vacuity_Facts_Pkg,Vacuity_Rail_Pkg," &
              "Prover_Verdict_Pkg,Prover_Rail_Pkg,Seam_Coherence_Pkg,Provenance_Record_Pkg,Admission_Decision_Pkg," &
-             "Job_Record_Pkg") &
+             "Job_Record_Pkg" & (if Has_Body then "" else ",Body_Requirement_Pkg")) &
          "," & Json_Of ("gates_passed") & ":" & Json_Of ("intake,decompose,emit_contract,prove_spec,vacuity,fill_body,prove_body,seam,provenance,admission") &
          --  Named, not omitted: a reader must not have to guess why a field is absent.
          "," & Json_Of ("not_recorded") & ":" & Json_Of ("prover_version, model_name, rail_endpoints: this run does not hold them") &
          "}" & LF, Ok_R);
       if Ok_S and then Ok_B and then Ok_R then
          O := Pipeline_Stage_Pkg.Passed;
-         R := To_Unbounded_String ("emit: wrote " & Lower_Unit & ".ads, " & Lower_Unit & ".adb and receipt.json");
+         R := To_Unbounded_String ("emit: wrote " & Lower_Unit & ".ads, " &
+                                   (if Has_Body then Lower_Unit & ".adb and " else "no body (none needed) and ") & "receipt.json");
       else
          O := Pipeline_Stage_Pkg.Refused_Here;
          R := To_Unbounded_String ("emit refused: could not write the unit or its receipt");
@@ -438,7 +456,7 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (BR = Body_Requirement_Pkg.Earned_Withou
 GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
        checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
 Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
-           GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
+          GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
 O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
       --  SLOT END (prove-body-verdict)
       R := To_Unbounded_String ("prove_body: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
