@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: da9eacdda7274ea64667faa098fb95a8a3c8a48babd6bd957e0696afe4f1d6a2
+--  Unstamped source sha256: d668d290e9f59c72ed20dd73b3d9b563c0c9b48e2ccd10c4c16df31f16325544
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -19,6 +19,8 @@ with Prover_Rail_Pkg;
 with Gate_Word_Pkg;
 with Fill_Route_Pkg;
 with Spec_Shape_Pkg;
+with Cheat_Marker_Pkg;
+with Body_Requirement_Pkg;
 with Stage_Outcome_Map_Pkg;
 with Vacuity_Rail_Call_Pkg;
 with Vacuity_Rail_Pkg;
@@ -42,6 +44,7 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
    use type Prover_Rail_Pkg.Outcome_Kind;
    use type Vacuity_Rail_Pkg.Outcome_Kind;
    use type Vacuity_Rail_Call_Pkg.Text_Access;
+   use type Body_Requirement_Pkg.Verdict_Kind;
 
    LF : constant Character := Character'Val (10);
    Vacuity_Path : constant String := "state/vacuity.jsonl";
@@ -162,8 +165,10 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       end loop;
       Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
       --  SLOT BEGIN (prove-spec-verdict)
-GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
-Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0, GF.checks_unproved, GF.subprograms_skipped, Undeclared);
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
+       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
+           GF.checks_unproved, GF.subprograms_skipped, Undeclared);
 O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
       --  SLOT END (prove-spec-verdict)
       R := To_Unbounded_String ("prove_spec: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
@@ -351,7 +356,15 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then 
    end Judge_Vacuity;
 
    --  Prove_Body: the prover judges specification + body together; with a body present nothing may remain deferred.
-   procedure Judge_Body (Name, Spec, Body_T : String; O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
+   --  Prove_Body. With a body, the prover judges specification + body together (the prove-body-verdict slot). WITHOUT a
+   --  body, Body_Requirement_Pkg (admitted; BRIEF_crucible_body_requirement_decider_2026-09-22) decides whether the unit
+   --  earned emission anyway -- every operation completed in the specification, and the specification's OWN proof stands.
+   --  The edge only MEASURES the facts: the operations (Spec_Shape_Pkg over each line), the cheat markers
+   --  (Cheat_Marker_Pkg over each line), the specification proved ALONE (checks generated, unproved, subprograms skipped =
+   --  operations NOT completed in the spec), and the vacuity stage's own verdict. The bare "no body was filled" refusal it
+   --  replaces decided with no core behind it (the 09-22 finding).
+   procedure Judge_Body (Name, Spec, Body_T : String; Vacuity_Passed : Boolean;
+                         O : out Pipeline_Stage_Pkg.Outcome; R : out Unbounded_String) is
       N1 : constant String (1 .. Name'Length) := Name;
       S1 : constant String (1 .. Spec'Length) := Spec;
       B1 : constant String (1 .. Body_T'Length) := Body_T;
@@ -362,8 +375,57 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then 
       Route : Fill_Route_Pkg.Route_Kind := Fill_Route_Pkg.Route_Refuse;
    begin
       if B1'Length = 0 then
-         O := Pipeline_Stage_Pkg.Refused_Here;
-         R := To_Unbounded_String ("prove_body refused: no body was filled");
+         declare
+            Cheats : Cheat_Marker_Pkg.Tally;
+            Shape  : Spec_Shape_Pkg.Shape;
+            LS     : Positive := 1;
+            BF     : Body_Requirement_Pkg.Body_Facts;
+            BR     : Body_Requirement_Pkg.Verdict_Kind := Body_Requirement_Pkg.Refused_Empty_Unit;
+            Ops, Skipped : Natural;
+            function Cap (N : Natural) return Body_Requirement_Pkg.Count is
+              (Body_Requirement_Pkg.Count (Natural'Min (N, Body_Requirement_Pkg.Count'Last)));
+         begin
+            for P in 1 .. S1'Length + 1 loop
+               if P = S1'Length + 1 or else S1 (P) = LF then
+                  if P > LS then
+                     declare
+                        L1 : constant String (1 .. P - LS) := S1 (LS .. P - 1);
+                     begin
+                        Cheats := Cheat_Marker_Pkg.Add (Cheats, Cheat_Marker_Pkg.Marker_Of (L1));
+                        Shape  := Spec_Shape_Pkg.Add (Shape, L1);
+                     end;
+                  end if;
+                  LS := P + 1;
+               end if;
+            end loop;
+            Shape := Spec_Shape_Pkg.Finish (Shape);
+            Prover_Rail_Call_Pkg.Prove_Full (N1, S1, "", 2, PO, Facts, Diag);
+            if PO /= Prover_Rail_Pkg.Outcome_Proved and then PO /= Prover_Rail_Pkg.Outcome_Not_Proved then
+               O := Pipeline_Stage_Pkg.Unmeasured_Here;
+               R := To_Unbounded_String ("prove_body: no body; spec-alone prover rail: " &
+                                         Ada.Characters.Handling.To_Lower (Prover_Rail_Pkg.Outcome_Kind'Image (PO)));
+               return;
+            end if;
+            Ops     := Natural (Shape.operations);
+            Skipped := Natural'Min (Natural (Facts.subprograms_skipped), Ops);
+            BF := (body_present                 => False,
+                   operation_count              => Cap (Ops),
+                   operations_completed_in_spec => Cap (Ops - Skipped),
+                   spec_checks_generated        => Cap (Natural (Facts.run.checks_generated)),
+                   spec_checks_unproved         => Cap (Natural'Min (Natural (Facts.run.checks_unproved),
+                                                                     Natural (Facts.run.checks_generated))),
+                   cheat_markers                => Cap (Natural (Cheats.reject)),
+                   vacuity_meaningful           => Vacuity_Passed);
+            --  SLOT BEGIN (body-requirement)
+BR := Body_Requirement_Pkg.Decide (BF);
+O := Stage_Outcome_Map_Pkg.From_Verdict (BR = Body_Requirement_Pkg.Earned_Without_Body);
+            --  SLOT END (body-requirement)
+            R := To_Unbounded_String ("prove_body: no body; body_requirement " &
+                                      Ada.Characters.Handling.To_Lower (Body_Requirement_Pkg.Verdict_Kind'Image (BR)) &
+                                      " (operations" & Natural'Image (Ops) & ", completed in spec" &
+                                      Natural'Image (Ops - Skipped) & ", checks" &
+                                      Natural'Image (Natural (Facts.run.checks_generated)) & ")");
+         end;
          return;
       end if;
       Prover_Rail_Call_Pkg.Prove_Full (N1, S1, B1, 2, PO, Facts, Diag);
@@ -373,8 +435,10 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then 
          return;
       end if;
       --  SLOT BEGIN (prove-body-verdict)
-GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
-Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0, GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
+GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
+       checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
+Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
+           GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
 O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
       --  SLOT END (prove-body-verdict)
       R := To_Unbounded_String ("prove_body: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
@@ -415,7 +479,7 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
             when Pipeline_Stage_Pkg.Fill_Body =>
                Body_Fill_Activity_Pkg.Run (To_String (Spec_Text), To_String (Unit_Name), Body_Text, O, R);
             when Pipeline_Stage_Pkg.Prove_Body =>
-               Judge_Body (To_String (Unit_Name), To_String (Spec_Text), To_String (Body_Text), O, R);
+               Judge_Body (To_String (Unit_Name), To_String (Spec_Text), To_String (Body_Text), J.vacuity_passed, O, R);
             when Pipeline_Stage_Pkg.Seam =>
                Judge_Seam (J.prove_body_passed, J.prove_body_passed, O, R);
             when Pipeline_Stage_Pkg.Provenance =>
