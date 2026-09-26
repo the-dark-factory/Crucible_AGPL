@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 71ee5bc42ad97dd528217e92c4951d82a34183672258a39317ec83ffc64bc882
+--  Unstamped source sha256: d982f172c187246b94a6f07c8f7e10e286cc18fc9a257c62298e7d82621dab48
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -64,6 +64,7 @@ with Model_Rail_Fields_Pkg;
 with Model_Tier_Select_Pkg;
 with Sovereign_Gate_Pkg;
 with Rail_Verb_Pkg;
+with Report_Mode_Pkg;
 with Ada.Strings.Fixed;
 with GNAT.OS_Lib;
 
@@ -193,11 +194,11 @@ procedure Crucible_Main is
 
          Append ("{""verdict"":""refused"",""gaps"":[");
          --  SLOT BEGIN (gaps)
-if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
-if V.gap_no_operations then Add_Gap ("no_operations"); end if;
-if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
-if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
-if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
+         if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
+         if V.gap_no_operations then Add_Gap ("no_operations"); end if;
+         if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
+         if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
+         if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
          --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
@@ -273,7 +274,7 @@ if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
       declare
          Word : constant String := (
          --  SLOT BEGIN (outcome_word)
-case O is
+            case O is
      when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
      when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
      when Prover_Rail_Pkg.Outcome_Unmeasured => "unmeasured",
@@ -698,6 +699,49 @@ case O is
       function Low (S : String) return String renames Ada.Characters.Handling.To_Lower;
       Span : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Sheet_Span (Line);
    begin
+      --  v14: the REPORT-MODE switch is read FIRST, on every forge call, before the tower. The door decides nothing
+      --  here: the edge reads config/report.conf WHOLE, line by line with the unbounded Get_Line (never a fixed buffer,
+      --  never trimmed, no CR or BOM stripped), and the proven Report_Mode_Pkg judges it. Only a malformed file speaks,
+      --  one line on standard error. The forge never waits on it, and no fault here can turn the mode on. The mode
+      --  itself is kept by D1's lineage, which is its first reader.
+      declare
+         Conf    : constant String := "config/report.conf";
+         Present : constant Boolean := Ada.Directories.Exists (Conf);
+         Lines   : Natural := 0;
+         Found   : Report_Mode_Pkg.Fact_Kind := Report_Mode_Pkg.Fact_Not_Exact;
+         Fact    : Report_Mode_Pkg.Fact_Kind;
+         F       : Ada.Text_IO.File_Type;
+         function Is_Blank (S : String) return Boolean is
+           (for all C of S => C = ' ' or else C = ASCII.HT);
+      begin
+         if Present and then Ada.Directories.Kind (Conf) in Ada.Directories.Ordinary_File then
+            Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Conf);
+            while Lines < 2 and then not Ada.Text_IO.End_Of_File (F) loop
+               declare
+                  L : constant String := Ada.Text_IO.Get_Line (F);
+               begin
+                  if not Is_Blank (L) then
+                     Lines := Lines + 1;
+                     if Lines = 1 then
+                        Found := Report_Mode_Pkg.Line_Fact (L);
+                     end if;
+                  end if;
+               end;
+            end loop;
+            Ada.Text_IO.Close (F);
+         end if;
+         Fact := Report_Mode_Pkg.Decide (Present, Lines, Found);
+         if Report_Mode_Pkg.Is_Malformed (Fact) then
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+              "report: " & Conf & " " & Report_Mode_Pkg.Word_Of (Fact) & "; report mode is OFF");
+         end if;
+      exception
+         when others =>
+            if Ada.Text_IO.Is_Open (F) then
+               Ada.Text_IO.Close (F);
+            end if;
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "report: " & Conf & " unreadable; report mode is OFF");
+      end;
       --  v9: the tower base is checked FIRST, before the sheet is looked for. The door decides nothing here:
       --  the edge measures, Tower_Base_Verdict_Pkg.May_Forge permits or refuses, Reason_Word names the refusal.
       declare
