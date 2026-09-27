@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 67eda8518af5e298af908ecdb9a942c1965c77bfbd2e58f9abe51d4998672934
+--  Unstamped source sha256: e1189db2c69df340bffa37352d56273362d4e664af13e454bab381cd3fe1f7b2
 --
 with Palais_Tools_Pkg;
 
@@ -125,6 +125,8 @@ package Reply_Text_Pkg with SPARK_Mode is
    subtype Reply_String is String with Dynamic_Predicate => Reply_String'Length <= 8192;
    Tools_Inner  : constant Reply_String := Tools_Key & "[" & All_Tools & "]";
 
+   Max_Result_Text : constant := 1_048_576;
+
    function Error_Reply (Id_Text : String; Code : Integer; Message : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Error_Key & "{" & Code_Key & Image_Of (Code) & "," & Message_Key & Q (Message) & "}" & "}")
      with Pre  => (Id_Text'First = 1 and then Id_Text'Length <= 4096 and then Message'First = 1 and then Message'Length <= 4096),
@@ -132,8 +134,8 @@ package Reply_Text_Pkg with SPARK_Mode is
 
    function Result_Reply (Id_Text : String; Result_Text : String) return String
      is ("{" & Jsonrpc_Key & Version_Word & "," & Id_Key & Id_Text & "," & Result_Key & Result_Text & "}")
-     with Pre  => (Id_Text'First = 1 and then Id_Text'Length <= 4096 and then Result_Text'First = 1 and then Result_Text'Length <= 4096),
-          Post => (Result_Reply'Result'Length >= 2 and then Result_Reply'Result (Result_Reply'Result'First) = '{' and then Result_Reply'Result (Result_Reply'Result'Last) = '}' and then Result_Reply'Result'Length <= 16384);
+     with Pre  => (Id_Text'First = 1 and then Id_Text'Length <= 4096 and then Result_Text'First = 1 and then Result_Text'Length <= Max_Result_Text),
+          Post => (Result_Reply'Result'Length >= 2 and then Result_Reply'Result (Result_Reply'Result'First) = '{' and then Result_Reply'Result (Result_Reply'Result'Last) = '}' and then Result_Reply'Result'Length <= Max_Result_Text + 8192);
 
    function Initialize_Result (Server_Name : String) return String
      is ("{" & Protocolversion_Key & Protocol_Word & "," & Capabilities_Key & "{" & Tools_Key & "{" & "}" & "}" & "," & Serverinfo_Key & "{" & Name_Key & Q (Server_Name) & "," & Version_Key & Server_Version_Word & "}" & "}")
