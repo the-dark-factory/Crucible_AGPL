@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: a58124850dbba30a93c2bfee5e199cc787592c67391893ea4bddae0b63ba70b4
+--  Unstamped source sha256: af45ddccd8206fbd46b9a3a60dbcbacd86de98ed4d491cd16280e6b9097ad93f
 --
 with Ada.Text_IO;
 with Json_Scan_Pkg;
@@ -30,26 +30,38 @@ procedure Expand_Back is
    Close_Bracket : constant Character := ']';
    Blank        : constant Character := ' ';
 
-   Id_Buf      : String (1 .. 256);
-   Fault_Buf   : String (1 .. 256);
-   --  SLOT BEGIN (body-buffer)
+   --  SLOT BEGIN (line-buffers)
+   Max_Id    : constant := 4096;
+   Max_Fault : constant Natural := 4096 - Msg_Model'Length;
+   Id_Buf    : String (1 .. Max_Id + 1);
+   Fault_Buf : String (1 .. Max_Fault + 1);
+   --  SLOT END (line-buffers)
    Max_Body : constant := 1_048_576;
    Body_Buf : String (1 .. Max_Body + 1);
-   --  SLOT END (body-buffer)
    Id_Last     : Natural;
    Fault_Last  : Natural;
    Body_Last   : Natural;
 begin
+   --  SLOT BEGIN (line-read)
    Ada.Text_IO.Get_Line (Id_Buf, Id_Last);
+   if Id_Last > Max_Id then
+      Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Null_Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "id_too_long"));
+      Ada.Text_IO.Flush;
+      return;
+   end if;
    Ada.Text_IO.Get_Line (Fault_Buf, Fault_Last);
+   if Fault_Last > Max_Fault then
+      Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id_Buf (1 .. Id_Last), Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "fault_too_long"));
+      Ada.Text_IO.Flush;
+      return;
+   end if;
+   --  SLOT END (line-read)
    Ada.Text_IO.Get_Line (Body_Buf, Body_Last);
 
    declare
       Id         : constant String := Id_Buf (1 .. Id_Last);
       Fault_Text : constant String := Fault_Buf (1 .. Fault_Last);
-      --  SLOT BEGIN (body-view)
       Json_Body  : String renames Body_Buf (1 .. Body_Last);
-      --  SLOT END (body-view)
    begin
       if Fault_Text'Length /= 1 or else Fault_Text (Fault_Text'First) /= '0' then
          Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Model & Fault_Text));
@@ -57,13 +69,11 @@ begin
          return;
       end if;
 
-      --  SLOT BEGIN (body-check)
       if Body_Last > Max_Body then
          Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "too_long_to_read"));
          Ada.Text_IO.Flush;
          return;
       end if;
-      --  SLOT END (body-check)
 
       declare
          R   : constant Json_Scan_Pkg.Span_Type := Json_Scan_Pkg.Value_Span (Json_Body, Response_Key);
@@ -161,7 +171,6 @@ Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped 
                      Facts : constant Mascot_Judge_Pkg.Fact_Set := Mascot_Measure_Pkg.Measure (SR.Table);
                   begin
                      if not Mascot_Judge_Pkg.Accepted (Facts) then
-                        --  SLOT BEGIN (judge-names)
                         declare
                            Failed : constant Mascot_Judge_Pkg.Failed_Set := Mascot_Judge_Pkg.Failed (Facts);
                            Total  : Natural := 0;
@@ -202,7 +211,6 @@ Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped 
                               return;
                            end;
                         end;
-                        --  SLOT END (judge-names)
                      end if;
 
                      declare
@@ -220,7 +228,6 @@ Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped 
                            return;
                         end if;
 
-                        --  SLOT BEGIN (design-join)
                         declare
                            pragma Compile_Time_Error (Mascot_Measure_Pkg.Max_Nodes * (Mascot_Scan_Pkg.Max_Line + 1) + 1 > Door_Responder_Pkg.Max_Design_Text, "a scanned design can be longer than the door echoes");
                            Total       : Natural := 2;
@@ -264,7 +271,6 @@ Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped 
                               Ada.Text_IO.Flush;
                            end;
                         end;
-                        --  SLOT END (design-join)
                      end;
                   end;
                end;
