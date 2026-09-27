@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 8e776b3a150605ff80268b9310f36bde298acbff1c523f4c924b44fce78f10a7
+--  Unstamped source sha256: 16019b51f6ebff09414615c77dbc61bc66e335e5186b7e2a1961bff10acdfe9f
 --
 --  SLOT BEGIN (context)
 with Ada.Text_IO;
@@ -82,54 +82,62 @@ begin
                   Set.Lines (L).Len := 0;
                end loop;
 
-               while I <= Raw'Last loop
-                  if Raw (I) = Backslash and then I < Raw'Last then
-                     declare
-                        Next : constant Character := Raw (I + 1);
-                        Cur  : constant Natural := Set.Count + 1;
-                     begin
-                        if Next = Newline_Mark then
-                           if Set.Lines (Cur).Len > 0 then
-                              Set.Count := Set.Count + 1;
-                           end if;
-                        elsif Next = Quote then
-                           if Set.Lines (Cur).Len < Mascot_Scan_Pkg.Max_Line then
-                              Set.Lines (Cur).Len := Set.Lines (Cur).Len + 1;
-                              Set.Lines (Cur).Text (Set.Lines (Cur).Len) := Quote;
-                           end if;
-                        elsif Next = Backslash then
-                           if Set.Lines (Cur).Len < Mascot_Scan_Pkg.Max_Line then
-                              Set.Lines (Cur).Len := Set.Lines (Cur).Len + 1;
-                              Set.Lines (Cur).Text (Set.Lines (Cur).Len) := Backslash;
-                           end if;
-                        else
-                           if Set.Lines (Cur).Len < Mascot_Scan_Pkg.Max_Line then
-                              Set.Lines (Cur).Len := Set.Lines (Cur).Len + 1;
-                              Set.Lines (Cur).Text (Set.Lines (Cur).Len) := Next;
-                           end if;
-                        end if;
-                        I := I + 2;
-                     end;
-                  else
-                     declare
-                        Cur : constant Natural := Set.Count + 1;
-                     begin
-                        if Set.Lines (Cur).Len < Mascot_Scan_Pkg.Max_Line then
-                           Set.Lines (Cur).Len := Set.Lines (Cur).Len + 1;
-                           Set.Lines (Cur).Text (Set.Lines (Cur).Len) := Raw (I);
-                        end if;
-                     end;
-                     I := I + 1;
-                  end if;
-
-                  exit when Set.Count = Mascot_Measure_Pkg.Max_Nodes;
-               end loop;
-
-               if Set.Lines (Set.Count + 1).Len > 0
-                 and then Set.Count < Mascot_Measure_Pkg.Max_Nodes
-               then
-                  Set.Count := Set.Count + 1;
-               end if;
+               --  SLOT BEGIN (line-split)
+while I <= Raw'Last loop
+   declare
+      Next : Character;
+      Cur  : constant Natural := Set.Count + 1;
+      C    : Character;
+   begin
+      if Raw (I) = Backslash and then I < Raw'Last then
+         Next := Raw (I + 1);
+         if Next = Newline_Mark then
+            if Set.Count < Mascot_Measure_Pkg.Max_Nodes
+              and then Set.Lines (Set.Count + 1).Len > 0
+            then
+               Set.Count := Set.Count + 1;
+            end if;
+            I := I + 2;
+         else
+            C := Next;
+            if Set.Count = Mascot_Measure_Pkg.Max_Nodes then
+               Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "too_many_lines"));
+               Ada.Text_IO.Flush;
+               return;
+            end if;
+            if Set.Lines (Cur).Len = Mascot_Scan_Pkg.Max_Line then
+               Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "line_too_long"));
+               Ada.Text_IO.Flush;
+               return;
+            end if;
+            Set.Lines (Cur).Len := Set.Lines (Cur).Len + 1;
+            Set.Lines (Cur).Text (Set.Lines (Cur).Len) := C;
+            I := I + 2;
+         end if;
+      else
+         C := Raw (I);
+         if Set.Count = Mascot_Measure_Pkg.Max_Nodes then
+            Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "too_many_lines"));
+            Ada.Text_IO.Flush;
+            return;
+         end if;
+         if Set.Lines (Cur).Len = Mascot_Scan_Pkg.Max_Line then
+            Ada.Text_IO.Put_Line (Door_Responder_Pkg.Reply_Of (Id, Refused => True, Stamped => False, Design_Text => Null_Id, Fault_Message => Msg_Scan & "line_too_long"));
+            Ada.Text_IO.Flush;
+            return;
+         end if;
+         Set.Lines (Cur).Len := Set.Lines (Cur).Len + 1;
+         Set.Lines (Cur).Text (Set.Lines (Cur).Len) := C;
+         I := I + 1;
+      end if;
+   end;
+end loop;
+if Set.Count < Mascot_Measure_Pkg.Max_Nodes
+  and then Set.Lines (Set.Count + 1).Len > 0
+then
+   Set.Count := Set.Count + 1;
+end if;
+               --  SLOT END (line-split)
 
                declare
                   SR    : constant Mascot_Scan_Pkg.Scan_Result := Mascot_Scan_Pkg.Scan (Set);
