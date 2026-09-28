@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: e1189db2c69df340bffa37352d56273362d4e664af13e454bab381cd3fe1f7b2
+--  Unstamped source sha256: a37477fea85386924b8c4890bb91376524ac557e860bfb13dc551b7f76261d69
 --
 with Palais_Tools_Pkg;
 
@@ -23,8 +23,14 @@ package Reply_Text_Pkg with SPARK_Mode is
      is (if N < 0 then Integer'Image (N) else Integer'Image (N) (2 .. Integer'Image (N)'Last))
      with Post => Image_Of'Result'Length <= 12;
 
+   Backslash : constant Character := Character'Val (92);
+
    function Escape_Quotes (S : String) return String
+     is (if S'Length = 0 then ""
+         elsif S (S'Last) = '"' then Escape_Quotes (S (S'First .. S'Last - 1)) & Backslash & '"'
+         else Escape_Quotes (S (S'First .. S'Last - 1)) & S (S'Last))
      with Global => null,
+          Subprogram_Variant => (Decreases => S'Length),
           Pre  => (S'First = 1 and then S'Length <= 4096),
           Post => (Escape_Quotes'Result'First = 1
                    and then Escape_Quotes'Result'Length >= S'Length

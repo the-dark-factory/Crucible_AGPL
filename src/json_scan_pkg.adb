@@ -1,148 +1,95 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
---  Body of Json_Scan_Pkg, third forge: the lane's body-fill (opus, candidate 3), job verified
---  2026-09-12 12:05; locals assigned before first read carry no initializer; re-proved with the
---  spec as built: 183 checks, 0 unproved, 0 warnings under -gnatwa -gnatwe.
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: 8a00916fae2ff0a7492bcd017b51c3cac583541f4c31fdf4d7a99e633398c4eb
+--
 package body Json_Scan_Pkg with SPARK_Mode is
-
-   --  Implementation notes
-   --
-   --  * Every scanning loop is a FOR loop over a sub-range of Line'Range, so
-   --    termination holds by construction.
-   --  * Line'Last + 1 is never formed: for a null string Line'First = 1 does
-   --    not force Line'Last = 0, so Line'Last + 1 need not be Positive.  The
-   --    key-search invariant is therefore carried as
-   --    No_Key_Before (Line, Key, I) at the TOP of the loop body.
-   --  * Locals that are assigned before their first read carry no initial
-   --    value (the warnings-as-errors gate rejects dead initialisations).
-
-   ------------------
-   -- Key_Position --
-   ------------------
 
    function Key_Position (Line : String; Key : String) return Natural is
    begin
       for I in Line'Range loop
          pragma Loop_Invariant (No_Key_Before (Line, Key, I));
-         pragma Loop_Invariant
-           (for all J in Line'First .. I - 1 => not Is_Key_At (Line, Key, J));
-
          if Is_Key_At (Line, Key, I) then
-            pragma Assert (No_Key_Before (Line, Key, I));
             return I;
          end if;
       end loop;
-
-      pragma Assert (for all J in Line'Range => not Is_Key_At (Line, Key, J));
       return 0;
    end Key_Position;
 
-   ----------------
-   -- Value_Span --
-   ----------------
-
    function Value_Span (Line : String; Key : String) return Span_Type is
-      P : constant Natural := Key_Position (Line, Key);
-
-      B      : Natural;   --  first index that may hold the separating colon
-      C      : Natural;   --  colon position
-      F      : Natural;   --  first character of the value
-      L      : Natural;   --  last character of the value
-      D      : Natural;   --  bracket depth, composite values only
-      In_Str : Boolean;
+      Kpos   : Natural;
+      Cpos   : Natural;
+      Fpos   : Natural;
+      Q      : Natural;
+      L      : Natural;
+      Depth  : Natural;
       Esc    : Boolean;
+      In_Str : Boolean;
    begin
-      if P = 0 then
+      Kpos := Key_Position (Line, Key);
+
+      if Kpos = 0 then
          return (found => False, kind => K_None, first => 0, last => 0);
       end if;
 
-      pragma Assert (Is_Key_At (Line, Key, P));
-      pragma Assert (P in Line'Range);
+      pragma Assert (Is_Key_At (Line, Key, Kpos));
 
-      B := P + Key'Length + 2;
-
-      --  Locate the colon.  Is_Key_At (Line, Key, P) guarantees that one
-      --  exists in B .. Line'Last, preceded only by blanks.
-      C := 0;
-      for J in B .. Line'Last loop
+      Cpos := 0;
+      for J in (Kpos + Key'Length + 2) .. Line'Last loop
          if Line (J) = ':' then
-            C := J;
+            Cpos := J;
             exit;
          end if;
-
-         pragma Loop_Invariant (C = 0);
-         pragma Loop_Invariant (for all S in B .. J => Line (S) /= ':');
+         pragma Loop_Invariant (Cpos = 0);
+         pragma Loop_Invariant (for all S in Kpos + Key'Length + 2 .. J => Line (S) /= ':');
+         pragma Loop_Invariant (Colon_From (Line, Kpos + Key'Length + 2) = Colon_From (Line, J + 1));
       end loop;
 
-      pragma Assert (C /= 0);
-
-      if C = 0 then
-         --  Unreachable: contradicted by the existential inside Is_Key_At.
+      if Cpos = 0 then
          return (found => False, kind => K_None, first => 0, last => 0);
       end if;
 
-      pragma Assert (C in B .. Line'Last);
-      pragma Assert (Line (C) = ':');
-      pragma Assert (C > P);
-
-      --  First non-blank character after the colon starts the value.
-      F := 0;
-      for J in C + 1 .. Line'Last loop
+      Fpos := 0;
+      for J in (Cpos + 1) .. Line'Last loop
          if Line (J) /= ' ' then
-            F := J;
+            Fpos := J;
             exit;
          end if;
-
-         pragma Loop_Invariant (F = 0);
+         pragma Loop_Invariant (Fpos = 0);
+         pragma Loop_Invariant (Nonblank_From (Line, Cpos + 1) = Nonblank_From (Line, J + 1));
       end loop;
 
-      if F = 0 then
-         --  Key present but nothing follows the colon: report the colon
-         --  itself as a one-character bare span (it is not a blank, a quote,
-         --  a brace or a bracket, so the K_Bare part of the Post holds).
-         return (found => True, kind => K_Bare, first => C, last => C);
-      end if;
-
-      pragma Assert (F in Line'Range);
-      pragma Assert (F > C);
-      pragma Assert (Line (F) /= ' ');
-
-      if Line (F) = '"' then
-
-         --  String value: find the closing quote, honouring backslash escapes.
-         L := 0;
+      if Fpos = 0 then
+         return (found => True, kind => K_Bare, first => Cpos, last => Cpos);
+      elsif Line (Fpos) = '"' then
+         Q := 0;
          Esc := False;
-         for J in F + 1 .. Line'Last loop
+         for J in (Fpos + 1) .. Line'Last loop
             if Esc then
                Esc := False;
             elsif Line (J) = '\' then
                Esc := True;
             elsif Line (J) = '"' then
-               L := J;
+               Q := J;
                exit;
             end if;
-
-            pragma Loop_Invariant (L = 0);
+            pragma Loop_Invariant (Q = 0);
+            pragma Loop_Invariant (String_End (Line, Fpos + 1, False) = String_End (Line, J + 1, Esc));
          end loop;
-
-         if L = 0 then
-            --  Unterminated string: fall back to the colon as a bare span.
-            return (found => True, kind => K_Bare, first => C, last => C);
+         if Q = 0 then
+            return (found => True, kind => K_Bare, first => Cpos, last => Cpos);
+         else
+            return (found => True, kind => K_String, first => Fpos, last => Q);
          end if;
-
-         pragma Assert (L in F + 1 .. Line'Last);
-         pragma Assert (Line (L) = '"');
-         return (found => True, kind => K_String, first => F, last => L);
-
-      elsif Line (F) = '{' or else Line (F) = '[' then
-
-         --  Composite value: match brackets, ignoring bracket characters that
-         --  occur inside nested strings.  An unmatched opener runs to the end
-         --  of the line.
-         D := 0;
+      elsif Line (Fpos) = '{' or else Line (Fpos) = '[' then
+         L := Line'Last;
+         Depth := 0;
          In_Str := False;
          Esc := False;
-         L := Line'Last;
-         for J in F .. Line'Last loop
+         for J in Fpos .. Line'Last loop
             if In_Str then
                if Esc then
                   Esc := False;
@@ -150,93 +97,48 @@ package body Json_Scan_Pkg with SPARK_Mode is
                   Esc := True;
                elsif Line (J) = '"' then
                   In_Str := False;
+                  Esc := False;
                end if;
             elsif Line (J) = '"' then
                In_Str := True;
             elsif Line (J) = '{' or else Line (J) = '[' then
-               D := D + 1;
+               Depth := Depth + 1;
             elsif Line (J) = '}' or else Line (J) = ']' then
-               if D > 0 then
-                  D := D - 1;
-               end if;
-               if D = 0 then
+               if Depth <= 1 then
                   L := J;
                   exit;
                end if;
+               Depth := Depth - 1;
             end if;
-
-            pragma Loop_Invariant (D <= J - F + 1);
             pragma Loop_Invariant (L = Line'Last);
+            pragma Loop_Invariant (Depth <= J - Fpos + 1);
+            pragma Loop_Invariant (if not In_Str then not Esc);
+            pragma Loop_Invariant (Close_From (Line, Fpos, 0, False, False) = Close_From (Line, J + 1, Depth, In_Str, Esc));
          end loop;
-
-         pragma Assert (L in F .. Line'Last);
-         return (found => True, kind => K_Composite, first => F, last => L);
-
+         return (found => True, kind => K_Composite, first => Fpos, last => L);
       else
-
-         --  Bare value: runs up to the next separator, trailing blanks dropped.
-         L := F;
-         for J in F + 1 .. Line'Last loop
-            exit when Line (J) = ','
-              or else Line (J) = '}'
-              or else Line (J) = ']';
-
+         L := Fpos;
+         for J in (Fpos + 1) .. Line'Last loop
+            exit when Line (J) = ',' or else Line (J) = '}' or else Line (J) = ']';
             if Line (J) /= ' ' then
                L := J;
             end if;
-
-            pragma Loop_Invariant (L >= F and then L <= J);
+            pragma Loop_Invariant (L in Fpos .. J);
+            pragma Loop_Invariant (Line (L) /= ' ');
+            pragma Loop_Invariant (Bare_End (Line, Fpos + 1, Fpos) = Bare_End (Line, J + 1, L));
          end loop;
-
-         pragma Assert (L in F .. Line'Last);
-         return (found => True, kind => K_Bare, first => F, last => L);
-
+         return (found => True, kind => K_Bare, first => Fpos, last => L);
       end if;
    end Value_Span;
 
-   ---------------------
-   -- String_Contents --
-   ---------------------
-
    function String_Contents (Line : String; S : Span_Type) return Span_Type is
    begin
-      pragma Assert (Line'First = 1);
-      pragma Assert (S.first < S.last);
-      return (found => True,
-              kind  => K_String,
-              first => S.first + 1,
-              last  => S.last - 1);
+      return (found => True, kind => K_String, first => S.first + 1, last => S.last - 1);
    end String_Contents;
 
-   --------------------
-   -- Equals_Literal --
-   --------------------
-
-   function Equals_Literal
-     (Line : String; S : Span_Type; Literal : String) return Boolean
-   is
-      N : constant Natural := S.last - S.first + 1;
+   function Equals_Literal (Line : String; S : Span_Type; Literal : String) return Boolean is
    begin
-      if Literal'Length /= N then
-         return False;
-      end if;
-
-      for I in 0 .. N - 1 loop
-         if Line (S.first + I) /= Literal (Literal'First + I) then
-            pragma Assert (Line (S.first .. S.last) /= Literal);
-            return False;
-         end if;
-
-         pragma Loop_Invariant
-           (for all M in 0 .. I =>
-              Line (S.first + M) = Literal (Literal'First + M));
-         pragma Loop_Invariant
-           (Line (S.first .. S.first + I)
-              = Literal (Literal'First .. Literal'First + I));
-      end loop;
-
-      pragma Assert (Line (S.first .. S.last) = Literal);
-      return True;
+      return (Literal'Length = S.last - S.first + 1) and then (Line (S.first .. S.last) = Literal);
    end Equals_Literal;
 
 end Json_Scan_Pkg;
