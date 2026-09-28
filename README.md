@@ -143,8 +143,8 @@ will require signing the CLA (sending them will not).
 ## The model
 
 Crucible does not ship a model and does not need ours. The `model` line of `config/rail.conf` takes any endpoint
-you run. Install ollama and pull a model for your platform — `ollama pull qwen3-coder:30b` is the public model
-this release was demonstrated with — and point Crucible at it on localhost; the rail speaks plain HTTP to a local
+you run. The shipped default is `qwen3-coder:30b`: install ollama and `ollama pull qwen3-coder:30b`, or point the
+`model` line at any other model you run on localhost; the rail speaks plain HTTP to a local
 endpoint by design, so nothing leaves the box but what you send. The house figures above were measured with a
 qwen3.8-27b model tuned for the dialect.
 
@@ -153,8 +153,8 @@ qwen3.8-27b model tuned for the dialect.
 ## Get it
 
 This tagged release ships factory-built, signed tarballs — one per platform — plus one checksum file:
-`crucible-v0.2.1-macos-arm64.tar.gz`, `crucible-v0.2.1-linux-x86_64.tar.gz`, and
-`RELEASE_TARBALLS.sha256`. Each tarball unpacks to `crucible-v0.2.1/` — a working directory with a
+`crucible-v0.3.0-macos-arm64.tar.gz`, `crucible-v0.3.0-linux-x86_64.tar.gz`, and
+`RELEASE_TARBALLS.sha256`. Each tarball unpacks to `crucible-v0.3.0/` — a working directory with a
 `crucible-launch.sh`, `bin/`, `config/` and `tower/` — that connects to the tower out of the box. The
 macOS binary is Developer-ID signed and notarized (a bare CLI tool, so it cannot be stapled; clear the
 quarantine attribute if a browser download is blocked). Check the download, unpack, then verify the
@@ -162,7 +162,7 @@ signed set inside:
 
 ```sh
 sha256sum -c RELEASE_TARBALLS.sha256
-tar xzf crucible-v0.2.1-<platform>.tar.gz && cd crucible-v0.2.1
+tar xzf crucible-v0.3.0-<platform>.tar.gz && cd crucible-v0.3.0
 sha256sum -c SHA256SUMS
 ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
 ```

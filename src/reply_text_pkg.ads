@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 12ff6065f35201ff6c06a8edcf1b1de98c7b17735bd692dd8cae745af397ecc5
+--  Unstamped source sha256: 30706e9e91e0cc4b5e9dce6bc3bf0cc4ab2a7ecada4ddf1145de8ccf30018ab5
 --
 with Palais_Tools_Pkg;
 
@@ -91,7 +91,7 @@ package Reply_Text_Pkg with SPARK_Mode is
    String_Word : constant String := Q ("string");
    Version_Word : constant String := Q ("2.0");
    Protocol_Word : constant String := Q ("2025-06-18");
-   Server_Version_Word : constant String := Q ("0.2.1");
+   Server_Version_Word : constant String := Q ("0.3.0");
    Agpl_Word : constant String := Q ("agpl");
    Commercial_Word : constant String := Q ("commercial");
    Text_Word : constant String := Q ("text");

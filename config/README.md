@@ -26,7 +26,7 @@ take the first one that `Rail_Config_Pkg.Is_Valid` accepts for their rail. `rail
 `rail host port timeout_seconds max_reply_bytes sovereign`, and a model line also needs `model protocol max_tokens`
 (`protocol` is `ollama` or `openai`).
 
-    {"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3.8-27b-ada:v0.3","protocol":"ollama","max_tokens":"8192"}
+    {"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3-coder:30b","protocol":"ollama","max_tokens":"8192"}
     {"rail":"prover","host":"127.0.0.1","port":"8471","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true"}
 
 **Line 1 is kept for the legacy `harness/expand_brief_main` runner**, which reads ONLY the first line in the older
@@ -42,9 +42,10 @@ only three rail words is out of date: the five are `model prover vacuity palais 
 
     {"rail":"reef","host":"127.0.0.1","port":"8473","timeout_seconds":"60","max_reply_bytes":"65536","sovereign":"false"}
 
-**NO reef line ships**, deliberately: there is no Reef to talk to yet, and `palais.enrol` refusing with `no_reef_rail`
-is the correct answer until there is. `sovereign` is `false` because this rail leaves the estate — it is the only one
-that does.
+**A reef line ships** (since v0.3.0; the repo `rail.conf` is what the release tarball carries), pointing at the local
+relay on 8473 with `timeout_seconds` 600 and `max_reply_bytes` 1048576. Delete it to forge fully offline:
+`palais.enrol` then refuses with `no_reef_rail`. `sovereign` is `false` because this rail leaves the estate — it is the
+only one that does.
 
 ## Tiers — a standard model and an elevated one (v0.3, `rail.conf.example`)
 

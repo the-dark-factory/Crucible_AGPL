@@ -1,4 +1,4 @@
-{"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3.8-27b-ada:v0.5","protocol":"ollama","max_tokens":"8192","tier":"standard"}
+{"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3-coder:30b","protocol":"ollama","max_tokens":"8192","tier":"standard"}
 {"rail":"model","host":"127.0.0.1","port":"4000","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"gateway-elevated","protocol":"openai","max_tokens":"8192","tier":"elevated"}
 {"rail":"prover","host":"127.0.0.1","port":"8471","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true"}
 {"rail":"vacuity","host":"127.0.0.1","port":"8472","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true"}

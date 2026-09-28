@@ -2,19 +2,19 @@
 
 ## The short path (a published release)
 
-v0.2.1 ships prebuilt, signed tarballs. You do not need a toolchain to run the door — only to
+v0.3.0 ships prebuilt, signed tarballs. You do not need a toolchain to run the door — only to
 build it yourself (see "Build from source" below).
 
 1. Download the tarball for your platform and the checksum file from the release page:
-   - `crucible-v0.2.1-macos-arm64.tar.gz` (macOS, Apple silicon)
-   - `crucible-v0.2.1-linux-x86_64.tar.gz` (Linux, x86_64)
+   - `crucible-v0.3.0-macos-arm64.tar.gz` (macOS, Apple silicon)
+   - `crucible-v0.3.0-linux-x86_64.tar.gz` (Linux, x86_64)
    - `RELEASE_TARBALLS.sha256`
 
 2. Check what you downloaded, then unpack:
    ```sh
    sha256sum -c RELEASE_TARBALLS.sha256
-   tar xzf crucible-v0.2.1-<platform>.tar.gz
-   cd crucible-v0.2.1
+   tar xzf crucible-v0.3.0-<platform>.tar.gz
+   cd crucible-v0.3.0
    ```
 
 3. Verify the signed file set INSIDE the tarball (this is the df-release signature):
@@ -25,26 +25,25 @@ build it yourself (see "Build from source" below).
    ```
    A good run prints `Good "df-release" signature for tower@thedarkfactory.co.uk`.
 
-The tarball unpacks to `crucible-v0.2.1/` with this layout — everything is relative to that
+The tarball unpacks to `crucible-v0.3.0/` with this layout — everything is relative to that
 directory:
 ```
-crucible-v0.2.1/
+crucible-v0.3.0/
   crucible-launch.sh   the one-command launcher (starts the rails, serves the door, cleans up)
   bin/     crucible-agpl, prover_service_main, vacuity_service_main, reef_relay_main,
-           check-cores-mcp, allowed_signers
+           vacuity-battery (+ its 38 kit-name links), vacuity_verdict_main, allowed_signers
   config/  rail.conf, reef-relay.conf, tower.conf
   tower/   base.bundle, sharer.bundle
   SHA256SUMS, SHA256SUMS.sig, SHA256SUMS.allowed_signers
 ```
 
-> **After v0.2.1 (source tree from 2026-09-28, and the next release):** the Go battery
-> `check-cores-mcp` is gone. `bin/` instead holds `vacuity-battery` (the battery, Ada, built from
+> **Since v0.3.0:** the Go battery `check-cores-mcp` (shipped up to v0.2.1) is gone. `bin/` instead holds `vacuity-battery` (the battery, Ada, built from
 > `battery/` in this tree), the 38 kit names in `battery/LINKS` as symbolic links to it, and
 > `vacuity_verdict_main` (the grade edge) beside them. The battery's text scanning is Ada **edges**
 > (built and probe-checked, not proved); its judgements are proven cores. Do not call the battery proved.
 
 > The door finds `config/rail.conf` and `tower/base.bundle` **relative to the directory it is
-> started in**. Start it from the `crucible-v0.2.1/` directory (not from inside `bin/`). The
+> started in**. Start it from the `crucible-v0.3.0/` directory (not from inside `bin/`). The
 > launcher does this for you.
 
 ### What each piece is
@@ -69,20 +68,21 @@ public catalog — it sends no unit of yours.
 
 ## Start it
 
-Point your model line in `config/rail.conf` at a model you run on `127.0.0.1` (for example ollama
-with `qwen3-coder:30b`), then connect your MCP host to the launcher — it starts the prover rail, the
+The shipped `config/rail.conf` points the model rail at `qwen3-coder:30b` on ollama at
+`127.0.0.1:11434`. Pull it (`ollama pull qwen3-coder:30b`), or point the model line at any other model
+you run on `127.0.0.1`. Then connect your MCP host to the launcher — it starts the prover rail, the
 vacuity rail, and the reef relay (which reaches the tower), serves the door on stdio, and stops the
 rails when the door exits:
 
 ```sh
-claude mcp add crucible -- /absolute/path/to/crucible-v0.2.1/crucible-launch.sh
+claude mcp add crucible -- /absolute/path/to/crucible-v0.3.0/crucible-launch.sh
 ```
 
 That is the whole start. You do not start the rails by hand and you do not need a `cd` wrapper —
 the launcher cds into the install directory for you. A quick self-check:
 
 ```sh
-/absolute/path/to/crucible-v0.2.1/crucible-launch.sh --check
+/absolute/path/to/crucible-v0.3.0/crucible-launch.sh --check
 #   prover  8471 up
 #   vacuity 8472 up
 #   reef    8473 up
@@ -108,7 +108,7 @@ refused honestly until the tower publishes a signing key.)
 ### Confirm the connect
 
 The door records the outcome of that exchange — one row per attempt — in `state/tower-fetch.jsonl`,
-relative to your `crucible-v0.2.1/` directory. Run any `forge`, then read the newest row:
+relative to your `crucible-v0.3.0/` directory. Run any `forge`, then read the newest row:
 
 ```sh
 tail -n1 state/tower-fetch.jsonl
@@ -153,7 +153,7 @@ Run the version guard first — it fails the build if the source version, `alire
 intend disagree (the regression that once shipped a binary reporting the wrong version):
 
 ```sh
-scripts/check-version.sh v0.2.1     # prints OK; STOP on a mismatch
+scripts/check-version.sh v0.3.0     # prints OK; STOP on a mismatch
 ```
 
 Run every build command through the pinned toolchain, so that no other `gprbuild`/`gnat` on your
@@ -161,7 +161,7 @@ Run every build command through the pinned toolchain, so that no other `gprbuild
 
 ```sh
 TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
-mkdir -p obj/harness bin
+mkdir -p obj/harness obj/battery-verdict bin                     # gnatmake -D needs its object dir to exist
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
 bin/stamp_build_main || exit 1                                     # records the commit you are building; STOP if it refuses
