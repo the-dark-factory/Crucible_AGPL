@@ -4,10 +4,13 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 78ec7ae75dde63bb0a02c6a4a4d5ed0e03eeee6764685249149ba6927572a759
+--  Unstamped source sha256: ebe456c117b08dab949a9d44f2bed352d9e1ffa676d4c7d4d9f5699a4afeea8e
 --
 --  Decompose_Activity_Pkg body -- template (seat-written plumbing) with TWO slots (model_result, design_result), filled
 --  by a Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 3, Decompose).
+--  Lineage 3 (2026-09-28, Tony A11: refusals name the real fault): the earlier slots are frozen; ONE slot, model-reason:
+--  the four-parameter Model_Rail_Call_Pkg.Complete hands back a refusal the rail names (prompt_exceeds_context, with
+--  the estimated tokens and the budget), and the Reason carries it instead of the bare outcome word.
 with Ada.Characters.Handling;
 with Model_Reply_Pkg;
 with Model_Rail_Call_Pkg;
@@ -36,15 +39,17 @@ package body Decompose_Activity_Pkg with SPARK_Mode => Off is
       Text     : Model_Rail_Call_Pkg.Text_Access;
       O        : Model_Reply_Pkg.Outcome_Kind;
       Accepted : Boolean := False;
+      Why      : Unbounded_String;   --  lineage 3: a refusal the model rail names (prompt_exceeds_context)
    begin
       Design := Null_Unbounded_String;
-      Model_Rail_Call_Pkg.Complete (Design_Instruction & Brief, Text, O);
+      --  SLOT BEGIN (model-reason)
+      Model_Rail_Call_Pkg.Complete (Design_Instruction & Brief, Text, O, Why);
 
       if not Model_Reply_Pkg.Is_Text (O) then
-         Reason := To_Unbounded_String ("model: " & Lower (Model_Reply_Pkg.Outcome_Kind'Image (O)));
-         --  SLOT BEGIN (model_result)
+         Reason := To_Unbounded_String
+           ("model: " & (if Length (Why) > 0 then To_String (Why) else Lower (Model_Reply_Pkg.Outcome_Kind'Image (O))));
+      --  SLOT END (model-reason)
          Result := Stage_Outcome_Map_Pkg.From_Model (O);
-         --  SLOT END (model_result)
          return;
       end if;
 
@@ -139,9 +144,7 @@ package body Decompose_Activity_Pkg with SPARK_Mode => Off is
          end if;
       end;
 
-      --  SLOT BEGIN (design_result)
       Result := Stage_Outcome_Map_Pkg.From_Verdict (Accepted);
-      --  SLOT END (design_result)
    exception
       when others =>
          Reason := To_Unbounded_String ("decompose: unreadable");

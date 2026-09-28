@@ -4,12 +4,13 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 874f2de6441d24cd74d41ede280638088f8ebad5a67a14d672d6ee6de35a4d71
+--  Unstamped source sha256: 25675b1d6e2f6e1b2c58219973851e65ab9c910d941c298fc1675c03c60d2824
 --
 --  Body_Fill_Activity_Pkg body — the template: plumbing fixed by the seat; the FOUR slots are the planner's.
---  SLOT BEGIN (context)
+--  Lineage 4 (2026-09-28, Tony A11: refusals name the real fault): the earlier slots are frozen; ONE slot, model-reason:
+--  the four-parameter Model_Rail_Call_Pkg.Complete hands back a refusal the rail names (prompt_exceeds_context, with
+--  the estimated tokens and the budget), and the Reason carries it instead of the bare outcome word.
 with Ada.Unchecked_Deallocation;
---  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Characters.Handling;
 with Model_Rail_Call_Pkg;
@@ -71,7 +72,6 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
    --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
    --  refusal on the record names WHICH check failed. Encoded by the proven Json_String_Pkg; when the text
    --  is not encodable the row says so and carries no text -- never a stand-in string.
-   --  SLOT BEGIN (diag-field)
    function Diag_Field (D : String) return String is
       type Buf_Access is access String;
       procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
@@ -93,7 +93,6 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
          Free (Enc);
          raise;
    end Diag_Field;
-   --  SLOT END (diag-field)
 
    procedure Write_Body (Text : String) is
       F : Ada.Text_IO.File_Type;
@@ -240,11 +239,16 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
             Text : Model_Rail_Call_Pkg.Text_Access;
             MO   : Model_Reply_Pkg.Outcome_Kind;
             R    : Round_Budget_Pkg.Round_Result := Round_Budget_Pkg.Result_No_Unit;
+            Why  : Unbounded_String;   --  lineage 4: a refusal the model rail names (prompt_exceeds_context)
          begin
-            Model_Rail_Call_Pkg.Complete (Prompt, Text, MO);
+            --  SLOT BEGIN (model-reason)
+            Model_Rail_Call_Pkg.Complete (Prompt, Text, MO, Why);
             if not Model_Reply_Pkg.Is_Text (MO) then
                Result := Stage_Outcome_Map_Pkg.From_Model (MO);
-               Reason := To_Unbounded_String ("fill_body: model: " & Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO)));
+               Reason := To_Unbounded_String
+                 ("fill_body: model: " &
+                  (if Length (Why) > 0 then To_String (Why) else Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO))));
+            --  SLOT END (model-reason)
                Log_Round ("{""stage"":""fill_body"",""round"":""" & Letter & """,""word"":""unmeasured"",""model"":""" &
                           Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO)) & """}");
                return;

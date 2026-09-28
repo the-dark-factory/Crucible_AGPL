@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 2bfa954fe09078f383d3cac0f298826ba5f4852fd962b60b173a2a07306f2053
+--  Unstamped source sha256: 2ab09b4d9cf29790ea09b404d9d2867b499a4c22110ee2180aa22e75db20681c
 --
 --  Model_Rail_Call_Pkg -- CRUCIBLE's path to a language model over the MODEL RAIL (step 5 unit 5).
 --  Purpose: gather the facts for one completion request and its reply, and let the proven deciders judge them.
@@ -18,6 +18,7 @@
 --  Usage:
 --     Model_Rail_Call_Pkg.Complete (Prompt => P, Text => T, Outcome => O);
 --     Model_Reply_Pkg.Is_Text (O) is the ONLY case in which T.all is the model's text; otherwise T is null.
+with Ada.Strings.Unbounded;
 with Model_Reply_Pkg;
 
 package Model_Rail_Call_Pkg with SPARK_Mode => Off is
@@ -30,5 +31,15 @@ package Model_Rail_Call_Pkg with SPARK_Mode => Off is
      (Prompt  : String;
       Text    : out Text_Access;
       Outcome : out Model_Reply_Pkg.Outcome_Kind);
+
+   --  Lineage 6 (2026-09-28, Tony: refusals name the real fault, A11): the same call, and Refusal names why a request was
+   --  refused BEFORE it was sent when the operator can fix it -- today only
+   --  "prompt_exceeds_context (estimated E tokens > budget B = num_ctx N - max_tokens M)". Otherwise Refusal is empty.
+   --  The three-parameter Complete is this call with the Refusal dropped.
+   procedure Complete
+     (Prompt  : String;
+      Text    : out Text_Access;
+      Outcome : out Model_Reply_Pkg.Outcome_Kind;
+      Refusal : out Ada.Strings.Unbounded.Unbounded_String);
 
 end Model_Rail_Call_Pkg;

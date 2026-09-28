@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: ab0e2e13b7b277fc479bcd68106bee84206d3237e87e02fcacef1ba3651d7c90
+--  Unstamped source sha256: cfb33617e6ece2824141d5c4458ff0a0c6bce65e0bde37e41d0a521d12226561
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
@@ -14,8 +14,11 @@
 --  Lineage 5 (2026-09-28, Tony 17:07: refuse a prompt too long for the configured context, by name): req-body frozen;
 --  sent_fact reopened: an Ollama prompt that Model_Rail_Fields_Pkg.Prompt_Fits_Context refuses is never sent, and the
 --  refusal prompt_exceeds_context is said with the estimated tokens, num_ctx and max_tokens.
+--  Lineage 6 (2026-09-28, Tony: refusals name the real fault, A11): sent_fact reopened; the same refusal is also handed
+--  back to the caller in Refusal, so the forge reply names it. The three-parameter Complete calls this one.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
+with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
 with Json_String_Pkg;
 with Rail_Config_Pkg;
@@ -70,10 +73,17 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
       return S (S'First + 1 .. S'Last);
    end Img;
 
+   function Int_Img (N : Integer) return String is
+      S : constant String := Integer'Image (N);
+   begin
+      return (if N < 0 then S else S (S'First + 1 .. S'Last));
+   end Int_Img;
+
    procedure Complete
      (Prompt  : String;
       Text    : out Text_Access;
-      Outcome : out Model_Reply_Pkg.Outcome_Kind)
+      Outcome : out Model_Reply_Pkg.Outcome_Kind;
+      Refusal : out Ada.Strings.Unbounded.Unbounded_String)
    is
       F        : Model_Reply_Pkg.Facts_Type;
       Conf_Buf : String (1 .. Max_Conf_Line);
@@ -84,6 +94,7 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
       Conf_Err : Boolean := False;   --  the file could not be read to its end: a partial tally is never trusted
    begin
       Text := null;
+      Refusal := Ada.Strings.Unbounded.Null_Unbounded_String;
 
       declare
          File : Ada.Text_IO.File_Type;
@@ -174,6 +185,11 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                  """,""num_ctx"":""" & Img (Model_Rail_Fields_Pkg.Num_Ctx_Of (Conf)) &
                  """,""max_tokens"":""" & Img (Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)) &
                  """,""bytes_per_token"":""" & Img (Model_Rail_Fields_Pkg.Chars_Per_Token) & """}");
+            Refusal := Ada.Strings.Unbounded.To_Unbounded_String
+              ("prompt_exceeds_context (estimated " & Img (Model_Rail_Fields_Pkg.Estimated_Tokens (P1'Length)) &
+               " tokens > budget " & Int_Img (Model_Rail_Fields_Pkg.Context_Budget (Conf)) &
+               " = num_ctx " & Img (Model_Rail_Fields_Pkg.Num_Ctx_Of (Conf)) &
+               " - max_tokens " & Img (Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)) & ")");
          end if;
          --  SLOT END (sent_fact)
 
@@ -293,6 +309,16 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          if Model_Reply_Pkg.Is_Text (Outcome) then
             Outcome := Model_Reply_Pkg.Reply_Unreadable;
          end if;
+   end Complete;
+
+   procedure Complete
+     (Prompt  : String;
+      Text    : out Text_Access;
+      Outcome : out Model_Reply_Pkg.Outcome_Kind)
+   is
+      Unused : Ada.Strings.Unbounded.Unbounded_String;
+   begin
+      Complete (Prompt, Text, Outcome, Unused);
    end Complete;
 
 end Model_Rail_Call_Pkg;
