@@ -4,13 +4,17 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: befabb495b077a92140d93bfff98d431b7ce61d56a2f33892b0ef824f9740057
+--  Unstamped source sha256: 4cc4f95e49c78b348418ef6b2fc80496232344507e918e161e06ae63a89657a2
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
 --  Lineage 5 (2026-09-28, Tony A11: refusals name the real fault): the earlier slots are frozen; ONE slot, model-reason:
 --  the four-parameter Model_Rail_Call_Pkg.Complete hands back a refusal the rail names (prompt_exceeds_context, with
 --  the estimated tokens and the budget), and the Reason carries it instead of the bare outcome word.
+--  Lineage 6 (2026-09-28, Tony 18:05 "yes do all three qwen fixes", fix 2): the earlier slots are frozen; FOUR slots:
+--  focus-fn + focus-call (the first compiler error and the source line it names head the repair section) and
+--  prev-letter + progress-check (a round repeating the previous unit byte for byte stops the stage: no_progress,
+--  decided by the admitted Round_Progress_Pkg).
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Characters.Handling;
@@ -28,6 +32,7 @@ with Round_Budget_Pkg;
 with Contract_Emission_Pkg;
 with Stage_Outcome_Map_Pkg;
 with Json_String_Pkg;
+with Round_Progress_Pkg;
 
 package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
 
@@ -206,6 +211,91 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
          raise;
    end Diag_Field;
 
+   --  SLOT BEGIN (focus-fn)
+   --  Lineage 6 (Tony 2026-09-28 18:05, fix 2): the compiler's FIRST error line and the unit's source line it names,
+   --  quoted at the top of the repair section. A measurement, deciding nothing: the first line of Diag holding
+   --  ": error:", the decimal number between that line's first and second colon, and the line of Unit with that
+   --  number. Empty when Diag holds no error line.
+   function First_Error_Focus (Diag : String; Unit : String) return String is
+      Marker  : constant String := ": error:";
+      E_First : Natural := 0;
+      E_Last  : Natural := 0;
+      Line_No : Natural := 0;
+      S_First : Natural := 0;
+      S_Last  : Natural := 0;
+      Seen    : Natural := 0;
+      LS      : Positive := Diag'First;
+   begin
+      for P in Diag'Range loop
+         if Diag (P) = LF or else P = Diag'Last then
+            declare
+               E : constant Natural := (if Diag (P) = LF then P - 1 else P);
+            begin
+               if E >= LS and then E - LS + 1 >= Marker'Length then
+                  for K in LS .. E - Marker'Length + 1 loop
+                     if Diag (K .. K + Marker'Length - 1) = Marker then
+                        E_First := LS;
+                        E_Last  := E;
+                        exit;
+                     end if;
+                  end loop;
+               end if;
+            end;
+            exit when E_First > 0;
+            if P < Diag'Last then
+               LS := P + 1;
+            end if;
+         end if;
+      end loop;
+      if E_First = 0 then
+         return "";
+      end if;
+      declare
+         C1 : Natural := 0;
+         C2 : Natural := 0;
+      begin
+         for K in E_First .. E_Last loop
+            if Diag (K) = ':' then
+               if C1 = 0 then
+                  C1 := K;
+               elsif C2 = 0 then
+                  C2 := K;
+               end if;
+            end if;
+         end loop;
+         if C1 > 0 and then C2 > C1 + 1 and then C2 - C1 <= 7 then
+            for K in C1 + 1 .. C2 - 1 loop
+               if Diag (K) in '0' .. '9' then
+                  Line_No := Line_No * 10 + (Character'Pos (Diag (K)) - Character'Pos ('0'));
+               else
+                  Line_No := 0;
+                  exit;
+               end if;
+            end loop;
+         end if;
+      end;
+      if Line_No >= 1 and then Unit'Length > 0 then
+         Seen := 1;
+         for P in Unit'Range loop
+            if Seen = Line_No and then S_First = 0 then
+               S_First := P;
+            end if;
+            if Unit (P) = LF then
+               if Seen = Line_No then
+                  S_Last := P - 1;
+                  exit;
+               end if;
+               Seen := Seen + 1;
+            elsif P = Unit'Last and then Seen = Line_No then
+               S_Last := P;
+            end if;
+         end loop;
+      end if;
+      return "FIRST ERROR (fix this one first): " & Diag (E_First .. E_Last) & LF &
+        (if S_First > 0 and then S_Last >= S_First then "  the line it names: " & Unit (S_First .. S_Last) & LF else "") & LF;
+   end First_Error_Focus;
+   --  SLOT END (focus-fn)
+
    procedure Run
      (Sheet     : String;
       Design    : String;
@@ -223,6 +313,10 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       S         : Round_Budget_Pkg.Budget_State := Round_Budget_Pkg.Fresh;
       Prev_Unit : Unbounded_String;
       Prev_Diag : Unbounded_String;
+      --  SLOT BEGIN (prev-letter)
+      --  Lineage 6: the round letter of the unit held in Prev_Unit (the round a repeat names).
+      Prev_Letter : Character := 'A';
+      --  SLOT END (prev-letter)
       Last_Word : Unbounded_String := To_Unbounded_String ("none");
       Last_Hint : Unbounded_String;   --  Gate_Hint & Substance_Hint of the previous refused round
       Last_Subst : Unbounded_String;  --  the substance faults of the last round whose route passed but may_emit did not
@@ -250,6 +344,9 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                  LF & "REPAIR MODE. The previous round emitted the unit shown at the end, and the compiler/prover reported" & LF &
                  "the lines below. Start FROM that unit; do NOT write a new one from scratch. Change ONLY what those lines" & LF &
                  "or the sheet name; re-emit the whole unit." & LF & LF &
+                 --  SLOT BEGIN (focus-call)
+                 First_Error_Focus (To_String (Prev_Diag), To_String (Prev_Unit)) &
+                 --  SLOT END (focus-call)
                  "WHY IT WAS REFUSED (" & To_String (Last_Word) & "):" & LF & To_String (Last_Hint) & LF &
                  "THE PROVER'S LINES:" & LF &
                  To_String (Prev_Diag) & LF & "THE UNIT THE PREVIOUS ROUND EMITTED:" & LF & To_String (Prev_Unit) & LF
@@ -263,14 +360,12 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
             R    : Round_Budget_Pkg.Round_Result := Round_Budget_Pkg.Result_No_Unit;
             Why  : Unbounded_String;   --  lineage 5: a refusal the model rail names (prompt_exceeds_context)
          begin
-            --  SLOT BEGIN (model-reason)
             Model_Rail_Call_Pkg.Complete (Prompt, Text, MO, Why);
             if not Model_Reply_Pkg.Is_Text (MO) then
                Result := Stage_Outcome_Map_Pkg.From_Model (MO);
                Reason := To_Unbounded_String
                  ("emit_contract: model: " &
                   (if Length (Why) > 0 then To_String (Why) else Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO))));
-            --  SLOT END (model-reason)
                Log_Round ("{""stage"":""emit_contract"",""round"":""" & Letter & """,""word"":""unmeasured"",""model"":""" &
                           Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO)) & """}");
                return;
@@ -463,6 +558,23 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                                                  V.fault_vocabulary_open, V.fault_over_bound, not EF.preconditions_stated)
                                else ""));
                         end;
+                        --  SLOT BEGIN (progress-check)
+                        --  Lineage 6 (Tony 2026-09-28 18:05, fix 2): a round whose unit is byte-identical to the previous
+                        --  round's made no progress: the model ignored the compiler's lines, and every further round on the
+                        --  same prompt is wasted. The admitted Round_Progress_Pkg decides; the stage stops, refused by name.
+                        if Unit'Length <= Round_Progress_Pkg.Max_Unit
+                          and then Length (Prev_Unit) <= Round_Progress_Pkg.Max_Unit
+                          and then Round_Progress_Pkg.Repeated (To_String (Prev_Unit), Unit)
+                        then
+                           Log_Round ("{""stage"":""emit_contract"",""round"":""" & Letter &
+                                      """,""word"":""no_progress"",""repeated"":""" & Prev_Letter & """}");
+                           Result := Pipeline_Stage_Pkg.Refused_Here;
+                           Reason := To_Unbounded_String
+                             ("emit_contract: no_progress (round " & Letter & " repeated round " & Prev_Letter & ")");
+                           return;
+                        end if;
+                        Prev_Letter := Letter;
+                        --  SLOT END (progress-check)
                         Prev_Unit := To_Unbounded_String (Unit);
                         if Length (Prev_Unit) > Max_Repair_Chars then
                            Prev_Unit := Head (Prev_Unit, Max_Repair_Chars);

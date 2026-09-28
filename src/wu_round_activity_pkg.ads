@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: a8b9a2b73731edf092e9b50c78f71ad73c7982bcb629dda3b6e190aeae219e92
+--  Unstamped source sha256: c565363d3ff0b0d73dce286a37dbff40cef57704f9ec4cda20fdddc2b95f4770
 --
 --  Wu_Round_Activity_Pkg -- the Emit_Contract stage of CRUCIBLE's pipeline, in process (step 5a-2f).
 --  Purpose: the Wu SPECIFICATION ROUND inside the executable. Per round: the house form + the sheet + the accepted
@@ -27,6 +27,10 @@ package Wu_Round_Activity_Pkg with SPARK_Mode => Off is
    --  The house form (the seat's prose, as every proven prompt of 2026-09 states it), widened (A11): expression
    --  functions completed in the file; a walking operation declared with contract only and named on a BODY-DEFERRED
    --  comment line placed before the final end, which the round counts as DECLARED deferral.
+   --  Lineage 6 (Tony 2026-09-28 18:05, fix 1): two rules appended, NUMBERS (subtypes, never distinct numeric types)
+   --  and ONE EXPRESSION (one outer pair of parentheses), after an A/B through the released door (cand8, a relay
+   --  inserting exactly this text; 13 sheets): qwen3-coder:30b refused-compile 9 -> 2, emit_contract passed 4 -> 5;
+   --  qwen3.8-27b-ada:v0.3 8/13 -> 8/13. Evidence: crucible-parity/v03-test/emit-diagnosis.md.
    House_Form : constant String :=
      "OUTPUT FORMAT - READ THIS FIRST AND OBEY IT BEFORE ANYTHING ELSE." & LF &
      "Emit ONLY the compilation unit. The very first character of your reply is the 'p' of 'package'" & LF &
@@ -70,7 +74,13 @@ package Wu_Round_Activity_Pkg with SPARK_Mode => Off is
      "WHAT TO WRITE. The specification sheet below states what is delivered, the types, the operation and its" & LF &
      "postcondition in words. The design below (one subsystem per JSON line) says what each leaf discharges. Write" & LF &
      "the types the sheet names, then the helper(s), then the walking operation with the postcondition the sheet" & LF &
-     "states as a SPARK contract, then its BODY-DEFERRED line. End with  end <Name>;  and nothing after it." & LF;
+     "states as a SPARK contract, then its BODY-DEFERRED line. End with  end <Name>;  and nothing after it." & LF & LF &
+     "NUMBERS. Declare every numeric type the sheet names as a SUBTYPE of Integer or Natural (for example" & LF &
+     "subtype Coordinate is Natural range 0 .. 4_096;), never type X is new ... and never type X is range ..., unless" & LF &
+     "the sheet says the type is distinct. Values of different subtypes then compare and index freely; an index" & LF &
+     "into an array is of the array's index subtype." & LF &
+     "ONE EXPRESSION. After is comes ONE pair of parentheses around the WHOLE expression: is ((A) or else (B))," & LF &
+     "never is (A) or else (B)." & LF;
 
    --  When the previous round left a unit but the prover printed no failing line (the gate word is the whole
    --  finding), the repair section carries the lane's own message for that word — 5a-3's deterministic tier, keyed

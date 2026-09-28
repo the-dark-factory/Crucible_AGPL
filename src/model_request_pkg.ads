@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 850e61319ea936ea0e0754c8b8b82d4bd28e69b673b9f0e62bb94c391eca2ba2
+--  Unstamped source sha256: 8c8e48bd0f47716e094a45eaf198e019ec02d24cc373730bea46c46c0daa2136
 --
 with Reply_Text_Pkg;
 package Model_Request_Pkg with SPARK_Mode is
@@ -21,6 +21,7 @@ package Model_Request_Pkg with SPARK_Mode is
    Options_Key         : constant String := Reply_Text_Pkg.Q ("options") & ":";
    Num_Predict_Key     : constant String := Reply_Text_Pkg.Q ("num_predict") & ":";
    Num_Ctx_Key         : constant String := Reply_Text_Pkg.Q ("num_ctx") & ":";
+   Stop_Key            : constant String := Reply_Text_Pkg.Q ("stop") & ":";
    Chat_Template_Key   : constant String := Reply_Text_Pkg.Q ("chat_template_kwargs") & ":";
    Enable_Thinking_Key : constant String := Reply_Text_Pkg.Q ("enable_thinking") & ":";
    User_Role : constant String := Reply_Text_Pkg.Q ("user");
@@ -30,6 +31,12 @@ package Model_Request_Pkg with SPARK_Mode is
    Bracket_Close : constant String := "]";
    Comma : constant String := ",";
    Quote : constant String := """";
+   function Blank_Stop return String is
+     ((1 .. 256 => ' '))
+   with Global => null,
+        Post => Blank_Stop'Result'Length = 256
+                and then Blank_Stop'Result'First = 1
+                and then (for all K in Blank_Stop'Result'Range => Blank_Stop'Result (K) = ' ');
    function Message_Part (Encoded : String) return String is
      (Brace_Open & Role_Key & User_Role & Comma & Content_Key & Quote & Encoded & Quote & Brace_Close)
    with Global => null,
@@ -42,7 +49,8 @@ package Model_Request_Pkg with SPARK_Mode is
       & Bracket_Open & Message_Part (Encoded) & Bracket_Close & Comma
       & Stream_Key & Reply_Text_Pkg.Json_Bool (False) & Comma
       & Think_Key & Reply_Text_Pkg.Json_Bool (False) & Comma
-      & Options_Key & Brace_Open & Num_Ctx_Key & Reply_Text_Pkg.Image_Of (Num_Ctx) & Comma & Num_Predict_Key & Reply_Text_Pkg.Image_Of (Max_Tokens) & Brace_Close)
+      & Options_Key & Brace_Open & Num_Ctx_Key & Reply_Text_Pkg.Image_Of (Num_Ctx) & Comma & Num_Predict_Key & Reply_Text_Pkg.Image_Of (Max_Tokens)
+      & Comma & Stop_Key & Bracket_Open & Quote & Blank_Stop & Quote & Bracket_Close & Brace_Close)
       & Brace_Close)
    with Global => null,
         Pre  => Model'First = 1 and then Model'Length >= 1 and then Model'Length <= Max_Model
@@ -53,7 +61,7 @@ package Model_Request_Pkg with SPARK_Mode is
         Post => Request_Text'Result'Length >= 2
                 and then Request_Text'Result (Request_Text'Result'First) = '{'
                 and then Request_Text'Result (Request_Text'Result'Last) = '}'
-                and then Request_Text'Result'Length <= Encoded'Length + Model'Length + 240;
+                and then Request_Text'Result'Length <= Encoded'Length + Model'Length + 520;
    function Request_Text_Openai (Model : String; Encoded : String; Max_Tokens : Positive) return String is
      (Brace_Open
       & (Model_Key & Reply_Text_Pkg.Q (Model) & Comma & Messages_Key

@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: cfb33617e6ece2824141d5c4458ff0a0c6bce65e0bde37e41d0a521d12226561
+--  Unstamped source sha256: c7ee13651c8934624815d7b8d797182907b87c1bd96b622baf825f2998a23009
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
@@ -16,6 +16,10 @@
 --  refusal prompt_exceeds_context is said with the estimated tokens, num_ctx and max_tokens.
 --  Lineage 6 (2026-09-28, Tony: refusals name the real fault, A11): sent_fact reopened; the same refusal is also handed
 --  back to the caller in Refusal, so the forge reply names it. The three-parameter Complete calls this one.
+--  Lineage 7 (2026-09-28, Tony 18:05 "yes do all three qwen fixes", fix 3): every earlier slot frozen; THREE slots:
+--  runaway-decl, runaway-measure (the longest blank run and longest one-character run over the decoded reply, judged by
+--  the admitted Reply_Runaway_Pkg; a runaway is said and handed back as reply_runaway) and runaway-verdict (a runaway
+--  reply is never text: Reply_Unreadable). The request itself gains the stop sequence in Model_Request_Pkg lineage 6.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -28,6 +32,7 @@ with Model_Request_Pkg;
 with Http_Reply_Pkg;
 with Rail_Socket_Edge;
 with Sovereign_Gate_Pkg;
+with Reply_Runaway_Pkg;
 
 package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
 
@@ -92,6 +97,12 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
       Tally    : Model_Tier_Select_Pkg.Tier_Tally := Model_Tier_Select_Pkg.Empty;   --  v0.3 I-tiers: EVERY valid model line, by tier
       Std_Seen : Boolean := False;   --  the first STANDARD line is held in Conf_Buf; any other line only counts
       Conf_Err : Boolean := False;   --  the file could not be read to its end: a partial tally is never trusted
+      --  SLOT BEGIN (runaway-decl)
+      --  Lineage 7: the two run lengths the edge measures over a decoded reply, and the admitted verdict on them.
+      Blank_Run : Natural := 0;
+      Same_Run  : Natural := 0;
+      Runaway   : Boolean := False;
+      --  SLOT END (runaway-decl)
    begin
       Text := null;
       Refusal := Ada.Strings.Unbounded.Null_Unbounded_String;
@@ -170,7 +181,6 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
             Json_String_Pkg.Encode (P1, Enc.all, Enc_Len, Enc_Ok);
          end if;
 
-         --  SLOT BEGIN (sent_fact)
          F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok
                    and then Enc_Len <= 2 * Model_Request_Pkg.Max_Prompt
                    and then Model_Rail_Fields_Pkg.Prompt_Fits_Context (Conf, P1'Length);
@@ -191,7 +201,6 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                " = num_ctx " & Img (Model_Rail_Fields_Pkg.Num_Ctx_Of (Conf)) &
                " - max_tokens " & Img (Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)) & ")");
          end if;
-         --  SLOT END (sent_fact)
 
          if F.sent then
             declare
@@ -297,10 +306,58 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
             raise;
       end;
 
+      --  SLOT BEGIN (runaway-measure)
+      --  Lineage 7 (Tony 2026-09-28 18:05, fix 3): a reply that ran away (blanks, or one character, on and on) is refused
+      --  by name. The edge MEASURES the longest run of blanks and the longest run of one repeated character over the
+      --  decoded reply, whether or not the model was cut at max_tokens; the admitted Reply_Runaway_Pkg decides.
+      if Text /= null then
+         declare
+            Cur_Blank : Natural := 0;
+            Cur_Same  : Natural := 0;
+            Prev      : Character := ASCII.NUL;
+         begin
+            for C of Text.all loop
+               if Reply_Runaway_Pkg.Is_Blank (C) then
+                  Cur_Blank := Cur_Blank + 1;
+               else
+                  Cur_Blank := 0;
+               end if;
+               if Cur_Same > 0 and then C = Prev then
+                  Cur_Same := Cur_Same + 1;
+               else
+                  Cur_Same := 1;
+               end if;
+               Prev := C;
+               if Cur_Blank > Blank_Run then
+                  Blank_Run := Cur_Blank;
+               end if;
+               if Cur_Same > Same_Run then
+                  Same_Run := Cur_Same;
+               end if;
+            end loop;
+         end;
+         Runaway := Reply_Runaway_Pkg.Is_Runaway (Blank_Run, Same_Run);
+         if Runaway then
+            Say ("{""rail"":""model"",""refused"":""reply_runaway"",""reply_bytes"":""" & Img (Text.all'Length) &
+                 """,""longest_blank_run"":""" & Img (Blank_Run) &
+                 """,""longest_same_run"":""" & Img (Same_Run) & """}");
+            Refusal := Ada.Strings.Unbounded.To_Unbounded_String
+              ("reply_runaway (longest blank run " & Img (Blank_Run) & ", longest run of one character " & Img (Same_Run) &
+               ", reply " & Img (Text.all'Length) & " bytes)");
+         end if;
+      end if;
+      --  SLOT END (runaway-measure)
       Outcome := Model_Reply_Pkg.Decide (F);
       if not Model_Reply_Pkg.Is_Text (Outcome) then
          Text := null;
       end if;
+      --  SLOT BEGIN (runaway-verdict)
+      --  Lineage 7: a runaway reply is never text, whatever the other facts said (a cut at max_tokens included).
+      if Runaway then
+         Text := null;
+         Outcome := Model_Reply_Pkg.Reply_Unreadable;
+      end if;
+      --  SLOT END (runaway-verdict)
    exception
       when others =>
          --  Anything unexpected is never text: the facts gathered so far are judged as they stand.
