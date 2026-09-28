@@ -4,13 +4,11 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: b103c072199044a259cca281af66d6a23dc844edd9fd9ae1e865995bc11b019f
+--  Unstamped source sha256: 6fb8b332351c47d88ec7ecc1e3544dd46dc0ca1aa6b868840ba68e5c42291d59
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
---  SLOT BEGIN (context)
 with Ada.Unchecked_Deallocation;
---  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Characters.Handling;
 with Intake_Line_Pkg;
@@ -49,8 +47,61 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
 
    function Bool (B : Boolean) return String is (if B then "true" else "false");
 
-   --  The package name: the sheet's first "function" line's second word (the admitted Intake_Line_Pkg reads it) & "_Pkg".
-   --  "" when the sheet has no such line: Emit_Contract then refuses with a named reason.
+   --  SLOT BEGIN (name-claim)
+   --  Lineage 4 (Tony 2026-09-28 15:42, "fix the delivers naming slip too"): the sheet's FIRST "delivers:" line names
+   --  the package when its second word ends in "_Pkg" (a package claim). The claimed word must be a valid name: a
+   --  letter first, then letters, digits and underscores (the admitted Intake_Line_Pkg's Is_Letter and Name_Last), no
+   --  two underscores together, at most Unit_Extract_Pkg.Max_Name characters; otherwise Claim_Of answers Invalid_Claim
+   --  and Emit_Contract refuses by name. A delivers: line whose second word is prose makes no claim ("").
+   Invalid_Claim : constant String := "!";
+
+   function Claim_Of (Sheet : String) return String is
+      Start : Positive := Sheet'First;
+   begin
+      for P in Sheet'First .. Sheet'Last + 1 loop
+         if P = Sheet'Last + 1 or else Sheet (P) = LF then
+            if P > Start then
+               declare
+                  L : constant String (1 .. P - Start) := Sheet (Start .. P - 1);
+               begin
+                  if L'Length <= Intake_Line_Pkg.Max_Line
+                    and then Intake_Line_Pkg.Skip_Spaces (L, 1) <= L'Last
+                    and then Intake_Line_Pkg.Says_Deliverable (L)
+                  then
+                     declare
+                        F : constant Positive := Intake_Line_Pkg.Second_Word_First (L);
+                     begin
+                        if F <= L'Last then
+                           declare
+                              W : constant Positive := Intake_Line_Pkg.Word_Last (L, F);
+                           begin
+                              if W - F + 1 > 4 and then Lower (L (W - 3 .. W)) = "_pkg" then
+                                 if Intake_Line_Pkg.Is_Letter (L (F))
+                                   and then Intake_Line_Pkg.Name_Last (L, F) = W
+                                   and then W - F + 1 <= Unit_Extract_Pkg.Max_Name
+                                   and then (for all I in F .. W - 1 => not (L (I) = '_' and then L (I + 1) = '_'))
+                                 then
+                                    return L (F .. W);
+                                 end if;
+                                 return Invalid_Claim;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                     return "";
+                  end if;
+               end;
+            end if;
+            Start := P + 1;
+         end if;
+      end loop;
+      return "";
+   end Claim_Of;
+
+   --  The package name when the sheet makes no delivers: claim: the sheet's first "function" line's second word (the
+   --  admitted Intake_Line_Pkg reads it) & "_Pkg". "" when the sheet has no such line: Emit_Contract then refuses with a
+   --  named reason.
+   --  SLOT END (name-claim)
    function Unit_Name_Of (Sheet : String) return String is
       Start : Positive := Sheet'First;
    begin
@@ -108,7 +159,6 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
          null;
    end Write_Spec;
 
-   --  SLOT BEGIN (json-of)
    function Json_Of (S : String) return String is
       type Buf_Access is access String;
       procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
@@ -129,12 +179,10 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
          Free (Enc);
          raise;
    end Json_Of;
-   --  SLOT END (json-of)
 
    --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
    --  refusal on the record names WHICH check failed. Encoded by the proven Json_String_Pkg; when the text
    --  is not encodable the row says so and carries no text -- never a stand-in string.
-   --  SLOT BEGIN (diag-field)
    function Diag_Field (D : String) return String is
       type Buf_Access is access String;
       procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
@@ -156,7 +204,6 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
          Free (Enc);
          raise;
    end Diag_Field;
-   --  SLOT END (diag-field)
 
    procedure Run
      (Sheet     : String;
@@ -166,7 +213,11 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Result    : out Pipeline_Stage_Pkg.Outcome;
       Reason    : out Unbounded_String)
    is
-      Raw_Name  : constant String := Unit_Name_Of (Sheet);
+      --  SLOT BEGIN (run-name)
+      Claim     : constant String := Claim_Of (Sheet);
+      Raw_Name  : constant String :=
+        (if Claim = Invalid_Claim then "" elsif Claim'Length > 0 then Claim else Unit_Name_Of (Sheet));
+      --  SLOT END (run-name)
       --  First index 1: the proven cores index a Name pattern from 1, and a slice concatenation keeps the slice's
       --  lower bound (found by the 18:53 probe: "unreadable" on every real unit).
       Name      : constant String (1 .. Raw_Name'Length) := Raw_Name;
@@ -175,10 +226,21 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Prev_Diag : Unbounded_String;
       Last_Word : Unbounded_String := To_Unbounded_String ("none");
       Last_Hint : Unbounded_String;   --  Gate_Hint & Substance_Hint of the previous refused round
+      --  SLOT BEGIN (subst-decl)
+      Last_Subst : Unbounded_String;  --  the substance faults of the last round whose route passed but may_emit did not
+      --  SLOT END (subst-decl)
    begin
       Unit_Name := To_Unbounded_String (Name);
       Spec_Text := Null_Unbounded_String;
       Result    := Pipeline_Stage_Pkg.Refused_Here;
+      --  SLOT BEGIN (claim-refuse)
+      if Claim = Invalid_Claim then
+         Reason := To_Unbounded_String
+           ("emit_contract refused: the sheet's delivers: line names an invalid package (a letter first, then letters," &
+            " digits and single underscores, ending _Pkg, at most" & Natural'Image (Unit_Extract_Pkg.Max_Name) & " characters)");
+         return;
+      end if;
+      --  SLOT END (claim-refuse)
       if Name'Length = 0 or else Name'Length > Unit_Extract_Pkg.Max_Name then
          Reason := To_Unbounded_String ("emit_contract refused: the sheet names no function to specify");
          return;
@@ -217,6 +279,10 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
             if Text.all'Length = 0 or else Text.all'Length > Unit_Extract_Pkg.Max_Text then
                Log_Round ("{""stage"":""emit_contract"",""round"":""" & Letter & """,""word"":""no-unit"",""why"":""reply size"",""bytes"":""" &
                           Img (Text.all'Length) & """}");
+               --  SLOT BEGIN (no-unit-size)
+               Last_Word  := To_Unbounded_String ("no-unit");
+               Last_Subst := Null_Unbounded_String;
+               --  SLOT END (no-unit-size)
             else
                declare
                   T : String (1 .. Text.all'Length) := Text.all;
@@ -224,6 +290,10 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                   Unit_Extract_Pkg.Blank_Fences (T);
                   if not Unit_Extract_Pkg.Is_Unit (T, Name) then
                      Log_Round ("{""stage"":""emit_contract"",""round"":""" & Letter & """,""word"":""no-unit"",""why"":""not one unit named " & Name & """}");
+                     --  SLOT BEGIN (no-unit-name)
+                     Last_Word  := To_Unbounded_String ("no-unit");
+                     Last_Subst := Null_Unbounded_String;
+                     --  SLOT END (no-unit-name)
                   else
                      declare
                         First : constant Positive := Unit_Extract_Pkg.First_Content (T, Unit_Extract_Pkg.After_Think (T));
@@ -356,6 +426,29 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                                    """,""fit"":""" & Bool (Fit) & """" &
                                    Diag_Field (To_String (Prev_Diag)) & "}");
                         Last_Word := To_Unbounded_String (Gate_Word_Pkg.Word_Of (GF));
+                        --  SLOT BEGIN (substance)
+                        --  Lineage 4: when the route passed but the substance judge did not, the stage's final reason
+                        --  names the admitted Contract_Emission_Pkg's faults and the measured counts (A9: "last: accepted"
+                        --  said nothing of why).
+                        declare
+                           V : constant Contract_Emission_Pkg.Verdict_Type := Contract_Emission_Pkg.Assemble (EF);
+                        begin
+                           if Route /= Fill_Route_Pkg.Route_Refuse and then not May_Emit then
+                              Last_Subst := To_Unbounded_String
+                                ((if V.fault_no_operations then "no_operations " else "") &
+                                 (if V.fault_missing_postcondition then "missing_postcondition " else "") &
+                                 (if V.fault_undeclared_name then "undeclared_name " else "") &
+                                 (if V.fault_vocabulary_open then "vocabulary_open " else "") &
+                                 (if V.fault_over_bound then "over_bound " else "") &
+                                 (if V.fault_precondition_missing then "precondition_missing " else "") &
+                                 "(operations=" & Img (Natural (Shape.operations)) &
+                                 ", with_post=" & Img (Natural (Shape.operations_with_post)) &
+                                 ", pre=" & Img (Natural (Shape.preconditions)) & ")");
+                           else
+                              Last_Subst := Null_Unbounded_String;
+                           end if;
+                        end;
+                        --  SLOT END (substance)
 
                         if Fit then
                            Spec_Text := To_Unbounded_String (Unit);
@@ -390,7 +483,10 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
 
       Result := Pipeline_Stage_Pkg.Refused_Here;
       Reason := To_Unbounded_String
-        ("emit_contract refused: budget spent after " & Img (Natural (S.rounds_used)) & " rounds; last: " & To_String (Last_Word));
+        --  SLOT BEGIN (final-reason)
+        ("emit_contract refused: budget spent after " & Img (Natural (S.rounds_used)) & " rounds; last: " & To_String (Last_Word) &
+         (if Length (Last_Subst) > 0 then "; substance: " & To_String (Last_Subst) else ""));
+        --  SLOT END (final-reason)
    exception
       when others =>
          Result := Pipeline_Stage_Pkg.Unmeasured_Here;

@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: efb98f891e2544f152dc6562b6cbe5f9ac0616901e3bfd45edd84d197dcd9755
+--  Unstamped source sha256: 550c31721a16970ebe898a64eb90828c9601e64347ea6651bac5691adf64da84
 --
 package Spec_Shape_Pkg with SPARK_Mode is
 
@@ -26,6 +26,8 @@ package Spec_Shape_Pkg with SPARK_Mode is
       open_op : Boolean := False;
       has_post : Boolean := False;
       saturated : Boolean := False;
+      in_header : Boolean := False;
+      after_is : Boolean := False;
    end record;
 
    function Is_Upper (C : Character) return Boolean is
@@ -98,11 +100,40 @@ package Spec_Shape_Pkg with SPARK_Mode is
       (Contains_CI (Line, Pat_Undefined) or else Contains_CI (Line, Pat_Not_Declared)))
      with Pre => Line'First = 1 and then Line'Length <= Max_Line;
 
+   --  Version 3: an expression completion split over two lines. A declaration header line that ENDS
+   --  with the token "is", followed (blank and comment lines between allowed) by a line that BEGINS
+   --  with "(", completes the open operation. The header closes at a line ending in ';', so a later
+   --  "type T is" / "(A, B);" never completes a declaration that already ended.
+
+   function Is_Blank_Line (Line : String) return Boolean is
+     ((for all K in 1 .. Line'Length => Is_Blank (Line (K))))
+     with Pre => Line'First = 1 and then Line'Length <= Max_Line;
+
+   function Ends_With_Semicolon (Line : String) return Boolean is
+     (not Is_Comment_Line (Line) and then
+      (for some P in 1 .. Line'Length =>
+         Line (P) = ';' and then
+         (for all K in P + 1 .. Line'Length => Is_Blank (Line (K)))))
+     with Pre => Line'First = 1 and then Line'Length <= Max_Line;
+
+   function Ends_With_Is (Line : String) return Boolean is
+     (not Is_Comment_Line (Line) and then
+      (for some P in 1 .. Line'Length - 1 =>
+         Token_At (Line, P, "is") and then
+         (for all K in P + 2 .. Line'Length => Is_Blank (Line (K)))))
+     with Pre => Line'First = 1 and then Line'Length <= Max_Line;
+
+   function Starts_With_Paren (Line : String) return Boolean is
+     ((for some P in 1 .. Line'Length =>
+         (for all K in 1 .. P - 1 => Is_Blank (Line (K))) and then
+         Line (P) = '('))
+     with Pre => Line'First = 1 and then Line'Length <= Max_Line;
+
    function Close_Open (S : Shape) return Shape is
      ((if S.open_op and then S.has_post and then S.operations_with_post < Max_Count then
-        (operations => S.operations, operations_with_post => S.operations_with_post + 1, preconditions => S.preconditions, open_op => False, has_post => False, saturated => S.saturated)
+        (operations => S.operations, operations_with_post => S.operations_with_post + 1, preconditions => S.preconditions, open_op => False, has_post => False, saturated => S.saturated, in_header => False, after_is => False)
       else
-        (operations => S.operations, operations_with_post => S.operations_with_post, preconditions => S.preconditions, open_op => False, has_post => False, saturated => S.saturated)))
+        (operations => S.operations, operations_with_post => S.operations_with_post, preconditions => S.preconditions, open_op => False, has_post => False, saturated => S.saturated, in_header => False, after_is => False)))
      with Pre => True,
           Post => Close_Open'Result.open_op = False and
                   Close_Open'Result.has_post = False and
@@ -110,18 +141,20 @@ package Spec_Shape_Pkg with SPARK_Mode is
                   (if S.open_op and then S.has_post and then S.operations_with_post < Max_Count
                    then Close_Open'Result.operations_with_post = S.operations_with_post + 1) and
                   (if not S.open_op or else not S.has_post then Close_Open'Result.operations_with_post = S.operations_with_post) and
-                  Close_Open'Result.preconditions = S.preconditions;
+                  Close_Open'Result.preconditions = S.preconditions and
+                  Close_Open'Result.in_header = False and
+                  Close_Open'Result.after_is = False;
 
    function Add (S : Shape; Line : String) return Shape is
      ((if Is_Declaration (Line) then
         (if S.operations < Max_Count then
-           (operations => S.operations + 1, operations_with_post => Close_Open (S).operations_with_post, preconditions => (if Has_Pre (Line) and then S.preconditions < Max_Count then S.preconditions + 1 else S.preconditions), open_op => True, has_post => Is_Contract (Line), saturated => S.saturated)
+           (operations => S.operations + 1, operations_with_post => Close_Open (S).operations_with_post, preconditions => (if Has_Pre (Line) and then S.preconditions < Max_Count then S.preconditions + 1 else S.preconditions), open_op => True, has_post => Is_Contract (Line), saturated => S.saturated, in_header => not Ends_With_Semicolon (Line), after_is => Ends_With_Is (Line))
          else
-           (operations => S.operations, operations_with_post => Close_Open (S).operations_with_post, preconditions => (if Has_Pre (Line) and then S.preconditions < Max_Count then S.preconditions + 1 else S.preconditions), open_op => True, has_post => Is_Contract (Line), saturated => True))
-      elsif Is_Contract (Line) or else Has_Pre (Line) then
-        (operations => S.operations, operations_with_post => S.operations_with_post, preconditions => (if Has_Pre (Line) and then S.preconditions < Max_Count then S.preconditions + 1 else S.preconditions), open_op => S.open_op, has_post => (if Is_Contract (Line) and then S.open_op then True else S.has_post), saturated => S.saturated)
+           (operations => S.operations, operations_with_post => Close_Open (S).operations_with_post, preconditions => (if Has_Pre (Line) and then S.preconditions < Max_Count then S.preconditions + 1 else S.preconditions), open_op => True, has_post => Is_Contract (Line), saturated => True, in_header => not Ends_With_Semicolon (Line), after_is => Ends_With_Is (Line)))
+      elsif Is_Comment_Line (Line) or else Is_Blank_Line (Line) then
+        S
       else
-        S))
+        (operations => S.operations, operations_with_post => S.operations_with_post, preconditions => (if Has_Pre (Line) and then S.preconditions < Max_Count then S.preconditions + 1 else S.preconditions), open_op => S.open_op, has_post => (S.has_post or else (S.open_op and then (Is_Contract (Line) or else (S.in_header and then S.after_is and then Starts_With_Paren (Line))))), saturated => S.saturated, in_header => (S.in_header and then not Ends_With_Semicolon (Line)), after_is => (S.in_header and then Ends_With_Is (Line)))))
      with Pre => Line'First = 1 and then Line'Length <= Max_Line,
           Post => (if Is_Declaration (Line) and then S.operations < Max_Count then Add'Result.operations = S.operations + 1) and
                   (if not Is_Declaration (Line) then Add'Result.operations = S.operations) and
@@ -132,7 +165,12 @@ package Spec_Shape_Pkg with SPARK_Mode is
                   (if not Is_Declaration (Line) and then Is_Contract (Line) and then S.open_op then Add'Result.has_post) and
                   (if Is_Declaration (Line) and then Is_Contract (Line) then Add'Result.has_post) and
                   Add'Result.operations >= S.operations and
-                  Add'Result.operations_with_post >= S.operations_with_post;
+                  Add'Result.operations_with_post >= S.operations_with_post and
+                  (if not Is_Declaration (Line) and then S.open_op and then S.in_header and then S.after_is and then Starts_With_Paren (Line) then Add'Result.has_post) and
+                  (if Is_Declaration (Line) then Add'Result.in_header = not Ends_With_Semicolon (Line) and then Add'Result.after_is = Ends_With_Is (Line)) and
+                  (if Ends_With_Semicolon (Line) then not Add'Result.in_header) and
+                  (if not Is_Declaration (Line) and then not S.in_header then not Add'Result.in_header) and
+                  (if not Is_Declaration (Line) and then not S.in_header then Add'Result.has_post = (S.has_post or else (S.open_op and then Is_Contract (Line))));
 
    function Finish (S : Shape) return Shape is
      (Close_Open (S))
