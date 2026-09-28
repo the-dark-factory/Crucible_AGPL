@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 1bbbb9310b52a343968fc0d05cffe805cf7ac1aa5ff0877a90be2f47576810b3
+--  Unstamped source sha256: 0ab7e24a7e567a06a2f29a3fbe777c7a440890cc7ebb73ad93c71455a06cf86a
 --
 --  Vacuity_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (request-facts, reply-facts),
 --  filled by a Wu edge round. Sibling of the prover rail client edge (wu-crucible-prover-rail-call), whose
@@ -219,7 +219,9 @@ Request.max_unit_bytes := Max_Unit_Bytes;
                         --  SLOT BEGIN (reply-facts)
 Reply.reply_well_formed := Is_Present (R, "digest") and then Is_Present (R, "battery") and then Is_Present (R, "battery_ran") and then Is_Present (R, "refusal_present") and then Is_Present (R, "refusal") and then Err_Ok and then Rd_Ok and then Gr_Ok and then Def_Ok and then Dec_Ok and then Pr_Ok and then Th_Ok and then Ro_Ok and then Un_Ok and then Rf_Ok;
 Reply.digest_matches := Value_Text (R, "digest") = Digest;
-Reply.battery_identified := Value_Text (R, "battery") = "check-cores-mcp";
+--  Lineage 2 (Tony 2026-09-28, launcher item 3): the release ships the Ada vacuity-battery; its wire keeps the name
+--  check-cores-mcp for byte parity with the Go oracle. Either name identifies the battery; any other name does not.
+Reply.battery_identified := Value_Text (R, "battery") = "vacuity-battery" or else Value_Text (R, "battery") = "check-cores-mcp";
 Reply.facts.battery_ran := Value_Text (R, "battery_ran") = "true";
 Reply.facts.refusal_present := Value_Text (R, "refusal_present") = "true";
 Reply.facts.error_count := Err;

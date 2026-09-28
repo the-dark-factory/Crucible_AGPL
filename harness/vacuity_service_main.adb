@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 323c226f3b9933891c5bda9d9cb1f7d14a77609406a781f7119006da3ab7b52a
+--  Unstamped source sha256: 48fd7d3a3542f65cb366a2d7b5c4dbcfd7e38ed9426c97c936befc85c0e8f6af
 --
 --  Vacuity_Service_Main — the VACUITY SERVICE of CRUCIBLE's vacuity rail (step 5a-5b), sibling of the prover service.
 --  HAND-AUTHORED BOUNDARY: socket, file and process I/O. Every judgement is a call into a proven package: the request's
@@ -12,10 +12,14 @@
 --  per-function grades); CRUCIBLE re-judges them through Vacuity_Facts_Pkg. Listens on 127.0.0.1 ONLY. One request
 --  at a time. An invalid request, an over-budget run, or any failure gets NO reply: the client records unmeasured.
 --  Configuration: config/vacuity-service.conf, one JSON line:
---    {"port":"<digits>","staging_root":"<absolute dir>","battery":"<absolute path to check-cores-mcp>",
+--    {"port":"<digits>","staging_root":"<absolute dir>","battery":"<absolute path to vacuity-battery>",
 --     "deps_root":"<absolute dir of carried .ads/.adb, or absent>","timeout_seconds":"<digits>"}
---  The battery is spawned as  check-cores-mcp wire <spec.ads> [<deps_root>]  and prints the wire: one JSON line of
+--  The battery is spawned as  vacuity-battery wire <spec.ads> [<deps_root>]  and prints the wire: one JSON line of
 --  string-valued facts, then grade_lines raw lines "<name> <grade> <word>". The service prepends the digest and relays.
+--  Lineage 2 (2026-09-28, Tony 20:55 "fix the four launcher items", item 3): the startup line names the battery the
+--  release ships, vacuity-battery (the Ada battery that replaced the Go check-cores-mcp on 2026-09-28). The slot is
+--  unchanged. The wire's own "battery" field is the battery's (it keeps "check-cores-mcp" for byte parity with the
+--  Go oracle), relayed untouched.
 with Ada.Text_IO;
 with Ada.Streams;
 with Ada.Streams.Stream_IO;
@@ -217,7 +221,7 @@ procedure Vacuity_Service_Main is
             return;   --  not the wire: no reply
          end if;
          --  SLOT BEGIN (reply)
-Send_Text (Client, "{""digest"":""" & Digest & """," & First (First'First + 1 .. First'Last) & ASCII.LF);
+   Send_Text (Client, "{""digest"":""" & Digest & """," & First (First'First + 1 .. First'Last) & ASCII.LF);
          --  SLOT END (reply)
          Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Wire_Path);
          Ada.Text_IO.Skip_Line (F);
@@ -279,7 +283,7 @@ begin
       declare
       begin
          declare
-            Version : constant String := "check-cores-mcp";
+            Version : constant String := "vacuity-battery";
          begin
             if not Ada.Directories.Exists (Battery) then
                Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
