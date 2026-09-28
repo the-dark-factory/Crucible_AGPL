@@ -133,9 +133,14 @@ source. It is one tree; both editions build from it.
 
 - **Alire** (`alr`), 2.x: <https://alire.ada.dev>
 - **git**
+- **curl** (Linux): Alire downloads the toolchain with it. If curl is missing, `alr update` tries to install it with
+  `sudo apt-get install curl`; that fails where there is no sudo or no apt (a container, a minimal image). Install curl
+  first, e.g. `apt-get install curl ca-certificates` as root. (Measured 2026-09-28 in a Debian 12 build image.)
 - Optional: **ollama**, for the model rail.
 
 ### 2. Fetch the pinned toolchain
+
+On Linux, install **curl** first (see Prerequisites): `alr update` downloads the toolchain with it.
 
 ```sh
 cd toolchain

@@ -94,11 +94,34 @@ port_up() {
 # install directory is written; a config already present (e.g. from an installer) is left untouched.
 STATE="$ROOT/state"
 
-# find_gnatprove -> absolute path to a gnatprove on this box, or empty.
+# find_gnatprove -> absolute path to a gnatprove that RUNS on this box, or empty.
+# 2026-09-28 (Tony: "fix the four launcher items"): the first gnatprove FOUND is not good enough -- a shared home can
+# hold a toolchain built for another machine (gertrude held a Mach-O gnatprove beside its x86-64 one), and the prover
+# rail then refuses to serve. Each candidate, in order (EVERY gnatprove on PATH, in PATH order, then Alire's releases,
+# then ~/.alire), must answer `gnatprove --version`; the first that does is chosen and named on stderr, and every
+# skipped one is named too.
 find_gnatprove() {
-  if command -v gnatprove >/dev/null 2>&1; then command -v gnatprove; return; fi
+  old_ifs="$IFS"; IFS=:; set -f
+  on_path=""
+  for d in $PATH; do [ -n "$d" ] && [ -x "$d/gnatprove" ] && on_path="$on_path$d/gnatprove:"; done
+  set +f
+  for g in $on_path; do
+    IFS="$old_ifs"
+    [ -n "$g" ] || continue
+    if v="$("$g" --version 2>/dev/null | head -n 1)" && [ -n "$v" ]; then
+      echo "prover: gnatprove chosen: $g ($v)" >&2
+      echo "$g"; return
+    fi
+    echo "prover: gnatprove skipped (does not run on this machine): $g" >&2
+  done
+  IFS="$old_ifs"
   for g in "$HOME"/.local/share/alire/releases/gnatprove_*/bin/gnatprove "$HOME"/.alire/bin/gnatprove; do
-    [ -x "$g" ] && { echo "$g"; return; }
+    [ -x "$g" ] || continue
+    if v="$("$g" --version 2>/dev/null | head -n 1)" && [ -n "$v" ]; then
+      echo "prover: gnatprove chosen: $g ($v)" >&2
+      echo "$g"; return
+    fi
+    echo "prover: gnatprove skipped (does not run on this machine): $g" >&2
   done
   echo ""
 }
@@ -187,6 +210,39 @@ start_rail() {
 start_rail prover  prover_service_main
 start_rail vacuity vacuity_service_main
 start_rail reef    reef_relay_main
+
+# ---- wait until every rail THIS launcher started is listening (2026-09-28, Tony: "fix the four launcher items") ----
+# The door used to be served at once, and a tool call in the first second found its rail not yet listening
+# (prove_unit -> prover_unreachable on Linux, reproduced twice). Each started rail must accept connections within
+# RAIL_WAIT_SECONDS (default 30); a rail whose process exits, or that is not listening in time, is named and the
+# launcher REFUSES to serve (exit 1; the trap stops the rails it started). A rail that was already up, or that is not
+# declared or not shipped, is not waited for. Where no port probe exists at all, a still-running process is accepted
+# and said so.
+RAIL_WAIT_SECONDS="${RAIL_WAIT_SECONDS:-30}"
+for e in $RAIL_PIDS; do
+  name="${e%%=*}"; pid="${e#*=}"; port="$(rail_port "$name")"
+  waited=0
+  while :; do
+    port_up "$port"; st=$?
+    if [ "$st" = 0 ]; then
+      echo "$name rail listening on $port" >&2
+      break
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "rail $name did not come up: its process (pid $pid) exited before listening on $port; refusing to serve the door" >&2
+      exit 1
+    fi
+    if [ "$st" = 2 ]; then
+      echo "$name rail started (pid $pid); this machine cannot probe port $port, so it is not waited for" >&2
+      break
+    fi
+    if [ "$waited" -ge "$RAIL_WAIT_SECONDS" ]; then
+      echo "rail $name did not come up: nothing listening on $port after ${RAIL_WAIT_SECONDS}s; refusing to serve the door" >&2
+      exit 1
+    fi
+    sleep 1; waited=$((waited + 1))
+  done
+done
 
 # The model rail is the user's own -- Crucible ships no model -- so it is never started here.
 mp="$(rail_port model)"; [ -n "$mp" ] || mp="$(rail_port ollama)"
