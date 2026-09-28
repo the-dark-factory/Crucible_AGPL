@@ -17,6 +17,8 @@ TLS to the tower. From a release tarball you already have the binaries:
   ```
   Crucible ships no model and needs none of ours — any ollama- or OpenAI-shaped endpoint on
   localhost works; change the `model` line to use another.
+  The door asks ollama for a 32,768-token context by default (`"num_ctx":"32768"` on the model line;
+  any value from 2048 to 262144), so you do not need to set `OLLAMA_CONTEXT_LENGTH`.
 - `nc` (netcat) is optional; the launcher uses it to notice a rail that is already up.
 
 The launcher starts the prover rail, the vacuity rail, and the reef relay for you, and stops them

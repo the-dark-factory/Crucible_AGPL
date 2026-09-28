@@ -4,13 +4,14 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f71a3a0988b185e51c17f43ba0ae49947c213c2724d70819d3d4c66a5978d2f9
+--  Unstamped source sha256: d489d033c27022cc2ed75bb5049ab2a5902297adb6d471f105a6a045e1586cd7
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
---  SLOT BEGIN (context)
+--  Lineage 4 (2026-09-28, Tony: "make the door send num_ctx"): the eight lineage-3 slots are frozen as fixed text.
+--  ONE slot, req-body: the Ollama request carries the model line's context size (Model_Rail_Fields_Pkg.Num_Ctx_Of,
+--  32768 when the line names none), so Ollama never loads a model at its full native context. OpenAI: unchanged.
 with Ada.Unchecked_Deallocation;
---  SLOT END (context)
 with Ada.Text_IO;
 with Json_Scan_Pkg;
 with Json_String_Pkg;
@@ -146,10 +147,8 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                     /= Sovereign_Gate_Pkg.Refused_Sovereign_Off_Estate;
          Prompt_Ok  : constant Boolean := Prompt'Length <= Model_Request_Pkg.Max_Prompt;
          P1         : constant String (1 .. Prompt'Length) := Prompt;
-         --  SLOT BEGIN (encode-buffer)
          procedure Free is new Ada.Unchecked_Deallocation (String, Text_Access);
          Enc        : Text_Access := new String (1 .. Natural'Max (1, 6 * P1'Length));
-         --  SLOT END (encode-buffer)
          Enc_Len    : Natural := 0;
          Enc_Ok     : Boolean := False;
       begin
@@ -157,14 +156,12 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
             Json_String_Pkg.Encode (P1, Enc.all, Enc_Len, Enc_Ok);
          end if;
 
-         --  SLOT BEGIN (sent_fact)
          F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok
                    and then Enc_Len <= 2 * Model_Request_Pkg.Max_Prompt;
          if Enc_Ok and then Enc_Len > 2 * Model_Request_Pkg.Max_Prompt then
             Say ("{""rail"":""model"",""refused"":""not sent: encoded prompt too long"",""encoded_length"":""" &
                  Img (Enc_Len) & """,""bound"":""" & Img (2 * Model_Request_Pkg.Max_Prompt) & """}");
          end if;
-         --  SLOT END (sent_fact)
 
          if F.sent then
             declare
@@ -174,10 +171,14 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                Encoded   : constant String (1 .. Enc_Len) := Enc (1 .. Enc_Len);
                Is_Ollama : constant Boolean :=
                  Model_Rail_Fields_Pkg.Protocol_Of (Conf) = Model_Rail_Fields_Pkg.Protocol_Ollama;
+               --  SLOT BEGIN (req-body)
                Req_Body  : constant String :=
-                 (if Is_Ollama then Model_Request_Pkg.Request_Text (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf))
+                 (if Is_Ollama then Model_Request_Pkg.Request_Text
+                                      (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf),
+                                       Model_Rail_Fields_Pkg.Num_Ctx_Of (Conf))
                   else Model_Request_Pkg.Request_Text_Openai
                          (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)));
+               --  SLOT END (req-body)
                Path      : constant String := (if Is_Ollama then "/api/chat" else "/v1/chat/completions");
                Request   : constant String :=
                  "POST " & Path & " HTTP/1.0" & CRLF &
@@ -186,9 +187,7 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                  "Content-Length: " & Img (Req_Body'Length) & CRLF &
                  "Connection: close" & CRLF & CRLF & Req_Body;
                Max_Reply : constant Positive := Rail_Config_Pkg.Max_Reply_Of (Conf);
-               --  SLOT BEGIN (reply-buffer)
                Reply_Buf : Text_Access := new String (1 .. Max_Reply);
-               --  SLOT END (reply-buffer)
                Reply_Len : Natural;
                Reached, Timed_Out, Over_Bound, Closed_Clean : Boolean;
                Http_Ok, Content_Ok, Complete_Ok, Truncated_Ok, Decoded_Ok : Boolean := False;
@@ -229,22 +228,18 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                               C := Model_Reply_Pkg.String_Field (Payload, Model_Reply_Pkg.Content_Key);
                               declare
                                  Raw     : constant String (1 .. C.last - C.first + 1) := Payload (C.first .. C.last);
-                                 --  SLOT BEGIN (out-buffer)
                                  Out_Buf : Text_Access := new String (1 .. Raw'Length);
-                                 --  SLOT END (out-buffer)
                                  Out_Len : Natural;
                               begin
                                  Json_String_Pkg.Decode (Raw, Out_Buf.all, Out_Len, Decoded_Ok);
                                  if Decoded_Ok then
                                     Text := new String'(Out_Buf (1 .. Out_Len));
                                  end if;
-                                 --  SLOT BEGIN (release-out)
                                  Free (Out_Buf);
                               exception
                                  when others =>
                                     Free (Out_Buf);
                                     raise;
-                                 --  SLOT END (release-out)
                               end;
                            end if;
                         end;
@@ -260,22 +255,18 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          F.content_present := Content_Ok;
          F.complete := Complete_Ok;
          F.decoded_ok := Decoded_Ok;
-               --  SLOT BEGIN (release-reply)
                Free (Reply_Buf);
             exception
                when others =>
                   Free (Reply_Buf);
                   raise;
-               --  SLOT END (release-reply)
             end;
          end if;
-         --  SLOT BEGIN (release)
          Free (Enc);
       exception
          when others =>
             Free (Enc);
             raise;
-         --  SLOT END (release)
       end;
 
       Outcome := Model_Reply_Pkg.Decide (F);

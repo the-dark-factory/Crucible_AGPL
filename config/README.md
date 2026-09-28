@@ -24,9 +24,11 @@ The door's rail readers (`Model_Rail_Call_Pkg`, `Prover_Rail_Call_Pkg`, `Vacuity
 take the first one that `Rail_Config_Pkg.Is_Valid` accepts for their rail. `rail` must be `model`, `prover` or
 `vacuity`; every value is a JSON STRING, including `sovereign` ("true" / "false") and the numbers; required keys are
 `rail host port timeout_seconds max_reply_bytes sovereign`, and a model line also needs `model protocol max_tokens`
-(`protocol` is `ollama` or `openai`).
+(`protocol` is `ollama` or `openai`). A model line may also carry `num_ctx`, the context size in tokens that the door
+asks ollama to load the model with (`"2048"` to `"262144"`; absent means `"32768"`; any other value makes the line
+invalid, refused as `invalid_model_line`). Only the ollama request carries it; an `openai` request is unchanged.
 
-    {"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3-coder:30b","protocol":"ollama","max_tokens":"8192"}
+    {"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3-coder:30b","protocol":"ollama","max_tokens":"8192","num_ctx":"32768"}
     {"rail":"prover","host":"127.0.0.1","port":"8471","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true"}
 
 **Line 1 is kept for the legacy `harness/expand_brief_main` runner**, which reads ONLY the first line in the older

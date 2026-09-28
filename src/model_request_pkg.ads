@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 6c608e47b01a907f09c35cdb85c7217265f31a40e43278046c2b86a35e83a589
+--  Unstamped source sha256: 850e61319ea936ea0e0754c8b8b82d4bd28e69b673b9f0e62bb94c391eca2ba2
 --
 with Reply_Text_Pkg;
 package Model_Request_Pkg with SPARK_Mode is
@@ -20,6 +20,7 @@ package Model_Request_Pkg with SPARK_Mode is
    Think_Key           : constant String := Reply_Text_Pkg.Q ("think") & ":";
    Options_Key         : constant String := Reply_Text_Pkg.Q ("options") & ":";
    Num_Predict_Key     : constant String := Reply_Text_Pkg.Q ("num_predict") & ":";
+   Num_Ctx_Key         : constant String := Reply_Text_Pkg.Q ("num_ctx") & ":";
    Chat_Template_Key   : constant String := Reply_Text_Pkg.Q ("chat_template_kwargs") & ":";
    Enable_Thinking_Key : constant String := Reply_Text_Pkg.Q ("enable_thinking") & ":";
    User_Role : constant String := Reply_Text_Pkg.Q ("user");
@@ -35,28 +36,31 @@ package Model_Request_Pkg with SPARK_Mode is
         Pre  => Encoded'First = 1 and then Encoded'Length <= 2 * Max_Prompt
                 and then (for all K in Encoded'Range => Encoded (K) in ' ' .. '~'),
         Post => Message_Part'Result'Length <= Encoded'Length + 64;
-   function Request_Text (Model : String; Encoded : String; Max_Tokens : Positive) return String is
-     (Brace_Open & Model_Key & Reply_Text_Pkg.Q (Model) & Comma & Messages_Key
+   function Request_Text (Model : String; Encoded : String; Max_Tokens : Positive; Num_Ctx : Positive) return String is
+     (Brace_Open
+      & (Model_Key & Reply_Text_Pkg.Q (Model) & Comma & Messages_Key
       & Bracket_Open & Message_Part (Encoded) & Bracket_Close & Comma
       & Stream_Key & Reply_Text_Pkg.Json_Bool (False) & Comma
       & Think_Key & Reply_Text_Pkg.Json_Bool (False) & Comma
-      & Options_Key & Brace_Open & Num_Predict_Key & Reply_Text_Pkg.Image_Of (Max_Tokens) & Brace_Close
+      & Options_Key & Brace_Open & Num_Ctx_Key & Reply_Text_Pkg.Image_Of (Num_Ctx) & Comma & Num_Predict_Key & Reply_Text_Pkg.Image_Of (Max_Tokens) & Brace_Close)
       & Brace_Close)
    with Global => null,
         Pre  => Model'First = 1 and then Model'Length >= 1 and then Model'Length <= Max_Model
                 and then Encoded'First = 1 and then Encoded'Length <= 2 * Max_Prompt
                 and then (for all K in Encoded'Range => Encoded (K) in ' ' .. '~')
-                and then Max_Tokens <= 32_768,
+                and then Max_Tokens <= 32_768
+                and then Num_Ctx <= 262_144,
         Post => Request_Text'Result'Length >= 2
                 and then Request_Text'Result (Request_Text'Result'First) = '{'
                 and then Request_Text'Result (Request_Text'Result'Last) = '}'
                 and then Request_Text'Result'Length <= Encoded'Length + Model'Length + 240;
    function Request_Text_Openai (Model : String; Encoded : String; Max_Tokens : Positive) return String is
-     (Brace_Open & Model_Key & Reply_Text_Pkg.Q (Model) & Comma & Messages_Key
+     (Brace_Open
+      & (Model_Key & Reply_Text_Pkg.Q (Model) & Comma & Messages_Key
       & Bracket_Open & Message_Part (Encoded) & Bracket_Close & Comma
       & Max_Tokens_Key & Reply_Text_Pkg.Image_Of (Max_Tokens) & Comma
       & Stream_Key & Reply_Text_Pkg.Json_Bool (False) & Comma
-      & Chat_Template_Key & Brace_Open & Enable_Thinking_Key & Reply_Text_Pkg.Json_Bool (False) & Brace_Close
+      & Chat_Template_Key & Brace_Open & Enable_Thinking_Key & Reply_Text_Pkg.Json_Bool (False) & Brace_Close)
       & Brace_Close)
    with Global => null,
         Pre  => Model'First = 1 and then Model'Length >= 1 and then Model'Length <= Max_Model
