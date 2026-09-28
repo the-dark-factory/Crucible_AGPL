@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 49228e40def141b1efc2147770fcc9b599838672b3c65e1c2b9f14935699c811
+--  Unstamped source sha256: 73820f18ae1ede49dfdb6d58faf2d0ed211f9cc75edce3e3025c88425fb2a5e2
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -33,6 +33,12 @@
 --  unrecorded -- the forge proceeds on the ledger as it stands; only the base check stops it. The word surfaces as ONE
 --  line on standard error (the MCP stdio server's logging channel), never in the reply. Seat-written plumbing, no new
 --  slot; brief BRIEF_door_import_wiring_2026-09-21.
+--  v17 (lineage 17, 2026-09-28; security fix CWE-444, request smuggling): a line longer than the 1 MiB buffer was read
+--  by Get_Line in pieces, and the tail of an over-long line became the next frame (a request hidden behind 1 MiB of
+--  padding was executed). Read_Frame (the ONE new slot) drains an over-long line through its terminator and says so;
+--  the loop then answers it with ONE error reply -- the frame decider's own parse-failure code (-32700), id null,
+--  message "frame_too_long" -- and goes on to the next line. A line of exactly Max_Line_Bytes is a normal frame: GNAT
+--  leaves its terminator unread when the buffer fills, and Read_Frame skips it, so it no longer yields an empty frame.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -81,6 +87,8 @@ procedure Crucible_Main is
    type Buffer_Access is access String;
    Buffer        : constant Buffer_Access := new String (1 .. Max_Line_Bytes);
    Last          : Natural;
+   Too_Long      : Boolean := False;
+   Too_Long_Msg  : constant String := "frame_too_long";
 
    use type Json_Rpc_Frame_Pkg.Reply_Type;
    use type Json_Rpc_Frame_Pkg.Action_Type;
@@ -93,6 +101,25 @@ procedure Crucible_Main is
 
    S      : constant Sheet_Access := new Intake_Measure_Pkg.Sheet;
    Origin : constant Origin_Access := new Origin_Array'(others => 1);
+
+   --  SLOT BEGIN (frame-read)
+   --  One frame from standard input into Buffer (1 .. Last). A line longer than the buffer is drained through its
+   --  terminator and reported as Too_Long, so its tail never becomes a frame. A line of exactly Max_Line_Bytes is a
+   --  normal frame: Get_Line leaves its terminator unread when the buffer fills, so it is skipped here.
+   procedure Read_Frame (Too_Long : out Boolean) is
+   begin
+      Too_Long := False;
+      Ada.Text_IO.Get_Line (Buffer.all, Last);
+      if Last = Buffer'Last then
+         if not Ada.Text_IO.End_Of_Line then
+            Too_Long := True;
+            Ada.Text_IO.Skip_Line;
+         elsif not Ada.Text_IO.End_Of_File then
+            Ada.Text_IO.Skip_Line;
+         end if;
+      end if;
+   end Read_Frame;
+   --  SLOT END (frame-read)
 
    --  A Natural as decimal digits with no leading space.
    function Img (N : Natural) return String is
@@ -417,7 +444,6 @@ procedure Crucible_Main is
       L1       : constant String (1 .. Line'Length) := Line;
       Q        : constant String := """";
 
-      --  SLOT BEGIN (arg-lookup)
       function Arg (Key : String; Given : out Boolean) return String is
          K1 : constant String (1 .. Key'Length) := Key;
          S  : Json_Scan_Pkg.Span_Type;
@@ -447,7 +473,6 @@ procedure Crucible_Main is
          return L1'Length <= 1_048_576 and then K1'Length in 1 .. 64
            and then Frame_Facts_Pkg.Arg_Span (L1, K1).found;   --  params.arguments.<Key>
       end Has;
-      --  SLOT END (arg-lookup)
 
       function Read (Path : String; Lines : out Line_Array; N : out Natural; All_Text : out Unbounded_String)
         return Boolean
@@ -858,46 +883,60 @@ begin
       when others => null;
    end;
    while not Ada.Text_IO.End_Of_File loop
-      Ada.Text_IO.Get_Line (Buffer.all, Last);
-      declare
-         Line  : constant String := Buffer.all (1 .. Last);
-         Facts : constant Json_Rpc_Frame_Pkg.Facts_Type := Frame_Facts_Pkg.Facts_Of (Line);
-         V     : constant Json_Rpc_Frame_Pkg.Verdict_Type := Json_Rpc_Frame_Pkg.Assemble (Facts);
-         Span  : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Id_Span (Line);
-         Id    : constant String (1 .. (if Span.found then Span.last - Span.first + 1 else Null_Id'Length)) :=
-           (if Span.found then Line (Span.first .. Span.last) else Null_Id);
-      begin
-         if V.reply = Json_Rpc_Frame_Pkg.Reply_Error then
-            Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Frame_Msg));
-         elsif V.reply = Json_Rpc_Frame_Pkg.Reply_Result then
-            case V.action is
-               when Json_Rpc_Frame_Pkg.Do_Initialize =>
-                  Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Initialize_Result (Server_Name)));
-               when Json_Rpc_Frame_Pkg.Do_List_Tools =>
-                  Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tools_List_Result));
-               when Json_Rpc_Frame_Pkg.Do_Call_Tool =>
-                  if Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Licence_Gate then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Tool_Run_Pkg.Licence_Gate (Crucible_Edition.Current, Line))));
-                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Intake_Check then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
-                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Prove_Unit then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
-                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Forge then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Forge_Text (Line))));
-                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Palais_Enrol then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
-                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Show then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Show_Text)));
-                  elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Set then
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Set_Text (Line))));
-                  else
-                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
-                  end if;
-               when Json_Rpc_Frame_Pkg.Do_Nothing =>
-                  null;
-            end case;
-         end if;
+      Read_Frame (Too_Long);
+      if Too_Long then
+         Ada.Text_IO.Put_Line
+           (Reply_Text_Pkg.Error_Reply
+              (Null_Id,
+               Json_Rpc_Frame_Pkg.Error_Code
+                 (Json_Rpc_Frame_Pkg.Facts_Type'(parse_failed   => True,
+                                                 jsonrpc_is_2_0 => False,
+                                                 has_id         => False,
+                                                 method         => Json_Rpc_Frame_Pkg.M_Unknown,
+                                                 has_params     => False)),
+               Too_Long_Msg));
          Ada.Text_IO.Flush;
-      end;
+      else
+         declare
+            Line  : constant String := Buffer.all (1 .. Last);
+            Facts : constant Json_Rpc_Frame_Pkg.Facts_Type := Frame_Facts_Pkg.Facts_Of (Line);
+            V     : constant Json_Rpc_Frame_Pkg.Verdict_Type := Json_Rpc_Frame_Pkg.Assemble (Facts);
+            Span  : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Id_Span (Line);
+            Id    : constant String (1 .. (if Span.found then Span.last - Span.first + 1 else Null_Id'Length)) :=
+              (if Span.found then Line (Span.first .. Span.last) else Null_Id);
+         begin
+            if V.reply = Json_Rpc_Frame_Pkg.Reply_Error then
+               Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Frame_Msg));
+            elsif V.reply = Json_Rpc_Frame_Pkg.Reply_Result then
+               case V.action is
+                  when Json_Rpc_Frame_Pkg.Do_Initialize =>
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Initialize_Result (Server_Name)));
+                  when Json_Rpc_Frame_Pkg.Do_List_Tools =>
+                     Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tools_List_Result));
+                  when Json_Rpc_Frame_Pkg.Do_Call_Tool =>
+                     if Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Licence_Gate then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Tool_Run_Pkg.Licence_Gate (Crucible_Edition.Current, Line))));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Intake_Check then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Prove_Unit then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Forge then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Forge_Text (Line))));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Palais_Enrol then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Show then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Show_Text)));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Set then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Rail_Set_Text (Line))));
+                     else
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Bad_Tool_Msg));
+                     end if;
+                  when Json_Rpc_Frame_Pkg.Do_Nothing =>
+                     null;
+               end case;
+            end if;
+            Ada.Text_IO.Flush;
+         end;
+      end if;
    end loop;
 end Crucible_Main;
