@@ -72,7 +72,7 @@ The shipped `config/rail.conf` points the model rail at `qwen3-coder:30b` on oll
 `127.0.0.1:11434`. Pull it (`ollama pull qwen3-coder:30b`), or point the model line at any other model
 you run on `127.0.0.1`. The door asks ollama for a 32,768-token context by default (the model line's `"num_ctx":"32768"`;
 change it to any value from 2048 to 262144, or leave it out for 32768), so you do not need to set
-`OLLAMA_CONTEXT_LENGTH`. Then connect your MCP host to the launcher — it starts the prover rail, the
+`OLLAMA_CONTEXT_LENGTH`. A prompt too long for that context is refused by name (`prompt_exceeds_context`), never cut. Then connect your MCP host to the launcher — it starts the prover rail, the
 vacuity rail, and the reef relay (which reaches the tower), serves the door on stdio, and stops the
 rails when the door exits:
 

@@ -27,6 +27,9 @@ take the first one that `Rail_Config_Pkg.Is_Valid` accepts for their rail. `rail
 (`protocol` is `ollama` or `openai`). A model line may also carry `num_ctx`, the context size in tokens that the door
 asks ollama to load the model with (`"2048"` to `"262144"`; absent means `"32768"`; any other value makes the line
 invalid, refused as `invalid_model_line`). Only the ollama request carries it; an `openai` request is unchanged.
+An ollama prompt longer than 3 x (`num_ctx` - `max_tokens`) bytes (a conservative token estimate: bytes / 3) is refused
+before it is sent, by name (`prompt_exceeds_context`, with the estimated tokens, `num_ctx` and `max_tokens`) -- raise
+`num_ctx` to allow it; ollama would otherwise cut the prompt silently.
 
     {"rail":"model","host":"127.0.0.1","port":"11434","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true","model":"qwen3-coder:30b","protocol":"ollama","max_tokens":"8192","num_ctx":"32768"}
     {"rail":"prover","host":"127.0.0.1","port":"8471","timeout_seconds":"600","max_reply_bytes":"1048576","sovereign":"true"}

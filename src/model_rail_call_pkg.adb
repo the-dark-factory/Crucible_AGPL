@@ -4,13 +4,16 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: d489d033c27022cc2ed75bb5049ab2a5902297adb6d471f105a6a045e1586cd7
+--  Unstamped source sha256: ab0e2e13b7b277fc479bcd68106bee84206d3237e87e02fcacef1ba3651d7c90
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
 --  Lineage 4 (2026-09-28, Tony: "make the door send num_ctx"): the eight lineage-3 slots are frozen as fixed text.
 --  ONE slot, req-body: the Ollama request carries the model line's context size (Model_Rail_Fields_Pkg.Num_Ctx_Of,
 --  32768 when the line names none), so Ollama never loads a model at its full native context. OpenAI: unchanged.
+--  Lineage 5 (2026-09-28, Tony 17:07: refuse a prompt too long for the configured context, by name): req-body frozen;
+--  sent_fact reopened: an Ollama prompt that Model_Rail_Fields_Pkg.Prompt_Fits_Context refuses is never sent, and the
+--  refusal prompt_exceeds_context is said with the estimated tokens, num_ctx and max_tokens.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Json_Scan_Pkg;
@@ -156,12 +159,23 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
             Json_String_Pkg.Encode (P1, Enc.all, Enc_Len, Enc_Ok);
          end if;
 
+         --  SLOT BEGIN (sent_fact)
          F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok
-                   and then Enc_Len <= 2 * Model_Request_Pkg.Max_Prompt;
+                   and then Enc_Len <= 2 * Model_Request_Pkg.Max_Prompt
+                   and then Model_Rail_Fields_Pkg.Prompt_Fits_Context (Conf, P1'Length);
          if Enc_Ok and then Enc_Len > 2 * Model_Request_Pkg.Max_Prompt then
             Say ("{""rail"":""model"",""refused"":""not sent: encoded prompt too long"",""encoded_length"":""" &
                  Img (Enc_Len) & """,""bound"":""" & Img (2 * Model_Request_Pkg.Max_Prompt) & """}");
+         elsif Found and then Route_Ok and then Prompt_Ok and then Enc_Ok
+           and then not Model_Rail_Fields_Pkg.Prompt_Fits_Context (Conf, P1'Length)
+         then
+            Say ("{""rail"":""model"",""refused"":""prompt_exceeds_context"",""prompt_bytes"":""" & Img (P1'Length) &
+                 """,""estimated_tokens"":""" & Img (Model_Rail_Fields_Pkg.Estimated_Tokens (P1'Length)) &
+                 """,""num_ctx"":""" & Img (Model_Rail_Fields_Pkg.Num_Ctx_Of (Conf)) &
+                 """,""max_tokens"":""" & Img (Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)) &
+                 """,""bytes_per_token"":""" & Img (Model_Rail_Fields_Pkg.Chars_Per_Token) & """}");
          end if;
+         --  SLOT END (sent_fact)
 
          if F.sent then
             declare
@@ -171,14 +185,12 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                Encoded   : constant String (1 .. Enc_Len) := Enc (1 .. Enc_Len);
                Is_Ollama : constant Boolean :=
                  Model_Rail_Fields_Pkg.Protocol_Of (Conf) = Model_Rail_Fields_Pkg.Protocol_Ollama;
-               --  SLOT BEGIN (req-body)
                Req_Body  : constant String :=
                  (if Is_Ollama then Model_Request_Pkg.Request_Text
                                       (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf),
                                        Model_Rail_Fields_Pkg.Num_Ctx_Of (Conf))
                   else Model_Request_Pkg.Request_Text_Openai
                          (Model_1, Encoded, Model_Rail_Fields_Pkg.Max_Tokens_Of (Conf)));
-               --  SLOT END (req-body)
                Path      : constant String := (if Is_Ollama then "/api/chat" else "/v1/chat/completions");
                Request   : constant String :=
                  "POST " & Path & " HTTP/1.0" & CRLF &

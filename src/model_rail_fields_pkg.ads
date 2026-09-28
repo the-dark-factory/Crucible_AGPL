@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: cf9edec64a3a56fb0e176ccebfd3ffcca460d591743b496b8498b78ab7f53013
+--  Unstamped source sha256: 44a3c400359b6e0a37c1c8d1205dbb637487c923f87f0a83fb16b0a136c8e924
 --
 with Json_Scan_Pkg;
 with Rail_Config_Pkg;
@@ -21,6 +21,7 @@ package Model_Rail_Fields_Pkg with SPARK_Mode is
    Elevated_Word  : constant String := "elevated";
    Num_Ctx_Key    : constant String := "num_ctx";
    Default_Num_Ctx : constant := 32_768;
+   Chars_Per_Token : constant := 3;
 
    type Protocol_Kind is (Protocol_Ollama, Protocol_Openai, Protocol_Unknown);
    type Tier_Kind is (Tier_Standard, Tier_Elevated, Tier_Unknown);
@@ -99,5 +100,25 @@ package Model_Rail_Fields_Pkg with SPARK_Mode is
           Post => ((if Is_Valid_Tiered_Model_Line'Result then Is_Valid_Model_Line (Line))
                    and then (if Is_Valid_Tiered_Model_Line'Result then Tier_Of (Line) /= Tier_Unknown)
                    and then (if Is_Valid_Model_Line (Line) and then Tier_Of (Line) /= Tier_Unknown then Is_Valid_Tiered_Model_Line'Result));
+
+   function Estimated_Tokens (Prompt_Length : Natural) return Natural
+     is ((Prompt_Length + (Chars_Per_Token - 1)) / Chars_Per_Token)
+     with Pre  => Prompt_Length <= 1_048_576,
+          Post => Estimated_Tokens'Result * Chars_Per_Token >= Prompt_Length
+                  and then Estimated_Tokens'Result * Chars_Per_Token < Prompt_Length + Chars_Per_Token;
+
+   function Context_Budget (Line : String) return Integer
+     is (Num_Ctx_Of (Line) - Max_Tokens_Of (Line))
+     with Pre  => Line'First = 1 and then Line'Length <= Rail_Config_Pkg.Max_Line and then Is_Valid_Model_Line (Line),
+          Post => Context_Budget'Result in -30_720 .. 262_143;
+
+   function Prompt_Fits_Context (Line : String; Prompt_Length : Natural) return Boolean
+     is (Protocol_Of (Line) /= Protocol_Ollama
+         or else Estimated_Tokens (Prompt_Length) <= Context_Budget (Line))
+     with Pre  => Line'First = 1 and then Line'Length <= Rail_Config_Pkg.Max_Line and then Is_Valid_Model_Line (Line)
+                  and then Prompt_Length <= 1_048_576,
+          Post => ((if Protocol_Of (Line) /= Protocol_Ollama then Prompt_Fits_Context'Result)
+                   and then (if Protocol_Of (Line) = Protocol_Ollama
+                             then Prompt_Fits_Context'Result = (Prompt_Length <= Chars_Per_Token * Context_Budget (Line))));
 
 end Model_Rail_Fields_Pkg;
