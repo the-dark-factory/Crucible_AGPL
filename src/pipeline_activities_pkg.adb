@@ -1,13 +1,16 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 6010845d618d61f5528ee6dd1ad80a9281de239b21f65c985cfc0638d0a96dfc
+--  Unstamped source sha256: c1fa34f463b948eb55ca4cc343439af954e0175ea6fc85d58b21ef04c40709f0
 --
 --  Pipeline_Activities_Pkg body -- template (seat-written plumbing) with TWO slots (intake_result, prove_result), filled
 --  by a Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 3).
+--  SLOT BEGIN (context)
+with Ada.Unchecked_Deallocation;
+--  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Characters.Handling;
 with Json_String_Pkg;
@@ -93,9 +96,7 @@ package body Pipeline_Activities_Pkg with SPARK_Mode => Off is
          Reason := To_Unbounded_String ("input_refused: sheet does not fit");
       end if;
 
-      --  SLOT BEGIN (intake_result)
 Result := Stage_Outcome_Map_Pkg.From_Verdict (May_Forge);
-      --  SLOT END (intake_result)
    end Run_Intake;
 
    procedure Run_Prove
@@ -109,9 +110,7 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (May_Forge);
       O : constant Prover_Rail_Pkg.Outcome_Kind := Prover_Rail_Call_Pkg.Prove (Unit_Name, Spec_Text, Body_Text, Level);
    begin
       Reason := To_Unbounded_String (Lower (Prover_Rail_Pkg.Outcome_Kind'Image (O)));
-      --  SLOT BEGIN (prove_result)
 Result := Stage_Outcome_Map_Pkg.From_Prover (O);
-      --  SLOT END (prove_result)
    end Run_Prove;
 
    procedure Run_Owed
@@ -132,14 +131,20 @@ Result := Stage_Outcome_Map_Pkg.From_Prover (O);
    is
       Code    : constant Natural := Stage_Outcome_Map_Pkg.Audit_Code (S, O);
       R1      : constant String (1 .. Reason'Length) := Reason;
-      Enc     : String (1 .. Natural'Max (1, 2 * R1'Length));
+      --  SLOT BEGIN (encode-buffer)
+      type Buf_Access is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
+      Enc     : Buf_Access := new String (1 .. Natural'Max (1, 6 * R1'Length));
+      --  SLOT END (encode-buffer)
       Enc_Len : Natural;
       Enc_Ok  : Boolean;
       F       : Ada.Text_IO.File_Type;
    begin
       Ledger := Audit_Ledger_Pkg.Appended
         (Ledger, (Source => Audit_Ledger_Pkg.Door_Listener, Code => Audit_Ledger_Pkg.Event_Code (Code)));
-      Json_String_Pkg.Encode (R1, Enc, Enc_Len, Enc_Ok);
+      --  SLOT BEGIN (encode-call)
+      Json_String_Pkg.Encode (R1, Enc.all, Enc_Len, Enc_Ok);
+      --  SLOT END (encode-call)
       begin
          Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, Audit_Path);
       exception
@@ -151,8 +156,14 @@ Result := Stage_Outcome_Map_Pkg.From_Prover (O);
             """,""outcome"":""" & Lower (Pipeline_Stage_Pkg.Outcome'Image (O)) & """,""code"":""" & Img (Code) &
             """,""reason"":""" & (if Enc_Ok then Enc (1 .. Enc_Len) else "unencodable") & """}");
       Ada.Text_IO.Close (F);
+      --  SLOT BEGIN (release)
+      Free (Enc);
+      --  SLOT END (release)
    exception
       when others =>
+         --  SLOT BEGIN (release-on-failure)
+         Free (Enc);
+         --  SLOT END (release-on-failure)
          null;  --  the in-memory ledger entry stands; a file failure never changes a stage outcome
    end Audit;
 

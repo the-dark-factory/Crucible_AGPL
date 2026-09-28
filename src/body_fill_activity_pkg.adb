@@ -1,12 +1,15 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: e7f495a70a8ea07c2e03671478582d69cc2131b56262353ca279170a6280d7aa
+--  Unstamped source sha256: 874f2de6441d24cd74d41ede280638088f8ebad5a67a14d672d6ee6de35a4d71
 --
 --  Body_Fill_Activity_Pkg body — the template: plumbing fixed by the seat; the FOUR slots are the planner's.
+--  SLOT BEGIN (context)
+with Ada.Unchecked_Deallocation;
+--  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Characters.Handling;
 with Model_Rail_Call_Pkg;
@@ -68,15 +71,29 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
    --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
    --  refusal on the record names WHICH check failed. Encoded by the proven Json_String_Pkg; when the text
    --  is not encodable the row says so and carries no text -- never a stand-in string.
+   --  SLOT BEGIN (diag-field)
    function Diag_Field (D : String) return String is
+      type Buf_Access is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
       D1  : constant String (1 .. D'Length) := D;
-      Enc : String (1 .. Natural'Max (1, 2 * D1'Length));
+      Enc : Buf_Access := new String (1 .. Natural'Max (1, 6 * D1'Length));
       Len : Natural;
       Ok  : Boolean;
    begin
-      Json_String_Pkg.Encode (D1, Enc, Len, Ok);
-      return (if Ok then ",""diagnostics"":""" & Enc (1 .. Len) & """" else ",""diagnostics_encoded"":""false""");
+      Json_String_Pkg.Encode (D1, Enc.all, Len, Ok);
+      declare
+         Result : constant String :=
+           (if Ok then ",""diagnostics"":""" & Enc (1 .. Len) & """" else ",""diagnostics_encoded"":""false""");
+      begin
+         Free (Enc);
+         return Result;
+      end;
+   exception
+      when others =>
+         Free (Enc);
+         raise;
    end Diag_Field;
+   --  SLOT END (diag-field)
 
    procedure Write_Body (Text : String) is
       F : Ada.Text_IO.File_Type;
@@ -328,28 +345,20 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
                                    (if D'Length <= Max_Repair_Chars then D else D (1 .. Max_Repair_Chars));
                               end;
 
-                              --  SLOT BEGIN (gate-facts)
 GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
        checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped,
        cheat_markers => Natural (Cheats.reject));
-                              --  SLOT END (gate-facts)
 
-                              --  SLOT BEGIN (route)
 Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF),
           Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
-                              --  SLOT END (route)
 
-                              --  SLOT BEGIN (fit)
 Fit := Route = Fill_Route_Pkg.Route_Fill;
 Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
-                              --  SLOT END (fit)
 
                               Last_Word := To_Unbounded_String (Gate_Word_Pkg.Word_Of (GF));
                               if not Fit then
                                  --  ONE diagnosis per round (5a-3): the paragraph the repair section carries.
-                                 --  SLOT BEGIN (diagnosis)
 Diagnosis_Activity_Pkg.Diagnose (Diag.all, Spec, Unit, DS, D_Text, D_Class, D_Cat, D_Source);
-                                 --  SLOT END (diagnosis)
                                  Last_Class := (if Length (D_Class) > 0 then D_Class else To_Unbounded_String ("none"));
                               end if;
                               Log_Round ("{""stage"":""fill_body"",""round"":""" & Letter &

@@ -1,13 +1,16 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 15a9e70f88b88faec397446275ed7b1f93bc03f3fef3df1d4fd35bc1e271daaf
+--  Unstamped source sha256: f71a3a0988b185e51c17f43ba0ae49947c213c2724d70819d3d4c66a5978d2f9
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
+--  SLOT BEGIN (context)
+with Ada.Unchecked_Deallocation;
+--  SLOT END (context)
 with Ada.Text_IO;
 with Json_Scan_Pkg;
 with Json_String_Pkg;
@@ -143,7 +146,10 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                     /= Sovereign_Gate_Pkg.Refused_Sovereign_Off_Estate;
          Prompt_Ok  : constant Boolean := Prompt'Length <= Model_Request_Pkg.Max_Prompt;
          P1         : constant String (1 .. Prompt'Length) := Prompt;
-         Enc        : constant Text_Access := new String (1 .. Natural'Max (1, 2 * P1'Length));
+         --  SLOT BEGIN (encode-buffer)
+         procedure Free is new Ada.Unchecked_Deallocation (String, Text_Access);
+         Enc        : Text_Access := new String (1 .. Natural'Max (1, 6 * P1'Length));
+         --  SLOT END (encode-buffer)
          Enc_Len    : Natural := 0;
          Enc_Ok     : Boolean := False;
       begin
@@ -152,7 +158,12 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          end if;
 
          --  SLOT BEGIN (sent_fact)
-      F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok;
+         F.sent := Found and then Route_Ok and then Prompt_Ok and then Enc_Ok
+                   and then Enc_Len <= 2 * Model_Request_Pkg.Max_Prompt;
+         if Enc_Ok and then Enc_Len > 2 * Model_Request_Pkg.Max_Prompt then
+            Say ("{""rail"":""model"",""refused"":""not sent: encoded prompt too long"",""encoded_length"":""" &
+                 Img (Enc_Len) & """,""bound"":""" & Img (2 * Model_Request_Pkg.Max_Prompt) & """}");
+         end if;
          --  SLOT END (sent_fact)
 
          if F.sent then
@@ -175,7 +186,9 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                  "Content-Length: " & Img (Req_Body'Length) & CRLF &
                  "Connection: close" & CRLF & CRLF & Req_Body;
                Max_Reply : constant Positive := Rail_Config_Pkg.Max_Reply_Of (Conf);
-               Reply_Buf : constant Text_Access := new String (1 .. Max_Reply);
+               --  SLOT BEGIN (reply-buffer)
+               Reply_Buf : Text_Access := new String (1 .. Max_Reply);
+               --  SLOT END (reply-buffer)
                Reply_Len : Natural;
                Reached, Timed_Out, Over_Bound, Closed_Clean : Boolean;
                Http_Ok, Content_Ok, Complete_Ok, Truncated_Ok, Decoded_Ok : Boolean := False;
@@ -216,13 +229,22 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                               C := Model_Reply_Pkg.String_Field (Payload, Model_Reply_Pkg.Content_Key);
                               declare
                                  Raw     : constant String (1 .. C.last - C.first + 1) := Payload (C.first .. C.last);
-                                 Out_Buf : constant Text_Access := new String (1 .. Raw'Length);
+                                 --  SLOT BEGIN (out-buffer)
+                                 Out_Buf : Text_Access := new String (1 .. Raw'Length);
+                                 --  SLOT END (out-buffer)
                                  Out_Len : Natural;
                               begin
                                  Json_String_Pkg.Decode (Raw, Out_Buf.all, Out_Len, Decoded_Ok);
                                  if Decoded_Ok then
                                     Text := new String'(Out_Buf (1 .. Out_Len));
                                  end if;
+                                 --  SLOT BEGIN (release-out)
+                                 Free (Out_Buf);
+                              exception
+                                 when others =>
+                                    Free (Out_Buf);
+                                    raise;
+                                 --  SLOT END (release-out)
                               end;
                            end if;
                         end;
@@ -230,7 +252,6 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                   end;
                end if;
 
-               --  SLOT BEGIN (reply_facts)
          F.reached := Reached;
          F.timed_out := Timed_Out;
          F.over_bound := Over_Bound;
@@ -239,9 +260,22 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          F.content_present := Content_Ok;
          F.complete := Complete_Ok;
          F.decoded_ok := Decoded_Ok;
-               --  SLOT END (reply_facts)
+               --  SLOT BEGIN (release-reply)
+               Free (Reply_Buf);
+            exception
+               when others =>
+                  Free (Reply_Buf);
+                  raise;
+               --  SLOT END (release-reply)
             end;
          end if;
+         --  SLOT BEGIN (release)
+         Free (Enc);
+      exception
+         when others =>
+            Free (Enc);
+            raise;
+         --  SLOT END (release)
       end;
 
       Outcome := Model_Reply_Pkg.Decide (F);

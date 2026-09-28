@@ -1,13 +1,16 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f3f8d0e5e69b9c8a4f10c26b2fb8cdcbf2e90f43aada4acbfe1d95b4b00619b0
+--  Unstamped source sha256: b103c072199044a259cca281af66d6a23dc844edd9fd9ae1e865995bc11b019f
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
+--  SLOT BEGIN (context)
+with Ada.Unchecked_Deallocation;
+--  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Characters.Handling;
 with Intake_Line_Pkg;
@@ -105,28 +108,55 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
          null;
    end Write_Spec;
 
+   --  SLOT BEGIN (json-of)
    function Json_Of (S : String) return String is
+      type Buf_Access is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
       S1  : constant String (1 .. S'Length) := S;
-      Enc : String (1 .. Natural'Max (1, 2 * S1'Length));
+      Enc : Buf_Access := new String (1 .. Natural'Max (1, 6 * S1'Length));
       Len : Natural;
       Ok  : Boolean;
    begin
-      Json_String_Pkg.Encode (S1, Enc, Len, Ok);
-      return (if Ok then Enc (1 .. Len) else "unencodable");
+      Json_String_Pkg.Encode (S1, Enc.all, Len, Ok);
+      declare
+         Result : constant String := (if Ok then Enc (1 .. Len) else "unencodable");
+      begin
+         Free (Enc);
+         return Result;
+      end;
+   exception
+      when others =>
+         Free (Enc);
+         raise;
    end Json_Of;
+   --  SLOT END (json-of)
 
    --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
    --  refusal on the record names WHICH check failed. Encoded by the proven Json_String_Pkg; when the text
    --  is not encodable the row says so and carries no text -- never a stand-in string.
+   --  SLOT BEGIN (diag-field)
    function Diag_Field (D : String) return String is
+      type Buf_Access is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
       D1  : constant String (1 .. D'Length) := D;
-      Enc : String (1 .. Natural'Max (1, 2 * D1'Length));
+      Enc : Buf_Access := new String (1 .. Natural'Max (1, 6 * D1'Length));
       Len : Natural;
       Ok  : Boolean;
    begin
-      Json_String_Pkg.Encode (D1, Enc, Len, Ok);
-      return (if Ok then ",""diagnostics"":""" & Enc (1 .. Len) & """" else ",""diagnostics_encoded"":""false""");
+      Json_String_Pkg.Encode (D1, Enc.all, Len, Ok);
+      declare
+         Result : constant String :=
+           (if Ok then ",""diagnostics"":""" & Enc (1 .. Len) & """" else ",""diagnostics_encoded"":""false""");
+      begin
+         Free (Enc);
+         return Result;
+      end;
+   exception
+      when others =>
+         Free (Enc);
+         raise;
    end Diag_Field;
+   --  SLOT END (diag-field)
 
    procedure Run
      (Sheet     : String;
@@ -270,13 +300,9 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                         --  Skipped subprograms the unit did not declare deferred (a COUNT: the known weakening, see the brief).
                         Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
 
-                        --  SLOT BEGIN (gate-facts)
 GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated, checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => Natural (Cheats.reject));
-                        --  SLOT END (gate-facts)
 
-                        --  SLOT BEGIN (route)
 Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), Natural (Cheats.reject), GF.checks_unproved, GF.subprograms_skipped, Undeclared);
-                        --  SLOT END (route)
 
                         --  Contract_Emission_Pkg.Facts_Type fields, in order: operation_count, operations_with_postcondition,
                         --  names_used (default 0), names_declared, names_undeclared, vocabulary_is_stated, preconditions_stated,
@@ -306,15 +332,11 @@ Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compil
                            end loop;
                         end;
 
-                        --  SLOT BEGIN (emission-facts)
 EF := (operation_count => Natural (Shape.operations), operations_with_postcondition => Natural (Shape.operations_with_post), names_used => 0, names_declared => Natural (Shape.operations), names_undeclared => Undeclared_Names, vocabulary_is_stated => Facts.run.unit_compiled, preconditions_stated => Shape.preconditions >= 1, sheet_states_precondition => Sheet_Pre);
 May_Emit := Contract_Emission_Pkg.Assemble (EF).may_emit;
-                        --  SLOT END (emission-facts)
 
-                        --  SLOT BEGIN (fit)
 Fit := Route /= Fill_Route_Pkg.Route_Refuse and then May_Emit;
 Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
-                        --  SLOT END (fit)
 
                         Log_Round ("{""stage"":""emit_contract"",""round"":""" & Letter &
                                    """,""word"":""" & Gate_Word_Pkg.Word_Of (GF) &

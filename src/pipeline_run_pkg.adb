@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: e0b0a3af65d9f964bed9b32240203a58e16d1a030beb8f7050173c80c2123837
+--  Unstamped source sha256: 9bd1442778faa25e85130490c335223e41a04737a0e6a3f2b9b40cc5644a9233
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
@@ -31,6 +31,9 @@ with Admission_Decision_Pkg;
 with Crucible_Build;
 with Crucible_Edition;
 with GNAT.SHA256;
+--  SLOT BEGIN (context)
+with Ada.Unchecked_Deallocation;
+--  SLOT END (context)
 with Ada.Characters.Handling;
 with Ada.Text_IO;
 with Ada.Directories;
@@ -58,18 +61,34 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 
    --  The activities' own idiom: Encode is a procedure with a bound, so a string too long to encode is reported
    --  as such rather than silently truncated -- a record that lies by omission is worse than one that says it cannot.
+   --  SLOT BEGIN (json-of)
    function Json_Of (S : String) return String is
+      type Buf_Access is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
       S1  : constant String (1 .. S'Length) := S;
-      Enc : String (1 .. Natural'Max (1, 2 * S1'Length));
       Len : Natural;
       Ok  : Boolean;
    begin
       if S1'Length > Json_String_Pkg.Max_Raw then
          return """too-long-to-encode""";
       end if;
-      Json_String_Pkg.Encode (S1, Enc, Len, Ok);
-      return (if Ok then """" & Enc (1 .. Len) & """" else """unencodable""");
+      declare
+         Enc : Buf_Access := new String (1 .. Natural'Max (1, 6 * S1'Length));
+      begin
+         Json_String_Pkg.Encode (S1, Enc.all, Len, Ok);
+         declare
+            Result : constant String := (if Ok then """" & Enc (1 .. Len) & """" else """unencodable""");
+         begin
+            Free (Enc);
+            return Result;
+         end;
+      exception
+         when others =>
+            Free (Enc);
+            raise;
+      end;
    end Json_Of;
+   --  SLOT END (json-of)
 
    --  The faults by name, so a refusal says WHICH promise was empty rather than only that one was.
    function Fault_Names (V : Vacuity_Facts_Pkg.Verdict_Type) return String is
@@ -164,13 +183,11 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
          end if;
       end loop;
       Undeclared := (if Facts.subprograms_skipped > Declared then Facts.subprograms_skipped - Declared else 0);
-      --  SLOT BEGIN (prove-spec-verdict)
 GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
        checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
 Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
           GF.checks_unproved, GF.subprograms_skipped, Undeclared);
 O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
-      --  SLOT END (prove-spec-verdict)
       R := To_Unbounded_String ("prove_spec: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
    end Judge_Spec;
@@ -283,9 +300,7 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route /= Fill_Route_Pkg.Route_Refuse);
             shared_types_defined_once => True,
             assembly_compiles        => Compiled);
       V := Seam_Coherence_Pkg.Assemble (F);
-      --  SLOT BEGIN (seam-verdict)
 O := Stage_Outcome_Map_Pkg.From_Verdict (V.fault_count = 0);
-      --  SLOT END (seam-verdict)
       R := To_Unbounded_String ("seam: units " & Img (F.units_proved) & "/" & Img (F.unit_count) &
                                 ", seams " & Img (F.seam_count) &
                                 (if V.fault_count = 0 then "" else ", faults " & Img (V.fault_count)));
@@ -311,9 +326,7 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (V.fault_count = 0);
             fields_recorded            => Recorded,
             fields_required            => 6);
       V := Provenance_Record_Pkg.Assemble (F);
-      --  SLOT BEGIN (provenance-verdict)
 O := Stage_Outcome_Map_Pkg.From_Verdict (Provenance_Record_Pkg.Replayable_By_A_Stranger (V));
-      --  SLOT END (provenance-verdict)
       R := To_Unbounded_String ("provenance: fields " & Img (F.fields_recorded) & "/" & Img (F.fields_required) &
                                 (if V.fault_count = 0 then "" else ", faults " & Img (V.fault_count)));
    end Judge_Provenance;
@@ -339,9 +352,7 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Provenance_Record_Pkg.Replayable_By_A_S
             --  receipt says so. The executable is not admitting its own proof; the service did the proving.
             admitter_is_the_seat        => False);
       V := Admission_Decision_Pkg.Assemble (F);
-      --  SLOT BEGIN (admission-verdict)
 O := Stage_Outcome_Map_Pkg.From_Verdict (V.admitted);
-      --  SLOT END (admission-verdict)
       R := To_Unbounded_String ("admission: " & (if V.admitted then "admitted" else "refused") &
                                 (if V.reason_count = 0 then "" else ", reasons " & Img (V.reason_count)));
    end Judge_Admission;
@@ -366,9 +377,7 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (V.admitted);
          return;
       end if;
       V := Vacuity_Facts_Pkg.Assemble (Facts.facts);
-      --  SLOT BEGIN (vacuity-verdict)
 O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then V.contract_is_meaningful);
-      --  SLOT END (vacuity-verdict)
       R := To_Unbounded_String ("vacuity: " & Ada.Characters.Handling.To_Lower (Vacuity_Rail_Pkg.Outcome_Kind'Image (VO)) &
                                 (if V.contract_is_meaningful then "" else ", faults:" & Fault_Names (V)));
    end Judge_Vacuity;
@@ -434,10 +443,8 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Vacuity_Rail_Pkg.Is_Pass (VO) and then 
                                                                      Natural (Facts.run.checks_generated))),
                    cheat_markers                => Cap (Natural (Cheats.reject)),
                    vacuity_meaningful           => Vacuity_Passed);
-            --  SLOT BEGIN (body-requirement)
 BR := Body_Requirement_Pkg.Decide (BF);
 O := Stage_Outcome_Map_Pkg.From_Verdict (BR = Body_Requirement_Pkg.Earned_Without_Body);
-            --  SLOT END (body-requirement)
             R := To_Unbounded_String ("prove_body: no body; body_requirement " &
                                       Ada.Characters.Handling.To_Lower (Body_Requirement_Pkg.Verdict_Kind'Image (BR)) &
                                       " (operations" & Natural'Image (Ops) & ", completed in spec" &
@@ -452,13 +459,11 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (BR = Body_Requirement_Pkg.Earned_Withou
          R := To_Unbounded_String ("prove_body: prover rail: " & Ada.Characters.Handling.To_Lower (Prover_Rail_Pkg.Outcome_Kind'Image (PO)));
          return;
       end if;
-      --  SLOT BEGIN (prove-body-verdict)
 GF := (unit_compiled => Facts.run.unit_compiled, checks_generated => Facts.run.checks_generated,
        checks_unproved => Facts.run.checks_unproved, subprograms_skipped => Facts.subprograms_skipped, cheat_markers => 0);
 Route := Fill_Route_Pkg.Decide (Gate_Word_Pkg.Word_Of (GF), Gate_Word_Pkg.Compile_Errors_Of (GF), 0,
           GF.checks_unproved, GF.subprograms_skipped, GF.subprograms_skipped);
 O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
-      --  SLOT END (prove-body-verdict)
       R := To_Unbounded_String ("prove_body: " & Gate_Word_Pkg.Word_Of (GF) & ", " &
                                 Ada.Characters.Handling.To_Lower (Fill_Route_Pkg.Route_Kind'Image (Route)));
    end Judge_Body;
@@ -519,10 +524,8 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
          Pipeline_Activities_Pkg.Audit (L, Seq, S, O, To_String (R));
          Last_S := S;
 
-         --  SLOT BEGIN (transition)
 J := Job_Record_Pkg.Record_Outcome (J, S, O);
 S := Pipeline_Stage_Pkg.Next (S, O);
-         --  SLOT END (transition)
       end loop;
 
       return (Final        => S,

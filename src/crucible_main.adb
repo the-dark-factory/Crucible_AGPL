@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: d982f172c187246b94a6f07c8f7e10e286cc18fc9a257c62298e7d82621dab48
+--  Unstamped source sha256: 3d9359a1fbe16d81cad3ce3987bcf52614d7fea00c4fe12d414d9d2a7e84ba42
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -33,6 +33,9 @@
 --  unrecorded -- the forge proceeds on the ledger as it stands; only the base check stops it. The word surfaces as ONE
 --  line on standard error (the MCP stdio server's logging channel), never in the reply. Seat-written plumbing, no new
 --  slot; brief BRIEF_door_import_wiring_2026-09-21.
+--  SLOT BEGIN (context)
+with Ada.Unchecked_Deallocation;
+--  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
@@ -193,13 +196,11 @@ procedure Crucible_Main is
          end if;
 
          Append ("{""verdict"":""refused"",""gaps"":[");
-         --  SLOT BEGIN (gaps)
          if V.gap_no_deliverable then Add_Gap ("no_deliverable"); end if;
          if V.gap_no_operations then Add_Gap ("no_operations"); end if;
          if V.gap_operations_not_functions then Add_Gap ("operations_not_functions"); end if;
          if V.gap_contracts_incomplete then Add_Gap ("contracts_incomplete"); end if;
          if V.gap_vocabulary_unsound then Add_Gap ("vocabulary_unsound"); end if;
-         --  SLOT END (gaps)
          Append ("],""operation_count"":""" & Img (V.operation_count) & """");
          Append (",""undefined_name_count"":""" & Img (V.undefined_name_count) & """");
 
@@ -273,7 +274,6 @@ procedure Crucible_Main is
       O := Prover_Rail_Call_Pkg.Prove (Unit_Raw, Spec_Buf (1 .. Spec_Len), Body_Buf (1 .. Body_Len), Level);
       declare
          Word : constant String := (
-         --  SLOT BEGIN (outcome_word)
             case O is
      when Prover_Rail_Pkg.Outcome_Not_Sent => "not_sent",
      when Prover_Rail_Pkg.Outcome_Prover_Unreachable => "prover_unreachable",
@@ -281,7 +281,6 @@ procedure Crucible_Main is
      when Prover_Rail_Pkg.Outcome_Reply_Refused => "reply_refused",
      when Prover_Rail_Pkg.Outcome_Not_Proved => "not_proved",
      when Prover_Rail_Pkg.Outcome_Proved => "proved"
-         --  SLOT END (outcome_word)
          );
       begin
          return "{""outcome"":""" & Word & """}";
@@ -784,21 +783,35 @@ procedure Crucible_Main is
          if not Ok then
             return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""bad_string""}";
          end if;
+         --  SLOT BEGIN (forge-reply)
          declare
+            type Buf_Access is access String;
+            procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
             R       : constant Pipeline_Run_Pkg.Report := Pipeline_Run_Pkg.Run (Decoded (1 .. Dec_Len));
             Why     : constant String := To_String (R.Reason);
             W1      : constant String (1 .. Why'Length) := Why;
-            Enc     : String (1 .. Natural'Max (1, 2 * W1'Length));
+            Enc     : Buf_Access := new String (1 .. Natural'Max (1, 6 * W1'Length));
             Enc_Len : Natural;
             Enc_Ok  : Boolean;
          begin
-            Json_String_Pkg.Encode (W1, Enc, Enc_Len, Enc_Ok);
-            return "{""final"":""" & Low (Pipeline_Stage_Pkg.Stage'Image (R.Final)) &
-              """,""stopped_at"":""" & Low (Pipeline_Stage_Pkg.Stage'Image (R.Stopped_At)) &
-              """,""transitions"":""" & Img (R.Transitions) &
-              """,""emit_allowed"":""" & (if R.Emit_Allowed then "true" else "false") &
-              """,""reason"":""" & (if Enc_Ok then Enc (1 .. Enc_Len) else "unencodable") & """}";
+            Json_String_Pkg.Encode (W1, Enc.all, Enc_Len, Enc_Ok);
+            declare
+               Result : constant String :=
+                 "{""final"":""" & Low (Pipeline_Stage_Pkg.Stage'Image (R.Final)) &
+                 """,""stopped_at"":""" & Low (Pipeline_Stage_Pkg.Stage'Image (R.Stopped_At)) &
+                 """,""transitions"":""" & Img (R.Transitions) &
+                 """,""emit_allowed"":""" & (if R.Emit_Allowed then "true" else "false") &
+                 """,""reason"":""" & (if Enc_Ok then Enc (1 .. Enc_Len) else "unencodable") & """}";
+            begin
+               Free (Enc);
+               return Result;
+            end;
+         exception
+            when others =>
+               Free (Enc);
+               raise;
          end;
+         --  SLOT END (forge-reply)
       end;
    exception
       when others =>
