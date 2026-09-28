@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 3cde1c908588018c18753c33682aa20bf4c08cda9174a2aad5242b62cf6ddd24
+--  Unstamped source sha256: b642c73d5f5d539d1fb367c4ee7d28b0916977ada82c67cb97eda2cf7ac45cd2
 --
 package body Json_Scan_Pkg with SPARK_Mode is
 
@@ -218,6 +218,60 @@ package body Json_Scan_Pkg with SPARK_Mode is
          end if;
       end loop;
    end Member_Span;
+
+   function Member_Duplicated (Line : String; Obj : Span_Type; Key : String) return Boolean is
+      P     : Positive;
+      Count : Natural := 0;
+      S, KE, C, V, VE, N : Natural;
+      Hit   : Boolean;
+   begin
+      if Skip_WS (Line, Obj.first + 1) = Obj.last then
+         return False;
+      end if;
+      P := Obj.first + 1;
+      loop
+         pragma Loop_Invariant (P in Obj.first + 1 .. Obj.last);
+         pragma Loop_Invariant (Count <= 2);
+         pragma Loop_Invariant
+           (Dup_From (Line, Obj.last, Obj.first + 1, Key, 0)
+              = Dup_From (Line, Obj.last, P, Key, Count));
+         pragma Loop_Variant (Increases => P);
+         S := Skip_WS (Line, P);
+         if S = 0 or else S >= Obj.last or else Line (S) /= '"' then
+            return False;
+         end if;
+         KE := Str_End (Line, S);
+         if KE = 0 or else KE >= Obj.last then
+            return False;
+         end if;
+         C := Skip_WS (Line, KE + 1);
+         if C = 0 or else C >= Obj.last or else Line (C) /= ':' then
+            return False;
+         end if;
+         V := Skip_WS (Line, C + 1);
+         if V = 0 or else V >= Obj.last then
+            return False;
+         end if;
+         VE := Value_End (Line, V);
+         if VE = 0 or else VE >= Obj.last then
+            return False;
+         end if;
+         Hit := Key_Equals (Line, S, KE, Key);
+         N := Skip_WS (Line, VE + 1);
+         if Hit and then Count < 2 then
+            Count := Count + 1;
+         end if;
+         if N = 0 then
+            return False;
+         elsif N = Obj.last then
+            return Count = 2;
+         elsif N < Obj.last and then Line (N) = ',' then
+            P := N + 1;
+         else
+            return False;
+         end if;
+      end loop;
+   end Member_Duplicated;
 
    function Element_Span (Line : String; Arr : Span_Type; Index : Positive) return Span_Type is
       P : Positive;

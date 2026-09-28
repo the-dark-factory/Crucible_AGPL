@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: f72b9e332368221afdb186def1814e052512f34ea4c0a25dce79cd87d7d08f0a
+--  Unstamped source sha256: 6e4ddf80b213d22ad02160d944b9728c3fd1030f182a21a58ed57d3ff15bca3e
 --
 package Json_Scan_Pkg with SPARK_Mode is
 
@@ -305,6 +305,65 @@ package Json_Scan_Pkg with SPARK_Mode is
                                            Line (Member_Span'Result.last) = '"'
                                            and then Member_Span'Result.first < Member_Span'Result.last)));
 
+   --  LINEAGE 6 (2026-09-28, the A11 refusal messages): Member_Span answers "not found" both
+   --  when a key is absent and when it is present twice, so a caller could not say which.
+   --  Dup_From / Member_Duplicated answer the second question on its own: the object is
+   --  well-formed to its closing brace AND at least two of its members are named Key.
+   --  Dup_From: the same walk as Mem_From, counting members named Key (capped at 2), with no
+   --  value kept: True exactly when the walk reaches the object's end with Count at 2.
+   function Dup_From (Line : String; Last_Obj : Positive; P : Positive; Key : String; Count : Natural) return Boolean
+     is (declare
+           S : constant Natural := Skip_WS (Line, P);
+         begin
+           (if S = 0 or else S >= Last_Obj or else Line (S) /= '"' then False
+            else
+              (declare
+                 KE : constant Natural := Str_End (Line, S);
+               begin
+                 (if KE = 0 or else KE >= Last_Obj then False
+                  else
+                    (declare
+                       C : constant Natural := Skip_WS (Line, KE + 1);
+                     begin
+                       (if C = 0 or else C >= Last_Obj or else Line (C) /= ':' then False
+                        else
+                          (declare
+                             V : constant Natural := Skip_WS (Line, C + 1);
+                           begin
+                             (if V = 0 or else V >= Last_Obj then False
+                              else
+                                (declare
+                                   VE : constant Natural := Value_End (Line, V);
+                                 begin
+                                   (if VE = 0 or else VE >= Last_Obj then False
+                                    else
+                                      (declare
+                                         Hit    : constant Boolean := Key_Equals (Line, S, KE, Key);
+                                         N      : constant Natural := Skip_WS (Line, VE + 1);
+                                         Count2 : constant Natural := (if Hit and then Count < 2 then Count + 1 else Count);
+                                       begin
+                                         (if N = 0 then False
+                                          elsif N = Last_Obj then Count2 = 2
+                                          elsif N < Last_Obj and then Line (N) = ',' then Dup_From (Line, Last_Obj, N + 1, Key, Count2)
+                                          else False))))))))))))
+     with Ghost,
+          Pre  => (Line'First = 1 and then Line'Length <= 1048576 and then Last_Obj in Line'Range
+                   and then P <= Last_Obj and then Count <= 2
+                   and then Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64),
+          Subprogram_Variant => (Decreases => Last_Obj - P);
+
+   --  Member_Duplicated: the object at Obj is well-formed and two or more of its members are
+   --  named Key (compared after JSON unescaping, as Member_Span compares).
+   function Member_Duplicated (Line : String; Obj : Span_Type; Key : String) return Boolean
+     with Pre  => (Line'First = 1 and then Line'Length <= 1048576 and then Key'First = 1
+                   and then Key'Length >= 1 and then Key'Length <= 64
+                   and then Obj.first in Line'Range and then Obj.last in Line'Range
+                   and then Obj.first < Obj.last
+                   and then Line (Obj.first) = '{' and then Line (Obj.last) = '}'),
+          Post => (Member_Duplicated'Result =
+                     (if Skip_WS (Line, Obj.first + 1) = Obj.last then False
+                      else Dup_From (Line, Obj.last, Obj.first + 1, Key, 0)));
+
    --  El_From: walking the elements of the array that closes at Last_Arr, from P, the I-th
    --  element being next: the Index-th element.
    function El_From (Line : String; Last_Arr : Positive; P : Positive; Index : Positive; I : Positive) return Span_Type
@@ -386,6 +445,12 @@ package Json_Scan_Pkg with SPARK_Mode is
                                            Line (Element_Of'Result.last) = '"'
                                            and then Element_Of'Result.first < Element_Of'Result.last)));
 
+   --  Duplicated_Of: total form of Member_Duplicated (False unless S is an object).
+   function Duplicated_Of (Line : String; Obj : Span_Type; Key : String) return Boolean is
+     (Is_Object (Line, Obj) and then Member_Duplicated (Line, Obj, Key))
+     with Pre  => (Line'First = 1 and then Line'Length <= 1048576 and then Key'First = 1
+                   and then Key'Length >= 1 and then Key'Length <= 64);
+
    --  Value_Span: the value of the member named Key of the line's TOP-LEVEL object. The line
    --  must be one JSON object (whitespace around it allowed); otherwise nothing is found.
    function Value_Span (Line : String; Key : String) return Span_Type
@@ -431,5 +496,7 @@ package Json_Scan_Pkg with SPARK_Mode is
    --  BODY: loops (or plain loops with a Loop_Variant) that carry the equality of Key_From,
    --  BODY: Mem_From or El_From at the start with the same function in the current state.
    --  BODY: Key_Position, String_Contents and Equals_Literal are lineage 4's bodies unchanged.
+   --  BODY: lineage 6. Member_Duplicated is Member_Span's loop with no value kept: it carries
+   --  BODY: the equality of Dup_From at the start with Dup_From in the current state.
 
 end Json_Scan_Pkg;

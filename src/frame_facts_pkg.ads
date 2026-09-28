@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 09c2530be8dd679dd3477743be5ad18bbf8bfece2a01211a84e03d45da803477
+--  Unstamped source sha256: a57b0059324ade33f4d45a46707585edd2d1436cdf34a7f55356c87f3c56adf5
 --
 with Json_Scan_Pkg;
 with Json_Rpc_Frame_Pkg;
@@ -154,6 +154,72 @@ package Frame_Facts_Pkg with SPARK_Mode is
      (Arg_Span (Line, Codename_Key))
      with Pre  => Line'First = 1 and then Line'Length <= 1048576,
           Post => (Codename_Span'Result.found = Arg_Span (Line, Codename_Key).found);
+
+   --  Lineage 9 (2026-09-28, the A11 refusal messages): Json_Scan_Pkg lineage 5 answers "not found"
+   --  for a key given twice, so the door could not tell a duplicated key from a missing one. With
+   --  Json_Scan_Pkg lineage 6 it can: a key is DUPLICATED when its object is well-formed and two or
+   --  more of its members carry that name. Duplicate_Key names the duplicates a tools/call is refused
+   --  for: params.name, params.arguments, and each argument the named tool reads (rail.set keeps its
+   --  own ruled reading, "an argument given twice counts as not given", so it is not listed).
+   function Tool_Name_Duplicated (Line : String) return Boolean is
+     (Json_Scan_Pkg.Duplicated_Of (Line, Json_Scan_Pkg.Value_Span (Line, Params_Key), Name_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Tool_Name_Duplicated'Result = Json_Scan_Pkg.Duplicated_Of (Line, Json_Scan_Pkg.Value_Span (Line, Params_Key), Name_Key));
+
+   function Arguments_Duplicated (Line : String) return Boolean is
+     (Json_Scan_Pkg.Duplicated_Of (Line, Json_Scan_Pkg.Value_Span (Line, Params_Key), Arguments_Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (Arguments_Duplicated'Result = Json_Scan_Pkg.Duplicated_Of (Line, Json_Scan_Pkg.Value_Span (Line, Params_Key), Arguments_Key));
+
+   function Arg_Duplicated (Line : String; Key : String) return Boolean is
+     (Json_Scan_Pkg.Duplicated_Of (Line, Json_Scan_Pkg.Member_Of (Line, Json_Scan_Pkg.Value_Span (Line, Params_Key), Arguments_Key), Key))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576 and then Key'First = 1
+                  and then Key'Length >= 1 and then Key'Length <= 64,
+          Post => (Arg_Duplicated'Result = Json_Scan_Pkg.Duplicated_Of (Line, Json_Scan_Pkg.Member_Of (Line, Json_Scan_Pkg.Value_Span (Line, Params_Key), Arguments_Key), Key));
+
+   function Duplicate_Key (Line : String) return Boolean is
+     (Tool_Name_Duplicated (Line) or else Arguments_Duplicated (Line)
+      or else (case Tool_Of (Line) is
+                 when T_Licence_Gate => Arg_Duplicated (Line, Requested_Key),
+                 when T_Intake_Check | T_Forge => Arg_Duplicated (Line, Sheet_Key),
+                 when T_Prove_Unit => Arg_Duplicated (Line, Unit_Key) or else Arg_Duplicated (Line, Spec_Key)
+                                      or else Arg_Duplicated (Line, Body_Key) or else Arg_Duplicated (Line, Level_Key),
+                 when T_Palais_Enrol => Arg_Duplicated (Line, Codename_Key),
+                 when others => False))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => ((if Tool_Name_Duplicated (Line) or else Arguments_Duplicated (Line) then Duplicate_Key'Result)
+                   and then (if Tool_Of (Line) = T_Licence_Gate then
+                               Duplicate_Key'Result = (Tool_Name_Duplicated (Line) or else Arguments_Duplicated (Line)
+                                                       or else Arg_Duplicated (Line, Requested_Key)))
+                   and then (if Tool_Of (Line) = T_Rail_Set or else Tool_Of (Line) = T_Unknown then
+                               Duplicate_Key'Result = (Tool_Name_Duplicated (Line) or else Arguments_Duplicated (Line))));
+
+   --  Brackets_Unclosed: the line opens a JSON object or array whose closer is never reached --
+   --  a mismatched bracket ({ closed by ] or [ by }), a bracket left open, a string left open, or
+   --  nesting deeper than Json_Scan_Pkg.Max_Depth. The door names this class in its -32700 reply.
+   function Brackets_Unclosed (Line : String) return Boolean is
+     (Line'Length > 0 and then Json_Scan_Pkg.Skip_WS (Line, 1) /= 0
+      and then (Line (Json_Scan_Pkg.Skip_WS (Line, 1)) = '{' or else Line (Json_Scan_Pkg.Skip_WS (Line, 1)) = '[')
+      and then Json_Scan_Pkg.Comp_End (Line, Json_Scan_Pkg.Skip_WS (Line, 1)) = 0)
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (if Brackets_Unclosed'Result then Parse_Failed (Line));
+
+   --  Unit_Name_Valid: params.arguments.unit is a string whose raw text is an Ada unit name the
+   --  prover rail accepts (Rail_Request_Pkg.Is_Valid's rule): 1 to 64 characters, a letter first,
+   --  then letters, digits and underscores only. No dot, slash, backslash or escape can pass.
+   function Is_Unit_Name_Char (C : Character) return Boolean is
+     ((C in 'A' .. 'Z') or else (C in 'a' .. 'z') or else (C in '0' .. '9') or else C = '_');
+
+   function Unit_Name_Valid (Line : String) return Boolean is
+     (Unit_Span (Line).found and then Unit_Span (Line).kind = Json_Scan_Pkg.K_String
+      and then Unit_Span (Line).last - Unit_Span (Line).first - 1 in 1 .. 64
+      and then (Line (Unit_Span (Line).first + 1) in 'A' .. 'Z' or else Line (Unit_Span (Line).first + 1) in 'a' .. 'z')
+      and then (for all K in Unit_Span (Line).first + 1 .. Unit_Span (Line).last - 1 => Is_Unit_Name_Char (Line (K))))
+     with Pre  => Line'First = 1 and then Line'Length <= 1048576,
+          Post => (if Unit_Name_Valid'Result then
+                     Unit_Span (Line).found and then Unit_Span (Line).kind = Json_Scan_Pkg.K_String
+                     and then (for all K in Unit_Span (Line).first + 1 .. Unit_Span (Line).last - 1 =>
+                                 Line (K) /= '.' and then Line (K) /= '/' and then Line (K) /= '\' and then Line (K) /= '"'));
 
    function Facts_Of (Line : String) return Json_Rpc_Frame_Pkg.Facts_Type is
      ((parse_failed => Parse_Failed (Line), jsonrpc_is_2_0 => Jsonrpc_Is_2_0 (Line), has_id => Has_Id (Line), method => Method_Of (Line), has_params => Has_Params (Line)))

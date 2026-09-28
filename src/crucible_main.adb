@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 73820f18ae1ede49dfdb6d58faf2d0ed211f9cc75edce3e3025c88425fb2a5e2
+--  Unstamped source sha256: c120dfd7b42541b65fd71d65b0524037aae9b176f6a2080eeba9855a185fb563
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -39,6 +39,12 @@
 --  the loop then answers it with ONE error reply -- the frame decider's own parse-failure code (-32700), id null,
 --  message "frame_too_long" -- and goes on to the next line. A line of exactly Max_Line_Bytes is a normal frame: GNAT
 --  leaves its terminator unread when the buffer fills, and Read_Frame skips it, so it no longer yields an empty frame.
+--  v18 (lineage 18, 2026-09-28; Tony 16:17 "fix the refusal messages before v0.3", release test A11): three refusals
+--  now say what is wrong; every JSON-RPC code is unchanged. (1) prove_unit with a unit name the prover rail would
+--  refuse (Frame_Facts_Pkg.Unit_Name_Valid) is answered input_refused / unit_name_invalid and never sent. (2) a
+--  tools/call carrying a duplicated key the named tool reads (Frame_Facts_Pkg.Duplicate_Key, over Json_Scan_Pkg
+--  lineage 6) is refused -32602 "duplicate_key" -- it was answered as if the key were absent. (3) a -32700 whose line
+--  opens an object or array that never closes (Frame_Facts_Pkg.Brackets_Unclosed) names that class. Three slots.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -89,6 +95,8 @@ procedure Crucible_Main is
    Last          : Natural;
    Too_Long      : Boolean := False;
    Too_Long_Msg  : constant String := "frame_too_long";
+   Duplicate_Msg : constant String := "duplicate_key";
+   Brackets_Msg  : constant String := "parse error: unbalanced or mismatched brackets, or an unclosed string";
 
    use type Json_Rpc_Frame_Pkg.Reply_Type;
    use type Json_Rpc_Frame_Pkg.Action_Type;
@@ -102,7 +110,6 @@ procedure Crucible_Main is
    S      : constant Sheet_Access := new Intake_Measure_Pkg.Sheet;
    Origin : constant Origin_Access := new Origin_Array'(others => 1);
 
-   --  SLOT BEGIN (frame-read)
    --  One frame from standard input into Buffer (1 .. Last). A line longer than the buffer is drained through its
    --  terminator and reported as Too_Long, so its tail never becomes a frame. A line of exactly Max_Line_Bytes is a
    --  normal frame: Get_Line leaves its terminator unread when the buffer fills, so it is skipped here.
@@ -119,7 +126,6 @@ procedure Crucible_Main is
          end if;
       end if;
    end Read_Frame;
-   --  SLOT END (frame-read)
 
    --  A Natural as decimal digits with no leading space.
    function Img (N : Natural) return String is
@@ -296,6 +302,12 @@ procedure Crucible_Main is
          when Constraint_Error =>
             Level := 0;   --  an unreadable level is 0, which the proven May_Send refuses
       end;
+      --  SLOT BEGIN (unit-name)
+      --  A unit name the prover rail would refuse is refused here, by name, and never sent.
+      if not Frame_Facts_Pkg.Unit_Name_Valid (Line) then
+         return "{""outcome"":""input_refused"",""reason"":""unit_name_invalid""}";
+      end if;
+      --  SLOT END (unit-name)
       O := Prover_Rail_Call_Pkg.Prove (Unit_Raw, Spec_Buf (1 .. Spec_Len), Body_Buf (1 .. Body_Len), Level);
       declare
          Word : constant String := (
@@ -906,7 +918,13 @@ begin
               (if Span.found then Line (Span.first .. Span.last) else Null_Id);
          begin
             if V.reply = Json_Rpc_Frame_Pkg.Reply_Error then
-               Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Frame_Msg));
+               --  SLOT BEGIN (frame-error)
+               if V.error_code = -32700 and then Frame_Facts_Pkg.Brackets_Unclosed (Line) then
+                  Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Brackets_Msg));
+               else
+                  Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Frame_Msg));
+               end if;
+               --  SLOT END (frame-error)
             elsif V.reply = Json_Rpc_Frame_Pkg.Reply_Result then
                case V.action is
                   when Json_Rpc_Frame_Pkg.Do_Initialize =>
@@ -914,7 +932,11 @@ begin
                   when Json_Rpc_Frame_Pkg.Do_List_Tools =>
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tools_List_Result));
                   when Json_Rpc_Frame_Pkg.Do_Call_Tool =>
-                     if Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Licence_Gate then
+                     --  SLOT BEGIN (duplicate-key)
+                     if Frame_Facts_Pkg.Duplicate_Key (Line) then
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Duplicate_Msg));
+                     elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Licence_Gate then
+                     --  SLOT END (duplicate-key)
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Tool_Run_Pkg.Licence_Gate (Crucible_Edition.Current, Line))));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Intake_Check then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
