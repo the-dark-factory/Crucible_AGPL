@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 3337add41342f325fbd5f536ae3724f38cf3f5f540e18fc6cfcccbff208e7629
+--  Unstamped source sha256: 1f17d3fc97d52e5854d76094469aef5db7a082734f2e374d470f265b3486f179
 --
 package Unit_Extract_Pkg with SPARK_Mode is
 
@@ -26,6 +26,12 @@ package Unit_Extract_Pkg with SPARK_Mode is
 
    function Is_Ascii (Text : String) return Boolean is
      (for all I in Text'Range => Character'Pos (Text (I)) < 128);
+
+   function Is_Clean_Char (C : Character) return Boolean is
+     (C in ' ' .. '~' or else C = LF or else C = Character'Val (13) or else C = Character'Val (9));
+
+   function Is_Clean (Text : String) return Boolean is
+     (for all I in Text'Range => Is_Clean_Char (Text (I)));
 
    function Starts_With_CI (Text : String; P : Positive; Pattern : String) return Boolean is
      (P + Pattern'Length - 1 <= Text'Length and then
@@ -106,14 +112,16 @@ package Unit_Extract_Pkg with SPARK_Mode is
        (for all I in 1 .. T'Length => T (I) = (if In_Fence_Line (T'Old, I) then ' ' else T'Old (I)));
 
    function Is_Unit (Text : String; Name : String) return Boolean is
-     (Is_Ascii (Text) and then First_Content (Text, After_Think (Text)) <= Text'Length and then Begins_Unit (Text, First_Content (Text, After_Think (Text))) and then Names_Package (Text, First_Content (Text, After_Think (Text)), Name) and then Last_Content (Text) >= 1 and then Ends_Unit (Text, Last_Content (Text), Name))
+     (Is_Clean (Text) and then First_Content (Text, After_Think (Text)) <= Text'Length and then Begins_Unit (Text, First_Content (Text, After_Think (Text))) and then Names_Package (Text, First_Content (Text, After_Think (Text)), Name) and then Last_Content (Text) >= 1 and then Ends_Unit (Text, Last_Content (Text), Name))
    with
      Pre =>
        Text'First = 1 and then Text'Length <= Max_Text and then Name'First = 1 and then Name'Length >= 1 and then Name'Length <= Max_Name,
      Post =>
        (if Is_Unit'Result then Is_Ascii (Text)) and
+       (if Is_Unit'Result then (for all I in Text'Range => Character'Pos (Text (I)) in 32 .. 126 or else Character'Pos (Text (I)) in 9 | 10 | 13)) and
        (if Is_Unit'Result then Begins_Unit (Text, First_Content (Text, After_Think (Text)))) and
        (if Is_Unit'Result then Ends_Unit (Text, Last_Content (Text), Name)) and
-       (if not Is_Ascii (Text) then not Is_Unit'Result);
+       (if not Is_Ascii (Text) then not Is_Unit'Result) and
+       (if not Is_Clean (Text) then not Is_Unit'Result);
 
 end Unit_Extract_Pkg;

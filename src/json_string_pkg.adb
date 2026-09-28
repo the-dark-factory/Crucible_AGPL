@@ -4,13 +4,18 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: ec067fec79b762ebe874198fcf7bed44d1dbd03bebb3deebfa3602760e2bc988
+--  Unstamped source sha256: 1a48b8934aa8ac611eaed567e676e95d9662ff75efc9ecdbbfe5cf161dfcaa2f
 --
 package body Json_String_Pkg with SPARK_Mode => On is
 
    procedure Decode (Raw : String; Output : out String; Output_Len : out Natural; Ok : out Boolean) is
-      K : Positive := 1;
-      N : Natural := 0;
+      K  : Positive := 1;
+      N  : Natural := 0;
+      W  : Natural;
+      V  : Natural;
+      V2 : Natural;
+      C  : Natural;
+      L  : Positive;
    begin
       Output := (others => ' ');
       Output_Len := 0;
@@ -18,8 +23,7 @@ package body Json_String_Pkg with SPARK_Mode => On is
 
       while K <= Raw'Last loop
          pragma Loop_Invariant (N <= K - 1);
-         pragma Loop_Invariant (for all J in 1 .. N => Is_Output_Char (Output (J)));
-         pragma Loop_Invariant (for all J in 1 .. K - 1 => Raw (J) in ' ' .. '~');
+         pragma Loop_Invariant (for all J in 1 .. K - 1 => Raw (J) >= ' ');
          pragma Loop_Invariant (if (for all J in 1 .. K - 1 => Is_Plain (Raw (J)))
                                 then N = K - 1 and then (for all J in 1 .. N => Output (J) = Raw (J)));
          pragma Loop_Invariant (if K >= 2 and then Raw (K - 1) = '\' then K >= 3 and then Raw (K - 2) = '\');
@@ -30,48 +34,148 @@ package body Json_String_Pkg with SPARK_Mode => On is
          pragma Loop_Invariant (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
          pragma Loop_Variant (Increases => K);
 
-         if Raw (K) not in ' ' .. '~' or else Raw (K) = '"' then
+         if Raw (K) < ' ' or else Raw (K) = '"' then
+            --  A raw control character or a raw quote: refused.
+            pragma Assert (Dec_Step (Raw, K) = 0);
             return;
+         elsif Character'Pos (Raw (K)) >= 16#80# then
+            --  A multi-byte UTF-8 sequence: copied unchanged when well-formed, refused if not.
+            W := Utf8_Width (Raw, K);
+            if W = 0 then
+               pragma Assert (Dec_Step (Raw, K) = 0);
+               return;
+            end if;
+            pragma Assert (W >= 2);
+            pragma Assert (Dec_Step (Raw, K) = W);
+            pragma Assert (Dec_Width (Raw, K) = W);
+            pragma Assert (for all I in 1 .. W => Dec_Nth (Raw, K, I) = Raw (K + I - 1));
+            pragma Assert (for all J in 1 .. Raw'Last - K - W + 1 => Dec_Nth (Raw, K, J + W) = Dec_Nth (Raw, K + W, J));
+            pragma Assert (for all I in 0 .. W - 1 => Character'Pos (Raw (K + I)) >= 16#80#);
+            pragma Assert (for all I in 0 .. W - 1 => Raw (K + I) >= ' ');
+            Output (N + 1 .. N + W) := Raw (K .. K + W - 1);
+            pragma Assert (for all I in 1 .. W => Output (N + I) = Raw (K + I - 1));
+            pragma Assert (Output (N + 1) = Dec_Nth (Raw, 1, N + 1));
+            pragma Assert (Output (N + 2) = Dec_Nth (Raw, 1, N + 2));
+            pragma Assert (if W >= 3 then Output (N + 3) = Dec_Nth (Raw, 1, N + 3));
+            pragma Assert (if W = 4 then Output (N + 4) = Dec_Nth (Raw, 1, N + 4));
+            pragma Assert (for all I in 1 .. N => Output (I) = Dec_Nth (Raw, 1, I));
+            pragma Assert (for all I in N + 1 .. N + W => Output (I) = Dec_Nth (Raw, 1, I));
+            pragma Assert (for all I in 1 .. N + W => Output (I) = Dec_Nth (Raw, 1, I));
+            pragma Assert (for all J in 1 .. Raw'Last - K - W + 1 => Dec_Nth (Raw, 1, N + W + J) = Dec_Nth (Raw, K + W, J));
+            pragma Assert (for all J in 1 .. K + W - 1 => Raw (J) >= ' ');
+            N := N + W;
+            K := K + W;
+            pragma Assert (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
          elsif Raw (K) /= '\' then
-            pragma Assert (Is_Output_Char (Raw (K)));
+            --  One byte 32 .. 127 (not '"', not '\'): itself.
             pragma Assert (Dec_Step (Raw, K) = 1);
+            pragma Assert (Dec_Width (Raw, K) = 1);
             pragma Assert (Dec_Nth (Raw, K, 1) = Raw (K));
             pragma Assert (for all J in 1 .. Raw'Last - K => Dec_Nth (Raw, K, J + 1) = Dec_Nth (Raw, K + 1, J));
+            pragma Assert (for all J in 1 .. K => Raw (J) >= ' ');
             N := N + 1;
             Output (N) := Raw (K);
             K := K + 1;
+            pragma Assert (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
          elsif K = Raw'Last then
+            --  A backslash with nothing after it.
+            pragma Assert (Dec_Step (Raw, K) = 0);
             return;
          elsif Is_Simple_Escape (Raw (K + 1)) then
-            pragma Assert (Is_Output_Char (Simple_Value (Raw (K + 1))));
             pragma Assert (Dec_Step (Raw, K) = 2);
+            pragma Assert (Dec_Width (Raw, K) = 1);
             pragma Assert (Dec_Nth (Raw, K, 1) = Simple_Value (Raw (K + 1)));
             pragma Assert (for all J in 1 .. Raw'Last - K - 1 => Dec_Nth (Raw, K, J + 1) = Dec_Nth (Raw, K + 2, J));
+            pragma Assert (Raw (K + 1) >= ' ');
+            pragma Assert (for all J in 1 .. K + 1 => Raw (J) >= ' ');
             N := N + 1;
             Output (N) := Simple_Value (Raw (K + 1));
             K := K + 2;
-         elsif Raw (K + 1) = 'u' and then K <= Raw'Last - 5
-           and then Is_Hex (Raw (K + 2)) and then Is_Hex (Raw (K + 3))
-           and then Is_Hex (Raw (K + 4)) and then Is_Hex (Raw (K + 5))
-         then
-            declare
-               V : constant Natural := 4096 * Hex_Value (Raw (K + 2)) + 256 * Hex_Value (Raw (K + 3))
-                                     + 16 * Hex_Value (Raw (K + 4)) + Hex_Value (Raw (K + 5));
-            begin
-               if V in 16#20# .. 16#7E# then
-                  pragma Assert (Is_Output_Char (Character'Val (V)));
-                  pragma Assert (V = Dec_Code (Raw, K));
-                  pragma Assert (Dec_Step (Raw, K) = 6);
-                  pragma Assert (Dec_Nth (Raw, K, 1) = Character'Val (V));
-                  pragma Assert (for all J in 1 .. Raw'Last - K - 5 => Dec_Nth (Raw, K, J + 1) = Dec_Nth (Raw, K + 6, J));
-                  N := N + 1;
-                  Output (N) := Character'Val (V);
-                  K := K + 6;
-               else
+            pragma Assert (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
+         elsif Is_U_Esc (Raw, K) then
+            V := 4096 * Hex_Value (Raw (K + 2)) + 256 * Hex_Value (Raw (K + 3))
+                 + 16 * Hex_Value (Raw (K + 4)) + Hex_Value (Raw (K + 5));
+            pragma Assert (V = Dec_Code (Raw, K));
+            if V in 16#DC00# .. 16#DFFF# then
+               --  A low surrogate with no high surrogate before it: refused.
+               pragma Assert (Dec_Step (Raw, K) = 0);
+               return;
+            elsif V in 16#D800# .. 16#DBFF# then
+               --  A high surrogate: the very next token must be a low surrogate escape.
+               if not (K + 6 <= Raw'Last and then Is_U_Esc (Raw, K + 6)) then
+                  pragma Assert (Dec_Step (Raw, K) = 0);
                   return;
                end if;
-            end;
+               V2 := 4096 * Hex_Value (Raw (K + 8)) + 256 * Hex_Value (Raw (K + 9))
+                     + 16 * Hex_Value (Raw (K + 10)) + Hex_Value (Raw (K + 11));
+               pragma Assert (V2 = Dec_Code (Raw, K + 6));
+               if V2 not in 16#DC00# .. 16#DFFF# then
+                  pragma Assert (Dec_Step (Raw, K) = 0);
+                  return;
+               end if;
+               pragma Assert (for all J in K .. K + 11 => Raw (J) >= ' ');
+               pragma Assert (for all J in 1 .. K + 11 => Raw (J) >= ' ');
+               C := 16#10000# + 1024 * (V - 16#D800#) + (V2 - 16#DC00#);
+               pragma Assert (Dec_Step (Raw, K) = 12);
+               pragma Assert (Dec_Point (Raw, K) = C);
+               pragma Assert (C in 16#10000# .. 16#10FFFF#);
+               pragma Assert (U8_Len (C) = 4);
+               pragma Assert (Dec_Width (Raw, K) = 4);
+               pragma Assert (Dec_Nth (Raw, K, 1) = Character'Val (U8_Byte (C, 1)));
+               pragma Assert (Dec_Nth (Raw, K, 2) = Character'Val (U8_Byte (C, 2)));
+               pragma Assert (Dec_Nth (Raw, K, 3) = Character'Val (U8_Byte (C, 3)));
+               pragma Assert (Dec_Nth (Raw, K, 4) = Character'Val (U8_Byte (C, 4)));
+               pragma Assert (for all J in 1 .. Raw'Last - K - 11 => Dec_Nth (Raw, K, J + 4) = Dec_Nth (Raw, K + 12, J));
+               Output (N + 1) := Character'Val (U8_Byte (C, 1));
+               Output (N + 2) := Character'Val (U8_Byte (C, 2));
+               Output (N + 3) := Character'Val (U8_Byte (C, 3));
+               Output (N + 4) := Character'Val (U8_Byte (C, 4));
+               pragma Assert (Output (N + 1) = Dec_Nth (Raw, 1, N + 1));
+               pragma Assert (Output (N + 2) = Dec_Nth (Raw, 1, N + 2));
+               pragma Assert (Output (N + 3) = Dec_Nth (Raw, 1, N + 3));
+               pragma Assert (Output (N + 4) = Dec_Nth (Raw, 1, N + 4));
+               pragma Assert (for all I in 1 .. N => Output (I) = Dec_Nth (Raw, 1, I));
+               pragma Assert (for all I in N + 1 .. N + 4 => Output (I) = Dec_Nth (Raw, 1, I));
+               pragma Assert (for all I in 1 .. N + 4 => Output (I) = Dec_Nth (Raw, 1, I));
+               pragma Assert (for all J in 1 .. Raw'Last - K - 11 => Dec_Nth (Raw, 1, N + 4 + J) = Dec_Nth (Raw, K + 12, J));
+               N := N + 4;
+               K := K + 12;
+               pragma Assert (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
+            else
+               --  Any other code point: its UTF-8 bytes (1 to 3 of them).
+               C := V;
+               L := U8_Len (C);
+               pragma Assert (L <= 3);
+               pragma Assert (Dec_Step (Raw, K) = 6);
+               pragma Assert (Dec_Point (Raw, K) = C);
+               pragma Assert (Dec_Width (Raw, K) = L);
+               pragma Assert (Dec_Nth (Raw, K, 1) = Character'Val (U8_Byte (C, 1)));
+               pragma Assert (if L >= 2 then Dec_Nth (Raw, K, 2) = Character'Val (U8_Byte (C, 2)));
+               pragma Assert (if L = 3 then Dec_Nth (Raw, K, 3) = Character'Val (U8_Byte (C, 3)));
+               pragma Assert (for all J in 1 .. Raw'Last - K - 5 => Dec_Nth (Raw, K, J + L) = Dec_Nth (Raw, K + 6, J));
+               Output (N + 1) := Character'Val (U8_Byte (C, 1));
+               if L >= 2 then
+                  Output (N + 2) := Character'Val (U8_Byte (C, 2));
+               end if;
+               if L = 3 then
+                  Output (N + 3) := Character'Val (U8_Byte (C, 3));
+               end if;
+               pragma Assert (Output (N + 1) = Dec_Nth (Raw, 1, N + 1));
+               pragma Assert (if L >= 2 then Output (N + 2) = Dec_Nth (Raw, 1, N + 2));
+               pragma Assert (if L = 3 then Output (N + 3) = Dec_Nth (Raw, 1, N + 3));
+               pragma Assert (for all I in 1 .. N => Output (I) = Dec_Nth (Raw, 1, I));
+               pragma Assert (for all I in N + 1 .. N + L => Output (I) = Dec_Nth (Raw, 1, I));
+               pragma Assert (for all I in 1 .. N + L => Output (I) = Dec_Nth (Raw, 1, I));
+               pragma Assert (for all J in 1 .. Raw'Last - K - 5 => Dec_Nth (Raw, 1, N + L + J) = Dec_Nth (Raw, K + 6, J));
+               pragma Assert (for all I in 0 .. 5 => Raw (K + I) >= ' ');
+               pragma Assert (for all J in 1 .. K + 5 => Raw (J) >= ' ');
+               N := N + L;
+               K := K + 6;
+               pragma Assert (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
+            end if;
          else
+            --  An unknown escape letter, or a truncated or malformed backslash-u escape.
+            pragma Assert (Dec_Step (Raw, K) = 0);
             return;
          end if;
       end loop;
@@ -158,6 +262,9 @@ package body Json_String_Pkg with SPARK_Mode => On is
             else
                Output (N + 2) := Input (K);
             end if;
+            pragma Assert (Output (N + 1) = '\');
+            pragma Assert (Output (N + 2) >= ' ');
+            pragma Assert (for all J in 1 .. N => Output (J) >= ' ');
             pragma Assert (for all J in 1 .. N + 2 => Output (J) >= ' ');
             pragma Assert (for all I in 1 .. N + 2 => Output (I) = Enc_Nth (Input, 1, I));
             pragma Assert (for all J in 1 .. 6 * (Input'Last - K - 1 + 1) => Enc_Nth (Input, 1, N + 2 + J) = Enc_Nth (Input, K + 1, J));

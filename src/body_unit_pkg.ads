@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: e4d2c53036aa59f4d1923f77ad7a4b7ddf4adbd963b2269ebd7bb3866b78e1f4
+--  Unstamped source sha256: 1b0f76f7d49c82bde7e2ea6312f540c46e25d645ee4be12ff20785175f64e7f0
 --
 with Unit_Extract_Pkg;
 
@@ -35,7 +35,7 @@ package Body_Unit_Pkg with SPARK_Mode is
        Name'Length <= Unit_Extract_Pkg.Max_Name;
 
    function Is_Body (Text : String; Name : String) return Boolean
-     is (Unit_Extract_Pkg.Is_Ascii (Text)
+     is (Unit_Extract_Pkg.Is_Clean (Text)
          and then
          Unit_Extract_Pkg.First_Content (Text, Unit_Extract_Pkg.After_Think (Text)) <= Text'Length
            and then
@@ -61,6 +61,10 @@ package Body_Unit_Pkg with SPARK_Mode is
             and then
             (if Is_Body'Result then Unit_Extract_Pkg.Ends_Unit (Text, Unit_Extract_Pkg.Last_Content (Text), Name))
             and then
-            (if not Unit_Extract_Pkg.Is_Ascii (Text) then not Is_Body'Result);
+            (if Is_Body'Result then (for all I in Text'Range => Character'Pos (Text (I)) in 32 .. 126 or else Character'Pos (Text (I)) in 9 | 10 | 13))
+            and then
+            (if not Unit_Extract_Pkg.Is_Ascii (Text) then not Is_Body'Result)
+            and then
+            (if not Unit_Extract_Pkg.Is_Clean (Text) then not Is_Body'Result);
 
 end Body_Unit_Pkg;

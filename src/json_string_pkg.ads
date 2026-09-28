@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 57440c6010c025e2742c354deeed0d02ab6dc9d44408951fe04b722d9ff9f5ef
+--  Unstamped source sha256: 079d426fd77cb37460741da13940e9d87b37267dc69084dc09506b0bba1f73b9
 --
 package Json_String_Pkg with SPARK_Mode is
 
@@ -57,73 +57,6 @@ package Json_String_Pkg with SPARK_Mode is
    --  THE MODEL OF Decode AND Encode (ghost: proof only, never compiled into the program).
    --  Decode's and Encode's Posts say their outputs ARE these definitions, so no body
    --  can be hollow: every output character, the length and Ok are all pinned.
-
-   --  Dec_Code: the value of the four hex digits of a \uHHHH escape starting at K.
-   function Dec_Code (Raw : String; K : Positive) return Natural is
-     (4096 * Hex_Value (Raw (K + 2)) + 256 * Hex_Value (Raw (K + 3))
-      + 16 * Hex_Value (Raw (K + 4)) + Hex_Value (Raw (K + 5)))
-   with Ghost,
-        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range
-               and then K <= Raw'Last - 5
-               and then Is_Hex (Raw (K + 2)) and then Is_Hex (Raw (K + 3))
-               and then Is_Hex (Raw (K + 4)) and then Is_Hex (Raw (K + 5)),
-        Post => Dec_Code'Result <= 65535;
-
-   --  Dec_Step: how many characters of Raw the token at K takes (1, 2 or 6); 0 means
-   --  the token at K is invalid and Decode refuses.
-   function Dec_Step (Raw : String; K : Positive) return Natural is
-     ((if Raw (K) not in ' ' .. '~' or else Raw (K) = '"' then 0
-       elsif Raw (K) /= '\' then 1
-       elsif K = Raw'Last then 0
-       elsif Is_Simple_Escape (Raw (K + 1)) then 2
-       elsif Raw (K + 1) = 'u' and then K <= Raw'Last - 5
-         and then Is_Hex (Raw (K + 2)) and then Is_Hex (Raw (K + 3))
-         and then Is_Hex (Raw (K + 4)) and then Is_Hex (Raw (K + 5))
-         and then Dec_Code (Raw, K) in 16#20# .. 16#7E#
-       then 6
-       else 0))
-   with Ghost,
-        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range,
-        Post => (Dec_Step'Result = 0 or else Dec_Step'Result = 1 or else Dec_Step'Result = 2 or else Dec_Step'Result = 6)
-                and then Dec_Step'Result <= Raw'Last - K + 1;
-
-   --  Dec_Char: the character the (valid) token at K decodes to.
-   function Dec_Char (Raw : String; K : Positive) return Character is
-     ((if Raw (K) /= '\' then Raw (K)
-       elsif Is_Simple_Escape (Raw (K + 1)) then Simple_Value (Raw (K + 1))
-       else Character'Val (Dec_Code (Raw, K))))
-   with Ghost,
-        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range
-               and then Dec_Step (Raw, K) /= 0;
-
-   --  Dec_Ok: every token from K to the end is valid.
-   function Dec_Ok (Raw : String; K : Positive) return Boolean is
-     ((if K > Raw'Last then True
-       elsif Dec_Step (Raw, K) = 0 then False
-       else Dec_Ok (Raw, K + Dec_Step (Raw, K))))
-   with Ghost,
-        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K - 1 <= Raw'Last,
-        Subprogram_Variant => (Decreases => Raw'Last - K + 1);
-
-   --  Dec_Len: how many characters the tokens from K decode to (up to the first invalid one).
-   function Dec_Len (Raw : String; K : Positive) return Natural is
-     ((if K > Raw'Last then 0
-       elsif Dec_Step (Raw, K) = 0 then 0
-       else 1 + Dec_Len (Raw, K + Dec_Step (Raw, K))))
-   with Ghost,
-        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K - 1 <= Raw'Last,
-        Post => Dec_Len'Result <= Raw'Last - K + 1,
-        Subprogram_Variant => (Decreases => Raw'Last - K + 1);
-
-   --  Dec_Nth: the I-th character decoded from the tokens starting at K (' ' past the end).
-   function Dec_Nth (Raw : String; K : Positive; I : Positive) return Character is
-     ((if K > Raw'Last then ' '
-       elsif Dec_Step (Raw, K) = 0 then ' '
-       elsif I = 1 then Dec_Char (Raw, K)
-       else Dec_Nth (Raw, K + Dec_Step (Raw, K), I - 1)))
-   with Ghost,
-        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K - 1 <= Raw'Last,
-        Subprogram_Variant => (Decreases => I);
 
    --  THE ENCODE MODEL (lineage 3). Encode reads Input as UTF-8, one TOKEN at a time:
    --  an ASCII byte, or one whole well-formed multi-byte sequence. Utf8_Width says how
@@ -246,9 +179,170 @@ package Json_String_Pkg with SPARK_Mode is
         Pre => Input'First = 1 and then Input'Last in 0 .. Max_Raw and then K - 1 <= Input'Last,
         Subprogram_Variant => (Decreases => I);
 
+   --  THE DECODE MODEL (lineage 4). Decode reads Raw (the text between a JSON string's
+   --  quotes) one TOKEN at a time and writes the UTF-8 bytes the token stands for:
+   --    a byte 32 .. 127 other than '"' and '\'            -> itself (1 byte);
+   --    a well-formed multi-byte UTF-8 sequence (Utf8_Width) -> itself (2 .. 4 bytes);
+   --    a backslash and a simple escape letter               -> Simple_Value (1 byte);
+   --    backslash, u, four hex digits, not a surrogate       -> that code point in UTF-8 (1 .. 3 bytes);
+   --    a high surrogate escape (D800 .. DBFF) followed at once by a low surrogate escape
+   --    (DC00 .. DFFF)                                        -> the pair's code point in UTF-8 (4 bytes).
+   --  Anything else is REFUSED: a raw control character (below 32), a raw '"', ill-formed
+   --  UTF-8, a lone, unpaired or misordered surrogate, an unknown or truncated escape.
+   --  A token never writes more bytes than it reads, so the output fits in Raw'Length.
+
+   --  Dec_Code: the value of the four hex digits of a \uHHHH escape starting at K.
+   function Dec_Code (Raw : String; K : Positive) return Natural is
+     (4096 * Hex_Value (Raw (K + 2)) + 256 * Hex_Value (Raw (K + 3))
+      + 16 * Hex_Value (Raw (K + 4)) + Hex_Value (Raw (K + 5)))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range
+               and then K <= Raw'Last - 5
+               and then Is_Hex (Raw (K + 2)) and then Is_Hex (Raw (K + 3))
+               and then Is_Hex (Raw (K + 4)) and then Is_Hex (Raw (K + 5)),
+        Post => Dec_Code'Result <= 65535;
+
+   --  Is_U_Esc: a backslash, 'u' and four hex digits start at K.
+   function Is_U_Esc (Raw : String; K : Positive) return Boolean is
+     (K <= Raw'Last - 5
+      and then Raw (K) = '\' and then Raw (K + 1) = 'u'
+      and then Is_Hex (Raw (K + 2)) and then Is_Hex (Raw (K + 3))
+      and then Is_Hex (Raw (K + 4)) and then Is_Hex (Raw (K + 5)))
+   with Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range;
+
+   --  U8_Len: how many bytes code point C takes in UTF-8.
+   function U8_Len (C : Natural) return Positive is
+     ((if C < 16#80# then 1 elsif C < 16#800# then 2 elsif C < 16#10000# then 3 else 4))
+   with Pre => C <= 16#10FFFF#,
+        Post => U8_Len'Result <= 4;
+
+   --  U8_Byte: the I-th byte of code point C in UTF-8 (RFC 3629).
+   function U8_Byte (C : Natural; I : Positive) return Natural is
+     ((if C < 16#80# then C
+       elsif C < 16#800# then
+         (if I = 1 then 16#C0# + C / 64 else 16#80# + C mod 64)
+       elsif C < 16#10000# then
+         (if I = 1 then 16#E0# + C / 4096
+          elsif I = 2 then 16#80# + (C / 64) mod 64
+          else 16#80# + C mod 64)
+       else
+         (if I = 1 then 16#F0# + C / 262144
+          elsif I = 2 then 16#80# + (C / 4096) mod 64
+          elsif I = 3 then 16#80# + (C / 64) mod 64
+          else 16#80# + C mod 64)))
+   with Pre => C <= 16#10FFFF# and then I <= U8_Len (C),
+        Post => U8_Byte'Result <= 255;
+
+   --  U8_Sound: U8_Byte IS the UTF-8 encoding of C, checked independently of how it is
+   --  computed. The lead byte has the form U8_Len (C) needs (never overlong), every
+   --  other byte is a continuation byte, and the bytes decode back to C. Its Post says
+   --  this holds for every C, so a wrong byte in U8_Byte leaves this Post unproved.
+   function U8_Sound (C : Natural) return Boolean is
+     ((if C < 16#80# then U8_Byte (C, 1) = C
+       elsif C < 16#800# then
+         U8_Byte (C, 1) in 16#C2# .. 16#DF# and then U8_Byte (C, 2) in 16#80# .. 16#BF#
+         and then 64 * (U8_Byte (C, 1) - 16#C0#) + (U8_Byte (C, 2) - 16#80#) = C
+       elsif C < 16#10000# then
+         U8_Byte (C, 1) in 16#E0# .. 16#EF# and then U8_Byte (C, 2) in 16#80# .. 16#BF#
+         and then U8_Byte (C, 3) in 16#80# .. 16#BF#
+         and then 4096 * (U8_Byte (C, 1) - 16#E0#) + 64 * (U8_Byte (C, 2) - 16#80#)
+                  + (U8_Byte (C, 3) - 16#80#) = C
+       else
+         U8_Byte (C, 1) in 16#F0# .. 16#F4# and then U8_Byte (C, 2) in 16#80# .. 16#BF#
+         and then U8_Byte (C, 3) in 16#80# .. 16#BF# and then U8_Byte (C, 4) in 16#80# .. 16#BF#
+         and then 262144 * (U8_Byte (C, 1) - 16#F0#) + 4096 * (U8_Byte (C, 2) - 16#80#)
+                  + 64 * (U8_Byte (C, 3) - 16#80#) + (U8_Byte (C, 4) - 16#80#) = C))
+   with Ghost,
+        Pre => C <= 16#10FFFF#,
+        Post => U8_Sound'Result;
+
+   --  Dec_Step: how many characters of Raw the token at K takes (1 .. 4, 6 or 12); 0 means
+   --  the token at K is invalid and Decode refuses.
+   function Dec_Step (Raw : String; K : Positive) return Natural is
+     ((if Raw (K) < ' ' or else Raw (K) = '"' then 0
+       elsif Character'Pos (Raw (K)) >= 16#80# then Utf8_Width (Raw, K)
+       elsif Raw (K) /= '\' then 1
+       elsif K = Raw'Last then 0
+       elsif Is_Simple_Escape (Raw (K + 1)) then 2
+       elsif not Is_U_Esc (Raw, K) then 0
+       elsif Dec_Code (Raw, K) in 16#DC00# .. 16#DFFF# then 0
+       elsif Dec_Code (Raw, K) not in 16#D800# .. 16#DBFF# then 6
+       elsif K + 6 <= Raw'Last and then Is_U_Esc (Raw, K + 6)
+         and then Dec_Code (Raw, K + 6) in 16#DC00# .. 16#DFFF#
+       then 12
+       else 0))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range,
+        Post => Dec_Step'Result <= 12
+                and then Dec_Step'Result <= Raw'Last - K + 1;
+
+   --  Dec_Point: the code point of the escape token (6 or 12 characters) at K.
+   function Dec_Point (Raw : String; K : Positive) return Natural is
+     ((if Dec_Step (Raw, K) = 12
+       then 16#10000# + 1024 * (Dec_Code (Raw, K) - 16#D800#) + (Dec_Code (Raw, K + 6) - 16#DC00#)
+       else Dec_Code (Raw, K)))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range
+               and then Raw (K) = '\' and then Dec_Step (Raw, K) >= 6,
+        Post => Dec_Point'Result <= 16#10FFFF#
+                and then Dec_Point'Result not in 16#D800# .. 16#DFFF#
+                and then (Dec_Point'Result >= 16#10000#) = (Dec_Step (Raw, K) = 12);
+
+   --  Dec_Width: how many bytes Decode writes for the (valid) token at K.
+   function Dec_Width (Raw : String; K : Positive) return Positive is
+     ((if Raw (K) /= '\' then Dec_Step (Raw, K)
+       elsif Dec_Step (Raw, K) = 2 then 1
+       else U8_Len (Dec_Point (Raw, K))))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range
+               and then Dec_Step (Raw, K) /= 0,
+        Post => Dec_Width'Result <= 4 and then Dec_Width'Result <= Dec_Step (Raw, K);
+
+   --  Dec_Byte: the I-th byte Decode writes for the (valid) token at K.
+   function Dec_Byte (Raw : String; K : Positive; I : Positive) return Character is
+     ((if Raw (K) /= '\' then Raw (K + I - 1)
+       elsif Dec_Step (Raw, K) = 2 then Simple_Value (Raw (K + 1))
+       else Character'Val (U8_Byte (Dec_Point (Raw, K), I))))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K in Raw'Range
+               and then Dec_Step (Raw, K) /= 0 and then I <= Dec_Width (Raw, K);
+
+   --  Dec_Ok: every token from K to the end is valid.
+   function Dec_Ok (Raw : String; K : Positive) return Boolean is
+     ((if K > Raw'Last then True
+       elsif Dec_Step (Raw, K) = 0 then False
+       else Dec_Ok (Raw, K + Dec_Step (Raw, K))))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K - 1 <= Raw'Last,
+        Subprogram_Variant => (Decreases => Raw'Last - K + 1);
+
+   --  Dec_Len: how many bytes the tokens from K decode to (up to the first invalid one).
+   function Dec_Len (Raw : String; K : Positive) return Natural is
+     ((if K > Raw'Last then 0
+       elsif Dec_Step (Raw, K) = 0 then 0
+       else Dec_Width (Raw, K) + Dec_Len (Raw, K + Dec_Step (Raw, K))))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K - 1 <= Raw'Last,
+        Post => Dec_Len'Result <= Raw'Last - K + 1,
+        Subprogram_Variant => (Decreases => Raw'Last - K + 1);
+
+   --  Dec_Nth: the I-th byte decoded from the tokens starting at K (' ' past the end).
+   function Dec_Nth (Raw : String; K : Positive; I : Positive) return Character is
+     ((if K > Raw'Last then ' '
+       elsif Dec_Step (Raw, K) = 0 then ' '
+       elsif I <= Dec_Width (Raw, K) then Dec_Byte (Raw, K, I)
+       else Dec_Nth (Raw, K + Dec_Step (Raw, K), I - Dec_Width (Raw, K))))
+   with Ghost,
+        Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then K - 1 <= Raw'Last,
+        Subprogram_Variant => (Decreases => I);
+
    procedure Decode (Raw : String; Output : out String; Output_Len : out Natural; Ok : out Boolean)
    with Pre => Raw'First = 1 and then Raw'Last in 0 .. Max_Raw and then Output'First = 1 and then Output'Length >= Raw'Length,
-        Post => (if Ok then Output_Len <= Raw'Length and then (for all K in 1 .. Output_Len => Is_Output_Char (Output (K)))) and then (if (for all K in Raw'Range => Is_Plain (Raw (K))) then Ok and then Output_Len = Raw'Length and then (for all K in Raw'Range => Output (K) = Raw (K))) and then (if (for some K in Raw'Range => Raw (K) not in ' ' .. '~') then not Ok) and then (if Raw'Length >= 1 and then Raw (Raw'Last) = '\' and then (Raw'Length = 1 or else Raw (Raw'Last - 1) /= '\') then not Ok) and then (if Raw'Length = 2 and then Raw (1) = '\' and then Is_Simple_Escape (Raw (2)) then Ok and then Output_Len = 1 and then Output (1) = Simple_Value (Raw (2)))
+        Post => (if Ok then Output_Len <= Raw'Length)
+                and then (if (for all K in Raw'Range => Is_Plain (Raw (K))) then Ok and then Output_Len = Raw'Length and then (for all K in Raw'Range => Output (K) = Raw (K)))
+                and then (if (for some K in Raw'Range => Raw (K) < ' ') then not Ok)
+                and then (if Raw'Length >= 1 and then Raw (Raw'Last) = '\' and then (Raw'Length = 1 or else Raw (Raw'Last - 1) /= '\') then not Ok)
+                and then (if Raw'Length = 2 and then Raw (1) = '\' and then Is_Simple_Escape (Raw (2)) then Ok and then Output_Len = 1 and then Output (1) = Simple_Value (Raw (2)))
                 and then (Ok = Dec_Ok (Raw, 1))
                 and then (if not Ok then Output_Len = 0)
                 and then (if Ok then Output_Len = Dec_Len (Raw, 1))
@@ -266,10 +360,12 @@ package Json_String_Pkg with SPARK_Mode is
                 and then (if Ok then Output_Len = Enc_Len (Input, 1))
                 and then (if Ok then (for all I in 1 .. Output_Len => Output (I) = Enc_Nth (Input, 1, I)));
 
-   --  BODY: Decode's loop carries, besides its bound invariants,
+   --  BODY: Decode is a WHILE loop over tokens. Its loop carries, besides its bound invariants,
    --  BODY:   Dec_Ok (Raw, 1) = Dec_Ok (Raw, K)  and  Dec_Len (Raw, 1) = N + Dec_Len (Raw, K),
    --  BODY:   (for all I in 1 .. N => Output (I) = Dec_Nth (Raw, 1, I)),
    --  BODY:   (for all J in 1 .. Raw'Last - K + 1 => Dec_Nth (Raw, 1, N + J) = Dec_Nth (Raw, K, J));
+   --  BODY: Each branch asserts Dec_Step and Dec_Width of the token, Dec_Nth (Raw, K, I) for
+   --  BODY: every I it writes, and the shift Dec_Nth (K, J + width) = Dec_Nth (K + step, J).
    --  BODY: Encode is a WHILE loop over tokens (W := Utf8_Width (Input, K); W = 0 refuses).
    --  BODY: It carries Utf8_Valid_From (Input, 1) = Utf8_Valid_From (Input, K),
    --  BODY: Enc_Len (Input, 1) = N + Enc_Len (Input, K) and the same two Nth invariants
