@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 5f402c941033b00a1fea9878f2448766eef356099c824b2126af1722c2c5a9dc
+--  Unstamped source sha256: 78ec7ae75dde63bb0a02c6a4a4d5ed0e03eeee6764685249149ba6927572a759
 --
 --  Decompose_Activity_Pkg body -- template (seat-written plumbing) with TWO slots (model_result, design_result), filled
 --  by a Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 3, Decompose).
@@ -43,7 +43,7 @@ package body Decompose_Activity_Pkg with SPARK_Mode => Off is
       if not Model_Reply_Pkg.Is_Text (O) then
          Reason := To_Unbounded_String ("model: " & Lower (Model_Reply_Pkg.Outcome_Kind'Image (O)));
          --  SLOT BEGIN (model_result)
-Result := Stage_Outcome_Map_Pkg.From_Model (O);
+         Result := Stage_Outcome_Map_Pkg.From_Model (O);
          --  SLOT END (model_result)
          return;
       end if;
@@ -140,7 +140,7 @@ Result := Stage_Outcome_Map_Pkg.From_Model (O);
       end;
 
       --  SLOT BEGIN (design_result)
-Result := Stage_Outcome_Map_Pkg.From_Verdict (Accepted);
+      Result := Stage_Outcome_Map_Pkg.From_Verdict (Accepted);
       --  SLOT END (design_result)
    exception
       when others =>

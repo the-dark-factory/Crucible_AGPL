@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: df8f0656227dd14ebcfd479df1c301a581aa57fc73e1eb502857ca86991f09cb
+--  Unstamped source sha256: 19b6195dd186f454758a812d10c0110eea645e3c6eb417adc9af34a16c7d6bb4
 --
 --  Decompose_Activity_Pkg -- the Decompose stage of CRUCIBLE's pipeline, in process (step 4c unit 3).
 --  Purpose: ask the model rail for a MASCOT design of the brief, and judge it with the proven MASCOT scanner, measurer
@@ -25,6 +25,10 @@ package Decompose_Activity_Pkg with SPARK_Mode => Off is
    --  2026-09-19 (Tony): two sentences added after an A/B through this package (Run_Keeping_Design, Rosie v0.3, two
    --  sheets): data in POOLS with the events channel the ONLY worker-to-sink channel, and an example pool line carrying
    --  its discharge. Decompose passed 32/50 with neither, 44/50 with the first, 50/50 with both.
+   --  2026-09-28 (Tony): an example ACTIVITY line (the sink) added after an A/B through the released door (cand5,
+   --  13 corpus sheets + Build_Stamp x2, two samples each): with pool and channel examples only, qwen3-coder:30b gave
+   --  no activity a discharge (30/30 activities, 0/46 pools, in its every_leaf_discharges refusals). Evidence:
+   --  crucible-parity/v03-test/decompose-diagnosis.md and ab/.
    Design_Instruction : constant String :=
      "Emit a MASCOT design as JSON lines: exactly one subsystem per line, each line one flat JSON "
      & "object, every value a double-quoted string (no numbers, no lists, no nesting), no prose, no "
@@ -52,6 +56,9 @@ package Decompose_Activity_Pkg with SPARK_Mode => Off is
      & """producer"":""searcher"",""consumer"":""reporter"",""reporting"":""true""} "
      & "Example pool line (every pool carries its discharge): {""id"":""input"",""kind"":""pool"",""element"":""Input"","
      & """accessed"":""worker"",""discharge"":""the input is read-only while the worker runs""} "
+     & "Example activity line (the sink; every activity reports on the events channel and carries its discharge): "
+     & "{""id"":""reporter"",""kind"":""activity"",""reads"":""events"",""reports"":""events"","
+     & """discharge"":""every event is written once, in order""} "
      & "Brief: ";
 
    procedure Run
