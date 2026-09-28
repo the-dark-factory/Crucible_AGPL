@@ -1,0 +1,39 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
+--  Vendored into Crucible 2026-09-28 from ada-factory expand-lovelace-check-cores/multicall (df928190).
+--  Changed from that copy: this header, and Object_Dir/Exec_Dir so the build lands in Crucible's obj/ and bin/.
+--
+--  vacuity_battery.gpr: the link step of the lovelace vacuity battery (sheets-assembly.txt section 1).
+--  src/ holds each lane-verified unit's source byte-identical to its wu-lovelace-* dir (SOURCES.tsv);
+--  the only new source is vacuity_battery.adb, the argv[0] dispatcher.
+--
+--  Switches reproduce each wu dir's edge.gpr: -gnat2022 -gnatU everywhere, -O2 except the seven units
+--  whose edge.gpr omits it (and the three carried specs only those seven use). The four carried cores
+--  shared between an -O2 unit and a non-O2 unit (run_config, utf8_decode, word_rules, go_quote) compile
+--  once here, at -O2.
+project Vacuity_Battery is
+   for Source_Dirs use (".", "src");
+   for Object_Dir use "../obj/battery";
+   for Exec_Dir use "../bin";
+   for Main use ("vacuity_battery.adb");
+
+   package Builder is
+      for Executable ("vacuity_battery.adb") use "vacuity-battery";
+   end Builder;
+
+   No_O2 := ("-gnat2022", "-gnatU");
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatU", "-O2");
+      for Switches ("argv_reader_main.adb") use No_O2;
+      for Switches ("aspect_counter_main.adb") use No_O2;
+      for Switches ("byte_measure_main.adb") use No_O2;
+      for Switches ("deps_lister_main.adb") use No_O2;
+      for Switches ("go_quote_wide_main.adb") use No_O2;
+      for Switches ("header_finder_main.adb") use No_O2;
+      for Switches ("spec_file_reader_main.adb") use No_O2;
+      for Switches ("lovelace_go_print_pkg.ads") use No_O2;
+      for Switches ("lovelace_go_print_16_pkg.ads") use No_O2;
+      for Switches ("lovelace_carried_unit_rule_pkg.ads") use No_O2;
+   end Compiler;
+end Vacuity_Battery;

@@ -1,0 +1,406 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
+--  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: aac4880eb7bd2b4fb85c2b15727add62b1f4422ecd53da7b3f626ccaf9a81a02
+--
+with Ada.Text_IO;
+with Ada.Command_Line;
+with Ada.Strings.Unbounded;
+with Ada.Containers.Vectors;
+with Ada.Containers.Indefinite_Vectors;
+with GNAT.OS_Lib;
+with Lovelace_Word_Rules_Pkg;
+
+procedure Tb_Stage_Main is
+   use type GNAT.OS_Lib.File_Descriptor;
+
+   package U renames Ada.Strings.Unbounded;
+
+   type Param is record
+      Name : U.Unbounded_String;
+      Kind : U.Unbounded_String;
+   end record;
+
+   package Param_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Param);
+   package Text_Vectors is new Ada.Containers.Indefinite_Vectors
+     (Index_Type => Positive, Element_Type => String);
+
+   type Func is record
+      Name      : U.Unbounded_String;
+      Ret       : U.Unbounded_String;
+      Pre       : U.Unbounded_String;
+      Post      : U.Unbounded_String;
+      Body_Text : U.Unbounded_String;
+      Renamed   : U.Unbounded_String;
+      Combined  : Boolean := False;
+      Is_Bool   : Boolean := False;
+      Decl_Line : Natural := 0;
+      Decl_End  : Natural := 0;
+      Body_Line : Natural := 0;
+      Body_End  : Natural := 0;
+      Params    : Param_Vectors.Vector;
+      Aspects   : Text_Vectors.Vector;
+   end record;
+
+   package Func_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Func);
+
+   LF          : constant Character := Character'Val (10);
+   Max_Request : constant := 4_194_304;
+
+   Req    : U.Unbounded_String;
+   Pos    : Positive := 1;
+   Bad    : Boolean := False;
+   Output : U.Unbounded_String;
+
+   function Decimal (N : Natural) return String is
+      S : constant String := Natural'Image (N);
+   begin
+      return S (S'First + 1 .. S'Last);
+   end Decimal;
+
+   --  Read the whole request file into Req. Ok is False when it cannot be read or is too long.
+   procedure Load (Path : String; Ok : out Boolean) is
+      FD : constant GNAT.OS_Lib.File_Descriptor := GNAT.OS_Lib.Open_Read (Path, GNAT.OS_Lib.Binary);
+   begin
+      Ok := False;
+      if FD = GNAT.OS_Lib.Invalid_FD then
+         return;
+      end if;
+      if GNAT.OS_Lib.File_Length (FD) > Max_Request then
+         GNAT.OS_Lib.Close (FD);
+         return;
+      end if;
+      declare
+         Buf : String (1 .. Natural (GNAT.OS_Lib.File_Length (FD)));
+         N   : Integer := 0;
+      begin
+         if Buf'Length > 0 then
+            N := GNAT.OS_Lib.Read (FD, Buf (1)'Address, Buf'Length);
+         end if;
+         GNAT.OS_Lib.Close (FD);
+         if N = Buf'Length then
+            Req := U.To_Unbounded_String (Buf);
+            Ok := True;
+         end if;
+      end;
+   end Load;
+
+   --  The next field "<Key> <length>" LF <bytes> LF. On any mismatch Bad is set and "" returned.
+   function Next (Key : String) return String is
+      Last : constant Natural := U.Length (Req);
+      NL   : Natural := 0;
+      N    : Natural := 0;
+      Sp   : Natural := 0;
+   begin
+      if Bad then
+         return "";
+      end if;
+      for I in Pos .. Last loop
+         if U.Element (Req, I) = LF then
+            NL := I;
+            exit;
+         end if;
+      end loop;
+      if NL = 0 then
+         Bad := True;
+         return "";
+      end if;
+      for I in Pos .. NL - 1 loop
+         if U.Element (Req, I) = ' ' then
+            Sp := I;
+            exit;
+         end if;
+      end loop;
+      if Sp = 0 or else U.Slice (Req, Pos, Sp - 1) /= Key or else NL - Sp - 1 < 1 or else NL - Sp - 1 > 9 then
+         Bad := True;
+         return "";
+      end if;
+      if NL - Sp - 1 > 1 and then U.Element (Req, Sp + 1) = '0' then
+         Bad := True;
+         return "";
+      end if;
+      for I in Sp + 1 .. NL - 1 loop
+         if U.Element (Req, I) not in '0' .. '9' then
+            Bad := True;
+            return "";
+         end if;
+         N := N * 10 + (Character'Pos (U.Element (Req, I)) - Character'Pos ('0'));
+      end loop;
+      if N > Last - NL - 1 or else U.Element (Req, NL + N + 1) /= LF then
+         Bad := True;
+         return "";
+      end if;
+      Pos := NL + N + 2;
+      declare
+         V : constant String (1 .. N) := U.Slice (Req, NL + 1, NL + N);
+      begin
+         return V;
+      end;
+   end Next;
+
+   --  A field whose value is a decimal count.
+   function Next_Count (Key : String) return Natural is
+      V : constant String := Next (Key);
+      N : Natural := 0;
+   begin
+      if V'Length < 1 or else V'Length > 7 or else (V'Length > 1 and then V (V'First) = '0') then
+         Bad := True;
+         return 0;
+      end if;
+      for C of V loop
+         if C not in '0' .. '9' then
+            Bad := True;
+            return 0;
+         end if;
+         N := N * 10 + (Character'Pos (C) - Character'Pos ('0'));
+      end loop;
+      return N;
+   end Next_Count;
+
+   --  A field whose value is "true" or "false".
+   function Next_Flag (Key : String) return Boolean is
+      V : constant String := Next (Key);
+   begin
+      if V /= "true" and then V /= "false" then
+         Bad := True;
+      end if;
+      return V = "true";
+   end Next_Flag;
+
+   --  Append one output field.
+   procedure Field (Key : String; Value : String) is
+   begin
+      U.Append (Output, Key & " " & Decimal (Value'Length) & LF & Value & LF);
+   end Field;
+
+   --  The four decimals of a "lines" field.
+   procedure Read_Lines (V : String; F : in out Func) is
+      Nums : array (1 .. 4) of Natural := (others => 0);
+      K    : Natural := 0;
+      In_Num : Boolean := False;
+   begin
+      for C of V loop
+         if C in '0' .. '9' then
+            if not In_Num then
+               K := K + 1;
+               In_Num := True;
+               if K > 4 then
+                  Bad := True;
+                  return;
+               end if;
+            end if;
+            Nums (K) := Nums (K) * 10 + (Character'Pos (C) - Character'Pos ('0'));
+         elsif C = ' ' then
+            In_Num := False;
+         else
+            Bad := True;
+            return;
+         end if;
+      end loop;
+      if K /= 4 then
+         Bad := True;
+         return;
+      end if;
+      F.Decl_Line := Nums (1);
+      F.Decl_End := Nums (2);
+      F.Body_Line := Nums (3);
+      F.Body_End := Nums (4);
+   end Read_Lines;
+
+   --  The stage request: package, text, subject, extra, then the function table.
+   procedure Read_Spec (Pkg : out U.Unbounded_String; Text : out U.Unbounded_String;
+                        Subject : out Natural; Extra : out U.Unbounded_String;
+                        Funcs : out Func_Vectors.Vector) is
+      N : Natural;
+   begin
+      Pkg := U.To_Unbounded_String (Next ("package"));
+      Text := U.To_Unbounded_String (Next ("text"));
+      Subject := Next_Count ("subject");
+      Extra := U.To_Unbounded_String (Next ("extra"));
+      N := Next_Count ("count");
+      Funcs := Func_Vectors.Empty_Vector;
+      for I in 1 .. N loop
+         exit when Bad;
+         declare
+            F  : Func;
+            NP : Natural;
+            NA : Natural;
+         begin
+            F.Name := U.To_Unbounded_String (Next ("name"));
+            F.Ret := U.To_Unbounded_String (Next ("ret"));
+            F.Pre := U.To_Unbounded_String (Next ("pre"));
+            F.Post := U.To_Unbounded_String (Next ("post"));
+            F.Body_Text := U.To_Unbounded_String (Next ("body"));
+            F.Renamed := U.To_Unbounded_String (Next ("renames"));
+            F.Combined := Next_Flag ("combined");
+            F.Is_Bool := Next_Flag ("boolean");
+            Read_Lines (Next ("lines"), F);
+            NP := Next_Count ("params");
+            for K in 1 .. NP loop
+               exit when Bad;
+               declare
+                  P : Param;
+               begin
+                  P.Name := U.To_Unbounded_String (Next ("pname"));
+                  P.Kind := U.To_Unbounded_String (Next ("ptype"));
+                  F.Params.Append (P);
+               end;
+            end loop;
+            NA := Next_Count ("aspects");
+            for K in 1 .. NA loop
+               exit when Bad;
+               F.Aspects.Append (Next ("aspect"));
+            end loop;
+            Funcs.Append (F);
+         end;
+      end loop;
+      if Pos /= U.Length (Req) + 1 or else Subject < 1 or else Subject > Natural (Funcs.Length) then
+         Bad := True;
+      end if;
+   end Read_Spec;
+
+   --  Go's paramList: "" or " (" & "N : T" joined by "; " & ")".
+   function Param_List (Ps : Param_Vectors.Vector) return String is
+      R : U.Unbounded_String;
+   begin
+      if Ps.Is_Empty then
+         return "";
+      end if;
+      U.Append (R, " (");
+      for K in 1 .. Natural (Ps.Length) loop
+         if K > 1 then
+            U.Append (R, "; ");
+         end if;
+         U.Append (R, U.To_String (Ps (K).Name) & " : " & U.To_String (Ps (K).Kind));
+      end loop;
+      U.Append (R, ")");
+      return U.To_String (R);
+   end Param_List;
+
+   --  Print Output as it is, with no line end added.
+   procedure Emit is
+      S : constant String := U.To_String (Output);
+      W : Integer;
+   begin
+      if S'Length > 0 then
+         W := GNAT.OS_Lib.Write (GNAT.OS_Lib.Standout, S (S'First)'Address, S'Length);
+      end if;
+   end Emit;
+
+   --  One lemma, as the lemma-builder request carries it.
+   procedure Write_Lemma (Key : String; Name : String; Ps : Param_Vectors.Vector;
+                          Pre : String; Post : String; Note : String) is
+   begin
+      Field ("key", Key);
+      Field ("lname", Name);
+      Field ("params", Decimal (Natural (Ps.Length)));
+      for P of Ps loop
+         Field ("pname", U.To_String (P.Name));
+         Field ("ptype", U.To_String (P.Kind));
+      end loop;
+      Field ("pre", Pre);
+      Field ("lpost", Post);
+      Field ("note", Note);
+   end Write_Lemma;
+
+   package Guard_Vectors is new Ada.Containers.Indefinite_Vectors
+     (Index_Type => Positive, Element_Type => String);
+
+   --  ifConditions [parse.go:575-619] over the collapsed text S: for Kw "if" then "elsif", each
+   --  whole-word Kw (word-rules' Keyword_At_Or_After) starts a guard at I + Kw'Length that ends
+   --  before the depth-zero "then" not preceded by "and" (word-rules' Guard_End); the guard is
+   --  trimmed and kept when not empty; the search goes on after that "then". No "then" (0) ends
+   --  the search for that Kw, as Go's break does.
+   --  (Not word-rules' Guard_Conditions: its verified body keeps the keyword and the "t" of "then"
+   --  in each guard and resumes one byte after the keyword; see sheets-edges-3.md.)
+   procedure Guards_Of (S : String; Kw : String; Guards : in out Guard_Vectors.Vector) is
+      Pos : Positive := 1;
+      I   : Natural;
+      T   : Natural;
+   begin
+      loop
+         exit when Pos > S'Length;
+         I := Lovelace_Word_Rules_Pkg.Keyword_At_Or_After (S, Kw, Pos);
+         exit when I = 0;
+         exit when I + Kw'Length > S'Length;
+         T := Lovelace_Word_Rules_Pkg.Guard_End (S, I + Kw'Length);
+         exit when T = 0;
+         declare
+            F : constant Positive := Lovelace_Word_Rules_Pkg.First_Non_Trim (S, I + Kw'Length, T - 1);
+            L : constant Natural := Lovelace_Word_Rules_Pkg.Last_Non_Trim (S, F, T - 1);
+         begin
+            if L >= F then
+               Guards.Append (S (F .. L));
+            end if;
+         end;
+         Pos := T + 4;
+      end loop;
+   end Guards_Of;
+
+   --  deriveTB [derive.go:113-129]: guard N (from 0) gives two lemmas under the Pre, (C) and not (C).
+   procedure Run_Stage is
+      Pkg     : U.Unbounded_String;
+      Text    : U.Unbounded_String;
+      Extra   : U.Unbounded_String;
+      Subject : Natural;
+      Funcs   : Func_Vectors.Vector;
+      Guards  : Guard_Vectors.Vector;
+   begin
+      Read_Spec (Pkg, Text, Subject, Extra, Funcs);
+      if Bad then
+         return;
+      end if;
+      declare
+         F    : constant Func := Funcs (Subject);
+         Name : constant String := U.To_String (F.Name);
+         B    : constant String := U.To_String (F.Body_Text);
+         Raw  : constant String (1 .. B'Length) := B;
+         S    : constant String := Lovelace_Word_Rules_Pkg.Collapse_Whitespace (Raw);
+      begin
+         Guards_Of (S, Lovelace_Word_Rules_Pkg.If_Kw, Guards);
+         Guards_Of (S, Lovelace_Word_Rules_Pkg.Elsif_Kw, Guards);
+         Field ("tag", "tb-" & Name);
+         Field ("lemmas", Decimal (2 * Natural (Guards.Length)));
+         for N in 1 .. Natural (Guards.Length) loop
+            declare
+               C : constant String := Guards (N);
+            begin
+               Write_Lemma (Name & "#" & Decimal (N - 1) & "#t", "Vac_TBT_" & Name & "_" & Decimal (N - 1),
+                            F.Params, U.To_String (F.Pre), "(" & C & ")", "guard always true: " & C);
+               Write_Lemma (Name & "#" & Decimal (N - 1) & "#f", "Vac_TBF_" & Name & "_" & Decimal (N - 1),
+                            F.Params, U.To_String (F.Pre), "not (" & C & ")", "guard always false: " & C);
+            end;
+         end loop;
+      end;
+   end Run_Stage;
+
+begin
+   if Ada.Command_Line.Argument_Count /= 1 then
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tb-stage: usage");
+      Ada.Command_Line.Set_Exit_Status (2);
+      return;
+   end if;
+   declare
+      Ok : Boolean;
+   begin
+      Load (Ada.Command_Line.Argument (1), Ok);
+      if not Ok then
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tb-stage: cannot read");
+         Ada.Command_Line.Set_Exit_Status (2);
+         return;
+      end if;
+   end;
+   Run_Stage;
+   if Bad then
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tb-stage: malformed request");
+      Ada.Command_Line.Set_Exit_Status (2);
+      return;
+   end if;
+   Emit;
+   Ada.Command_Line.Set_Exit_Status (0);
+end Tb_Stage_Main;

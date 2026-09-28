@@ -37,6 +37,12 @@ crucible-v0.2.1/
   SHA256SUMS, SHA256SUMS.sig, SHA256SUMS.allowed_signers
 ```
 
+> **After v0.2.1 (source tree from 2026-09-28, and the next release):** the Go battery
+> `check-cores-mcp` is gone. `bin/` instead holds `vacuity-battery` (the battery, Ada, built from
+> `battery/` in this tree), the 38 kit names in `battery/LINKS` as symbolic links to it, and
+> `vacuity_verdict_main` (the grade edge) beside them. The battery's text scanning is Ada **edges**
+> (built and probe-checked, not proved); its judgements are proven cores. Do not call the battery proved.
+
 > The door finds `config/rail.conf` and `tower/base.bundle` **relative to the directory it is
 > started in**. Start it from the `crucible-v0.2.1/` directory (not from inside `bin/`). The
 > launcher does this for you.
@@ -170,19 +176,26 @@ PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edit
     harness/vacuity_service_main.adb -o bin/vacuity_service_main  # -> bin/vacuity_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/reef_relay_main.adb -o bin/reef_relay_main            # -> bin/reef_relay_main (the reef rail)
+PATH="$TC" gprbuild -P battery/vacuity_battery.gpr -p              # -> bin/vacuity-battery (the vacuity battery, Ada)
+for n in $(cat battery/LINKS); do ln -sfn vacuity-battery bin/$n; done   # the battery's 38 kit names, links beside it
+PATH="$TC" gnatmake -gnat2022 -gnatU -D obj/battery-verdict \
+    battery/verdict/vacuity_verdict_main.adb -o bin/vacuity_verdict_main   # -> bin/vacuity_verdict_main (the grade edge)
 ```
 
-The vacuity battery `check-cores-mcp` is a separate Go repo; build it (`go build`) and place the
-binary where `config/vacuity-service.conf` names it (the launcher, and the release tarball, put it in
-`bin/`).
+The vacuity battery is `bin/vacuity-battery`: one executable that answers to each name in
+`battery/LINKS` (it dispatches on the name it was started under), so **the links must sit beside it** —
+it runs its stages as child processes by those names. Its sources are in `battery/`, each stamped and
+byte-identical below the stamp to the ada-factory round it came from (`battery/SOURCES.tsv` lists every
+file's unstamped and stamped sha256 and its origin). It replaces the Go `check-cores-mcp`, whose `wire`
+output it reproduces byte for byte (485 of 485 on the oracle corpus, 2026-09-28).
 
 **★ It needs a SECOND binary beside it: `vacuity_verdict_main`.** The battery decides no grade itself —
 every grade comes from the proven core `Vacuity_Verdict_Pkg` through its Ada edge, and the battery locates
 that edge as a SIBLING of its own executable (`VACUITY_EDGE` overrides the path). If the edge is absent,
 the battery refuses everything — `functions_read: 0`, `package_grade: refused` — and the door then reports
 `vacuity: outcome_hollow` and emits nothing. **A missing edge looks exactly like a hollow contract, so this
-failure is silent and easy to misread.** Build it from `wu-vacuity-verdict-3/edge/`
-(`gnatmake -gnat2022 vacuity_verdict_main.adb`) and put it in `bin/` next to `check-cores-mcp`.
+failure is silent and easy to misread.** The build above puts it in `bin/` next to `vacuity-battery`
+(from `battery/verdict/`, the admitted lineage 3 of `wu-vacuity-verdict-3/edge/`).
 
 ### 4. Configure and start
 

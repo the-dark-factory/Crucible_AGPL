@@ -128,9 +128,9 @@ ensure_vacuity_conf() {
   vc="$ROOT/config/vacuity-service.conf"
   [ -f "$vc" ] && return 0
   vp="$(rail_port vacuity)"; [ -n "$vp" ] || vp="8472"
-  bat="$ROOT/bin/check-cores-mcp"
+  bat="$ROOT/bin/vacuity-battery"
   if [ ! -x "$bat" ]; then
-    echo "vacuity: no bin/check-cores-mcp shipped here; the vacuity rail is off." >&2
+    echo "vacuity: no bin/vacuity-battery shipped here; the vacuity rail is off." >&2
     return 1
   fi
   printf '{"port":"%s","staging_root":"%s","battery":"%s","timeout_seconds":"600"}\n' \

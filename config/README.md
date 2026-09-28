@@ -34,7 +34,7 @@ format above (`"rail":"ollama"`, bare `true`). The door's readers skip it: `olla
 2026-09-19 that legacy line was the ONLY line, so every door rail read "no valid line" (found by the release plan).
 
 **The vacuity line** (added 2026-09-19) points at `harness/vacuity_service_main` on 127.0.0.1:8472; that service spawns the
-battery `check-cores-mcp` (a separate repo) and relays its facts.
+battery `bin/vacuity-battery` (Ada, built from `battery/`; it replaced the Go `check-cores-mcp` on 2026-09-28) and relays its facts.
 
 **The reef line** — `Rail_Config_Pkg` also accepts `palais` and `reef` (v4, 2026-09-19), so the sentence above naming
 only three rail words is out of date: the five are `model prover vacuity palais reef`. A `reef` line points at
