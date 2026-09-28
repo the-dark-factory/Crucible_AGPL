@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: a37477fea85386924b8c4890bb91376524ac557e860bfb13dc551b7f76261d69
+--  Unstamped source sha256: 12ff6065f35201ff6c06a8edcf1b1de98c7b17735bd692dd8cae745af397ecc5
 --
 with Palais_Tools_Pkg;
 
@@ -12,7 +12,7 @@ package Reply_Text_Pkg with SPARK_Mode is
 
    function Q (S : String) return String
      is ('"' & S & '"')
-     with Pre  => (S'First = 1 and then S'Length <= 8192),
+     with Pre  => (S'First = 1 and then S'Length <= 32768),
           Post => (Q'Result'Length = S'Length + 2);
 
    function Json_Bool (B : Boolean) return String
@@ -25,16 +25,34 @@ package Reply_Text_Pkg with SPARK_Mode is
 
    Backslash : constant Character := Character'Val (92);
 
+   function Hex_Digit (N : Natural) return Character
+     is (if N < 10 then Character'Val (48 + N) else Character'Val (87 + N))
+     with Pre => (N < 16);
+
+   function Escape_Char (C : Character) return String
+     is (if C = '"' then Backslash & '"'
+         elsif C = Backslash then Backslash & Backslash
+         elsif C = Character'Val (8) then Backslash & 'b'
+         elsif C = Character'Val (9) then Backslash & 't'
+         elsif C = Character'Val (10) then Backslash & 'n'
+         elsif C = Character'Val (12) then Backslash & 'f'
+         elsif C = Character'Val (13) then Backslash & 'r'
+         elsif Character'Pos (C) < 32 then Backslash & "u00" & Hex_Digit (Character'Pos (C) / 16) & Hex_Digit (Character'Pos (C) mod 16)
+         else (1 => C))
+     with Global => null,
+          Post => (Escape_Char'Result'First = 1
+                   and then Escape_Char'Result'Length >= 1
+                   and then Escape_Char'Result'Length <= 6);
+
    function Escape_Quotes (S : String) return String
      is (if S'Length = 0 then ""
-         elsif S (S'Last) = '"' then Escape_Quotes (S (S'First .. S'Last - 1)) & Backslash & '"'
-         else Escape_Quotes (S (S'First .. S'Last - 1)) & S (S'Last))
+         else Escape_Quotes (S (S'First .. S'Last - 1)) & Escape_Char (S (S'Last)))
      with Global => null,
           Subprogram_Variant => (Decreases => S'Length),
           Pre  => (S'First = 1 and then S'Length <= 4096),
           Post => (Escape_Quotes'Result'First = 1
                    and then Escape_Quotes'Result'Length >= S'Length
-                   and then Escape_Quotes'Result'Length <= 2 * S'Length);
+                   and then Escape_Quotes'Result'Length <= 6 * S'Length);
 
    Jsonrpc_Key : constant String := Q ("jsonrpc") & ":";
    Id_Key : constant String := Q ("id") & ":";
@@ -165,6 +183,6 @@ package Reply_Text_Pkg with SPARK_Mode is
    function Tool_Call_Result (Inner : String) return String
      is ("{" & Content_Key & "[" & "{" & Type_Key & Text_Word & "," & Text_Key & Q (Escape_Quotes (Inner)) & "}" & "]" & "," & Structuredcontent_Key & Inner & "}")
      with Pre  => (Inner'First = 1 and then Inner'Length <= 4096),
-          Post => (Tool_Call_Result'Result'Length >= 2 and then Tool_Call_Result'Result (Tool_Call_Result'Result'First) = '{' and then Tool_Call_Result'Result (Tool_Call_Result'Result'Last) = '}' and then Tool_Call_Result'Result'Length <= 16384);
+          Post => (Tool_Call_Result'Result'Length >= 2 and then Tool_Call_Result'Result (Tool_Call_Result'Result'First) = '{' and then Tool_Call_Result'Result (Tool_Call_Result'Result'Last) = '}' and then Tool_Call_Result'Result'Length <= 32768);
 
 end Reply_Text_Pkg;
