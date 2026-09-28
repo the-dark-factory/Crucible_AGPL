@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: fd7e363ac0a7367047b826a0a82b0875b89d708a3ab199dbdeddc70f34846b5f
+--  Unstamped source sha256: 242c189d98171066e1628fbe1c8d5e123a5a14517328a02c25dce5adb5ae0c33
 --
 with Json_Scan_Pkg;
 with Frame_Facts_Pkg;
@@ -35,13 +35,13 @@ package Tool_Run_Pkg with SPARK_Mode is
 
    function Requested_Of (Line : String) return Edition_Licence_Pkg.Requested_Licence_Type with
      Pre => Line'First = 1 and then Line'Length <= 1048576,
-     Post => (if not Json_Scan_Pkg.Value_Span (Line, Requested_Key).found then Requested_Of'Result = Edition_Licence_Pkg.Other_Licence);
+     Post => (if not Frame_Facts_Pkg.Arg_Span (Line, Requested_Key).found then Requested_Of'Result = Edition_Licence_Pkg.Other_Licence);
 
    function Requested_Of (Line : String) return Edition_Licence_Pkg.Requested_Licence_Type is
-     (if not (Json_Scan_Pkg.Value_Span (Line, Requested_Key).found and then Json_Scan_Pkg.Value_Span (Line, Requested_Key).kind = Json_Scan_Pkg.K_String) then Edition_Licence_Pkg.Other_Licence
-      elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Requested_Key)), Agpl_Lit) then Edition_Licence_Pkg.Agpl_Licence
-      elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Requested_Key)), Mit_Lit) then Edition_Licence_Pkg.Mit_Licence
-      elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Requested_Key)), Proprietary_Lit) then Edition_Licence_Pkg.Proprietary_Licence
+     (if not (Frame_Facts_Pkg.Arg_Span (Line, Requested_Key).found and then Frame_Facts_Pkg.Arg_Span (Line, Requested_Key).kind = Json_Scan_Pkg.K_String) then Edition_Licence_Pkg.Other_Licence
+      elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Frame_Facts_Pkg.Arg_Span (Line, Requested_Key)), Agpl_Lit) then Edition_Licence_Pkg.Agpl_Licence
+      elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Frame_Facts_Pkg.Arg_Span (Line, Requested_Key)), Mit_Lit) then Edition_Licence_Pkg.Mit_Licence
+      elsif Json_Scan_Pkg.Equals_Literal (Line, Json_Scan_Pkg.String_Contents (Line, Frame_Facts_Pkg.Arg_Span (Line, Requested_Key)), Proprietary_Lit) then Edition_Licence_Pkg.Proprietary_Licence
       else Edition_Licence_Pkg.Other_Licence);
 
    function Word_Of (R : Edition_Licence_Pkg.Requested_Licence_Type) return String with

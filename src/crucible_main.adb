@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 3d9359a1fbe16d81cad3ce3987bcf52614d7fea00c4fe12d414d9d2a7e84ba42
+--  Unstamped source sha256: 49228e40def141b1efc2147770fcc9b599838672b3c65e1c2b9f14935699c811
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -33,9 +33,7 @@
 --  unrecorded -- the forge proceeds on the ledger as it stands; only the base check stops it. The word surfaces as ONE
 --  line on standard error (the MCP stdio server's logging channel), never in the reply. Seat-written plumbing, no new
 --  slot; brief BRIEF_door_import_wiring_2026-09-21.
---  SLOT BEGIN (context)
 with Ada.Unchecked_Deallocation;
---  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Json_Scan_Pkg;
@@ -419,16 +417,19 @@ procedure Crucible_Main is
       L1       : constant String (1 .. Line'Length) := Line;
       Q        : constant String := """";
 
+      --  SLOT BEGIN (arg-lookup)
       function Arg (Key : String; Given : out Boolean) return String is
          K1 : constant String (1 .. Key'Length) := Key;
          S  : Json_Scan_Pkg.Span_Type;
          C  : Json_Scan_Pkg.Span_Type;
       begin
          Given := False;
-         if L1'Length > 1_048_576 or else Ada.Strings.Fixed.Count (L1, Q & K1 & Q) /= 1 then
+         if L1'Length > 1_048_576 or else K1'Length not in 1 .. 64
+           or else Ada.Strings.Fixed.Count (L1, Q & K1 & Q) /= 1
+         then
             return "";   --  absent, or given more than once: never guessed
          end if;
-         S := Json_Scan_Pkg.Value_Span (L1, K1);
+         S := Frame_Facts_Pkg.Arg_Span (L1, K1);   --  params.arguments.<Key>, nowhere else
          if not S.found or else S.kind /= Json_Scan_Pkg.K_String then
             return "";
          end if;
@@ -443,8 +444,10 @@ procedure Crucible_Main is
       function Has (Key : String) return Boolean is
          K1 : constant String (1 .. Key'Length) := Key;
       begin
-         return L1'Length <= 1_048_576 and then Json_Scan_Pkg.Has_Key (L1, K1);
+         return L1'Length <= 1_048_576 and then K1'Length in 1 .. 64
+           and then Frame_Facts_Pkg.Arg_Span (L1, K1).found;   --  params.arguments.<Key>
       end Has;
+      --  SLOT END (arg-lookup)
 
       function Read (Path : String; Lines : out Line_Array; N : out Natural; All_Text : out Unbounded_String)
         return Boolean
@@ -783,7 +786,6 @@ procedure Crucible_Main is
          if not Ok then
             return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""bad_string""}";
          end if;
-         --  SLOT BEGIN (forge-reply)
          declare
             type Buf_Access is access String;
             procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
@@ -811,7 +813,6 @@ procedure Crucible_Main is
                Free (Enc);
                raise;
          end;
-         --  SLOT END (forge-reply)
       end;
    exception
       when others =>

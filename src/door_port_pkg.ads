@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 0ca2adb7eac24a6451a487ba27d7c43044f39310403f55a91ebee14bc726f087
+--  Unstamped source sha256: a678369c228ba09a7e83ab454528af30ce475783be11cc9e7eee64d51a1fff5c
 --
 with Json_Scan_Pkg;
 with Json_Rpc_Frame_Pkg;
@@ -26,22 +26,22 @@ package Door_Port_Pkg with SPARK_Mode is
         Pre => Line'First = 1 and then Line'Length <= 65536;
 
    function Names_Expand_Brief (Line : String) return Boolean is
-     (Json_Scan_Pkg.Has_Key (Line, Key_Name)
-      and then Json_Scan_Pkg.Value_Span (Line, Key_Name).kind = Json_Scan_Pkg.K_String
+     (Frame_Facts_Pkg.Tool_Name_Span (Line).found
+      and then Frame_Facts_Pkg.Tool_Name_Span (Line).kind = Json_Scan_Pkg.K_String
       and then Json_Scan_Pkg.Equals_Literal (Line,
-        Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Key_Name)),
+        Json_Scan_Pkg.String_Contents (Line, Frame_Facts_Pkg.Tool_Name_Span (Line)),
         Lit_Expand_Brief))
    with Global => null,
         Pre => Line'First = 1 and then Line'Length <= 65536;
 
    function Brief_Present (Line : String) return Boolean is
-     (Json_Scan_Pkg.Has_Key (Line, Key_Brief)
-      and then Json_Scan_Pkg.Value_Span (Line, Key_Brief).kind = Json_Scan_Pkg.K_String)
+     (Frame_Facts_Pkg.Arg_Span (Line, Key_Brief).found
+      and then Frame_Facts_Pkg.Arg_Span (Line, Key_Brief).kind = Json_Scan_Pkg.K_String)
    with Global => null,
         Pre => Line'First = 1 and then Line'Length <= 65536;
 
    function Brief_Span (Line : String) return Json_Scan_Pkg.Span_Type is
-     (Json_Scan_Pkg.String_Contents (Line, Json_Scan_Pkg.Value_Span (Line, Key_Brief)))
+     (Json_Scan_Pkg.String_Contents (Line, Frame_Facts_Pkg.Arg_Span (Line, Key_Brief)))
    with Global => null,
         Pre => Line'First = 1 and then Line'Length <= 65536 and then Brief_Present (Line);
 

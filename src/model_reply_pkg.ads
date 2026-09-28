@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 0d7ce346462f73d45dab06a31ab84636007ed4edb2f2be1f3f776e2605e9d993
+--  Unstamped source sha256: 0cc47b4c03500242f9440c8978e97d3041ac438efeb07041255053aa8ba9c400
 --
 with Json_Scan_Pkg;
 
@@ -16,6 +16,8 @@ package Model_Reply_Pkg with SPARK_Mode is
    Done_Key          : constant String := "done";
    Done_Reason_Key   : constant String := "done_reason";
    Finish_Reason_Key : constant String := "finish_reason";
+   Message_Key       : constant String := "message";
+   Choices_Key       : constant String := "choices";
    Stop_Word         : constant String := "stop";
    Length_Word       : constant String := "length";
    True_Word         : constant String := "true";
@@ -38,11 +40,31 @@ package Model_Reply_Pkg with SPARK_Mode is
       decoded_ok      : Boolean := False;
    end record;
 
+   --  Lineage 2 (2026-09-28): each field is read where its protocol puts it, never by a
+   --  search. Ollama /api/chat: message.content, done, done_reason at the top level.
+   --  OpenAI /v1/chat/completions: choices[0].message.content and choices[0].finish_reason.
+   --  (Json_Scan_Pkg lineage 5 looks keys up at one level only, so a "content" anywhere else
+   --  in the reply is never taken for the model's text.)
+   function Choice_Span (Payload : String) return Json_Scan_Pkg.Span_Type is
+     (Json_Scan_Pkg.Element_Of (Payload, Json_Scan_Pkg.Value_Span (Payload, Choices_Key), 1))
+     with Pre  => Payload'First = 1 and then Payload'Length <= Max_Body;
+
+   function Message_Span (Payload : String) return Json_Scan_Pkg.Span_Type is
+     ((if Json_Scan_Pkg.Value_Span (Payload, Message_Key).found then Json_Scan_Pkg.Value_Span (Payload, Message_Key)
+       else Json_Scan_Pkg.Member_Of (Payload, Choice_Span (Payload), Message_Key)))
+     with Pre  => Payload'First = 1 and then Payload'Length <= Max_Body;
+
+   function Field_Span (Payload : String; Key : String) return Json_Scan_Pkg.Span_Type is
+     ((if Key = Content_Key then Json_Scan_Pkg.Member_Of (Payload, Message_Span (Payload), Key)
+       elsif Key = Finish_Reason_Key then Json_Scan_Pkg.Member_Of (Payload, Choice_Span (Payload), Key)
+       else Json_Scan_Pkg.Value_Span (Payload, Key)))
+     with Pre  => Payload'First = 1 and then Payload'Length <= Max_Body and then Key'First = 1 and then Key'Length in 1 .. 64;
+
    function String_Field (Payload : String; Key : String) return Json_Scan_Pkg.Span_Type is
-     ((if Json_Scan_Pkg.Value_Span (Payload, Key).found
-          and then Json_Scan_Pkg.Value_Span (Payload, Key).kind = Json_Scan_Pkg.K_String
-          and then Json_Scan_Pkg.Value_Span (Payload, Key).first < Json_Scan_Pkg.Value_Span (Payload, Key).last
-       then Json_Scan_Pkg.String_Contents (Payload, Json_Scan_Pkg.Value_Span (Payload, Key))
+     ((if Field_Span (Payload, Key).found
+          and then Field_Span (Payload, Key).kind = Json_Scan_Pkg.K_String
+          and then Field_Span (Payload, Key).first < Field_Span (Payload, Key).last
+       then Json_Scan_Pkg.String_Contents (Payload, Field_Span (Payload, Key))
        else No_Span))
      with Pre  => Payload'First = 1 and then Payload'Length <= Max_Body and then Key'First = 1 and then Key'Length in 1 .. 64,
           Post => (if String_Field'Result.found then String_Field'Result.first in Payload'Range and then String_Field'Result.last in Payload'Range and then String_Field'Result.first - 1 <= String_Field'Result.last);
