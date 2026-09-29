@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: c120dfd7b42541b65fd71d65b0524037aae9b176f6a2080eeba9855a185fb563
+--  Unstamped source sha256: 43ac0954f8e931163c9e41ee9a1010e929c43e17c3e71aa0235cf51c8546acf0
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -45,6 +45,11 @@
 --  tools/call carrying a duplicated key the named tool reads (Frame_Facts_Pkg.Duplicate_Key, over Json_Scan_Pkg
 --  lineage 6) is refused -32602 "duplicate_key" -- it was answered as if the key were absent. (3) a -32700 whose line
 --  opens an object or array that never closes (Frame_Facts_Pkg.Brackets_Unclosed) names that class. Three slots.
+--  v19 (lineage 19, 2026-09-29; Tony 15:44 "fix the reef-fetch defect", release test REEF PULL): v11 (5ebaddb) called
+--  Tower_Fetch_Pkg.Fetch before the import; lineage 11 (25104e5) lost that call, so the door never asked the Reef and
+--  state/tower-fetch.jsonl was never written. The call is restored where Tower_Fetch_Pkg's USAGE puts it: once per
+--  forge call, AFTER the base check has let the door through and BEFORE Tower_Import_Pkg.Import. It never raises and
+--  never stops a forge; its word goes to standard error as ONE line, like the import's. ONE slot (fetch-call).
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -71,6 +76,7 @@ with Ada.Directories;
 with Palais_Enrol_Pkg;
 with Tower_Base_Verdict_Pkg;
 with Tower_Base_Check_Edge;
+with Tower_Fetch_Pkg;
 with Tower_Import_Pkg;
 with Rail_Config_Pkg;
 with Model_Rail_Fields_Pkg;
@@ -302,12 +308,10 @@ procedure Crucible_Main is
          when Constraint_Error =>
             Level := 0;   --  an unreadable level is 0, which the proven May_Send refuses
       end;
-      --  SLOT BEGIN (unit-name)
       --  A unit name the prover rail would refuse is refused here, by name, and never sent.
       if not Frame_Facts_Pkg.Unit_Name_Valid (Line) then
          return "{""outcome"":""input_refused"",""reason"":""unit_name_invalid""}";
       end if;
-      --  SLOT END (unit-name)
       O := Prover_Rail_Call_Pkg.Prove (Unit_Raw, Spec_Buf (1 .. Spec_Len), Body_Buf (1 .. Body_Len), Level);
       declare
          Word : constant String := (
@@ -795,6 +799,21 @@ procedure Crucible_Main is
               """,""hint"":""restore the base bundle this binary was built with, or replace the binary""}";
          end if;
       end;
+      --  SLOT BEGIN (fetch-call)
+      --  v19: BEFORE the import, the FETCH edge asks the Reef (through the reef rail's relay) for the freshness index
+      --  and, when the proven Tower_Index_Pkg finds a version above the running one, brings that ONE file down into
+      --  tower/sharer.bundle for the import below to judge. It decides nothing, is rate-limited by its own row in
+      --  state/tower-fetch.jsonl, never raises and never stops the forge; its word goes to standard error, one line.
+      declare
+         Fetch_Word : Unbounded_String;
+      begin
+         Tower_Fetch_Pkg.Fetch (Word => Fetch_Word);
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: " & To_String (Fetch_Word));
+      exception
+         when others =>
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: unreadable");
+      end;
+      --  SLOT END (fetch-call)
       --  v10: the SHARER bundle is imported, best effort, once the base has let the door through and before the
       --  sheet is looked for. Tower_Import_Pkg measures, the proven Tower_Admission_Pkg decides, the proven
       --  Tower_Ledger_Fold_Pkg folds the ledger, and the word is recorded in state/tower.jsonl. THE FORGE NEVER WAITS
@@ -918,13 +937,11 @@ begin
               (if Span.found then Line (Span.first .. Span.last) else Null_Id);
          begin
             if V.reply = Json_Rpc_Frame_Pkg.Reply_Error then
-               --  SLOT BEGIN (frame-error)
                if V.error_code = -32700 and then Frame_Facts_Pkg.Brackets_Unclosed (Line) then
                   Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Brackets_Msg));
                else
                   Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, V.error_code, Frame_Msg));
                end if;
-               --  SLOT END (frame-error)
             elsif V.reply = Json_Rpc_Frame_Pkg.Reply_Result then
                case V.action is
                   when Json_Rpc_Frame_Pkg.Do_Initialize =>
@@ -932,11 +949,9 @@ begin
                   when Json_Rpc_Frame_Pkg.Do_List_Tools =>
                      Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tools_List_Result));
                   when Json_Rpc_Frame_Pkg.Do_Call_Tool =>
-                     --  SLOT BEGIN (duplicate-key)
                      if Frame_Facts_Pkg.Duplicate_Key (Line) then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Error_Reply (Id, -32602, Duplicate_Msg));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Licence_Gate then
-                     --  SLOT END (duplicate-key)
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Tool_Run_Pkg.Licence_Gate (Crucible_Edition.Current, Line))));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Intake_Check then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
