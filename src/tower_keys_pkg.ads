@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: c05f55fea72e51b753791b9fb2de7d36459d3cba1c50e15a62c9700696b19130
+--  Unstamped source sha256: 2267c9a9492ef866b551a083f2db2496c534cb794a1c47634ce778037ebf1cdc
 --
 --  Tower_Keys_Pkg -- the two catalog public keys a puller trusts under ONE stream, PINNED IN THE BUILD, plus the
 --  index signer's public key. Seat-written constants, no code: the way Crucible_Tower.Base_Digest and the door's
@@ -51,5 +51,19 @@ package Tower_Keys_Pkg with SPARK_Mode is
 
    --  CONSTANTS ONLY (the owner's lean, 2026-09-21: no shape predicates here; the stamp tool writes the pins blindly,
    --  and whether the written file is one ssh-keygen accepts is the probe's row A2, not a theorem of this unit).
+
+   --  ADMISSION ROOTS (key ceremony 2026-10-08, ObVault/designs/RUNBOOK_admission_key_ceremony_2026-09-07.md).
+   --  Admission receipts from 2026-10-08 are signed by the admitter TOKEN on gertrude through an OpenSSH
+   --  certificate that one of these roots issued (principals admitter + Principal, ~90-day validity). The trust
+   --  file names each root as a cert-authority under Admission_Namespace, so ssh-keygen accepts a receipt only
+   --  while its certificate is valid. Both roots were generated ON their tokens, offline; neither private half
+   --  has ever existed off a token. R1 signs certificates; R2 is the independent backup, kept in a safe.
+   --  Df_Admission_Public (above) STAYS: every receipt signed before 2026-10-08 was made with it.
+   --  R1 fingerprint SHA256:DPjoiD8gSi/Qg2SE0up0mB5CNXeIi2D6IbvzYGdyWDc (ssh) /
+   --  sha256(DER SPKI) cf6b64123941847e...ba8bb1e45725e78c; R2 sha256(DER SPKI) c8a9eca61d0b2b39...df9ccda8715d2c75.
+   Admission_Root_R1_Public : constant String :=
+     "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBHtotBGyXrfaIMN3Iy56AUk059bbXGKOzwzPrxDdG6y2PoOTDouuS0kO5i+cIbcxwNUiq3JhMeBscSsp3eVZ79g=";
+   Admission_Root_R2_Public : constant String :=
+     "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBJqvNjMchwpv3Y+qtKJtd/cN9nwEz1MAj+UNqabsjYtJWImVGMrSxS9BKQFw12Mc1Url3vuDIjuqnMwGswl0HIg=";
 
 end Tower_Keys_Pkg;
