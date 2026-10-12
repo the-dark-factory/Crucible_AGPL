@@ -1,20 +1,22 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 016778b12989d72bb44b13e24effbef708a6a1094e3fc8340f4cda5733e35ce0
+--  Unstamped source sha256: f28cee0b0b418f27d2906d5bda7a616cceb1fd46c181587a58f5b72b9aa08dfd
 --
 --  Palais_Enrol_Pkg body -- template (seat-written plumbing) with THREE slots (request-facts, reply-facts,
 --  refusal-reason), filled by a Wu edge round. Same shape as the vacuity rail client edge
 --  (wu-crucible-vacuity-rail-call): the plumbing reads, sends, measures and writes; the slots only RECORD FACTS; the
 --  decision is Reef_Key_Claim_Pkg.Accept_Key's. Brief BRIEF_palais_enrol_edge_2026-09-19.
+--  SLOT BEGIN (context)
 with Ada.Calendar;
 with Ada.Calendar.Conversions;
 with Ada.Directories;
 with Ada.Streams;
 with Ada.Streams.Stream_IO;
+with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with GNAT.Expect;
 with GNAT.OS_Lib;
@@ -22,9 +24,13 @@ with GNAT.SHA256;
 with Interfaces.C;
 with Hex_Text_Pkg;
 with Json_Scan_Pkg;
+with Pinned_Signer_Pkg;
+with Pinned_Verify_Edge;
 with Rail_Config_Pkg;
 with Rail_Socket_Edge;
 with Reef_Key_Claim_Pkg;
+use type Pinned_Signer_Pkg.Signer_Reason;
+--  SLOT END (context)
 
 package body Palais_Enrol_Pkg with SPARK_Mode => Off is
 
@@ -280,17 +286,32 @@ package body Palais_Enrol_Pkg with SPARK_Mode => Off is
          return;
       end if;
 
-      --  The pinned Reef key: the file must exist and have exactly the digest the caller pins.
+      --  SLOT BEGIN (signer-check)
       declare
-         Signers : Text_Access;
-         S_Ok    : Boolean;
+         Refusal_Word  : Pinned_Signer_Pkg.Signer_Reason;
+         Verified_Flag : Boolean;
+         Signer_Digest : Ada.Strings.Unbounded.Unbounded_String;
       begin
-         Read_First_Line (Where.Signers_Path.all, Signers, S_Ok);
-         if not S_Ok or else Sha_Hex (Signers.all) /= Where.Signers_Digest.all then
+         Pinned_Verify_Edge
+           (Signers_Path     => Where.Signers_Path.all,
+            Pin              => Where.Signers_Digest.all,
+            Message          => "",
+            Signature        => "",
+            Ssh_Keygen       => Where.Ssh_Keygen.all,
+            Work_Dir         => Where.State_Dir.all,
+            Verify_Signature => False,
+            Refusal          => Refusal_Word,
+            Verified         => Verified_Flag,
+            Signer_Digest    => Signer_Digest);
+         if Refusal_Word = Pinned_Signer_Pkg.Not_One_Line then
+            Reply := Refused ("signers_not_one_line");
+            return;
+         elsif Refusal_Word /= Pinned_Signer_Pkg.None then
             Reply := Refused ("no_reef_key_pinned");
             return;
          end if;
       end;
+      --  SLOT END (signer-check)
 
       --  This factory's own key pair and per-install id, made once. The private half never leaves Key_Dir.
       if not Ada.Directories.Exists (Where.Key_Dir.all) then
@@ -456,23 +477,35 @@ package body Palais_Enrol_Pkg with SPARK_Mode => Off is
                      --  Signature: ssh-keygen -Y verify against the PINNED signers, the record on stdin.
                      --  The Reef signs the record AS A LINE (record, then one line feed). Get_Command_Output's Send
                      --  appends exactly that one line feed (Add_LF defaults True), so Rec is passed without it.
-                     Write_Bytes (Sig_Path, Hex_Text_Pkg.Decode (Sig_Hex));
+                     --  SLOT BEGIN (verify)
                      declare
-                        Args : GNAT.OS_Lib.Argument_List :=
-                          (new String'("-Y"), new String'("verify"), new String'("-f"),
-                           new String'(Where.Signers_Path.all), new String'("-I"), new String'("reef"),
-                           new String'("-n"), new String'("df-reef-key"), new String'("-s"), new String'(Sig_Path));
-                        Out_Text : constant String :=
-                          GNAT.Expect.Get_Command_Output
-                            (Where.Ssh_Keygen.all, Args, Rec, Verify_Code'Access, Err_To_Out => True);
-                        pragma Unreferenced (Out_Text);
+                        Refusal_Word  : Pinned_Signer_Pkg.Signer_Reason;
+                        Verified_Flag : Boolean;
+                        Signer_Digest : Ada.Strings.Unbounded.Unbounded_String;
                      begin
-                        for A of Args loop
-                           GNAT.OS_Lib.Free (A);
-                        end loop;
+                        Pinned_Verify_Edge
+                          (Signers_Path     => Where.Signers_Path.all,
+                           Pin              => Where.Signers_Digest.all,
+                           Message          => Rec,
+                           Signature        => Hex_Text_Pkg.Decode (Sig_Hex),
+                           Ssh_Keygen       => Where.Ssh_Keygen.all,
+                           Work_Dir         => Where.State_Dir.all,
+                           Verify_Signature => True,
+                           Refusal          => Refusal_Word,
+                           Verified         => Verified_Flag,
+                           Signer_Digest    => Signer_Digest);
+                        if Refusal_Word = Pinned_Signer_Pkg.Not_One_Line then
+                           Remove (Pending_Path);
+                           Reply := Refused ("signers_not_one_line");
+                           return;
+                        elsif Refusal_Word /= Pinned_Signer_Pkg.None then
+                           Remove (Pending_Path);
+                           Reply := Refused ("no_reef_key_pinned");
+                           return;
+                        end if;
+                        Signed_Ok := Verified_Flag;
                      end;
-                     Remove (Sig_Path);
-                     Signed_Ok := Verify_Code = 0;
+                     --  SLOT END (verify)
 
                      --  Revocation: one more line. An unreadable answer is recorded as it is ("").
                      declare
@@ -488,13 +521,10 @@ package body Palais_Enrol_Pkg with SPARK_Mode => Off is
                         end if;
                      end;
 
-                     --  SLOT BEGIN (request-facts)
 Req.Factory_Id := To_Digest (Factory_Id);
 Req.Nonce := To_Digest (Nonce);
 Req.Now := Now;
-                     --  SLOT END (request-facts)
 
-                     --  SLOT BEGIN (reply-facts)
 K.Key_Fingerprint := To_Digest (Value_Text (Rec, "fingerprint"));
 K.Factory_Id := To_Digest (Value_Text (Rec, "factory_id"));
 K.Nonce_Echo := To_Digest (Value_Text (Rec, "nonce_echo"));
@@ -509,7 +539,6 @@ K.CLA_Signed := Value_Text (Rec, "cla_signed") = "true";
 K.Reef_Signed := Signed_Ok;
 K.Revoked := Revoked_Word.all /= "false";
 Record_Ok := Issued_Ok and then Expires_Ok;
-                     --  SLOT END (reply-facts)
 
                      if not Record_Ok then
                         Remove (Pending_Path);
@@ -533,7 +562,6 @@ Record_Ok := Issued_Ok and then Expires_Ok;
                         return;
                      end if;
 
-                     --  SLOT BEGIN (refusal-reason)
 if not (Reef_Key_Claim_Pkg.Is_Digest (K.Key_Fingerprint) and then Reef_Key_Claim_Pkg.Is_Digest (K.Factory_Id) and then Reef_Key_Claim_Pkg.Is_Digest (K.Nonce_Echo) and then Reef_Key_Claim_Pkg.Is_Digest (Req.Factory_Id) and then Reef_Key_Claim_Pkg.Is_Digest (Req.Nonce)) then
    Reason := new String'("not_hex");
 elsif not K.Reef_Signed then
@@ -553,7 +581,6 @@ elsif K.Role = Reef_Key_Claim_Pkg.Role_Solver and then not K.CLA_Signed then
 else
    Reason := new String'("refused");
 end if;
-                     --  SLOT END (refusal-reason)
 
                      Remove (Pending_Path);
                      Reply := Refused (Reason.all);
