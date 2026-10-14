@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 43ac0954f8e931163c9e41ee9a1010e929c43e17c3e71aa0235cf51c8546acf0
+--  Unstamped source sha256: 7ad418d14cb61ff4df5c527c42ef52f8c9b77a24aa64250f2fd180cd198f5106
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -50,6 +50,11 @@
 --  state/tower-fetch.jsonl was never written. The call is restored where Tower_Fetch_Pkg's USAGE puts it: once per
 --  forge call, AFTER the base check has let the door through and BEFORE Tower_Import_Pkg.Import. It never raises and
 --  never stops a forge; its word goes to standard error as ONE line, like the import's. ONE slot (fetch-call).
+--  v20 (lineage 20, 2026-10-14; Tony 19:46 "do it", Reef key ceremony 19:44): the pinned Reef signers digest is
+--  no longer 64 zeros. It is the SHA-256 (lower-case hex, taken WITHOUT the line feed) of the df-reef-key signer line
+--  (BRIEF_reef_enrol_service_2026-10-12 section 6, rule M5), line 1 of config/reef-allowed-signers. That digest is
+--  also the network id. Enrolment is no longer refused no_reef_key_pinned for want of a key; a signers file whose
+--  line 1 is any other line still is. ONE slot (reef-pin).
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -332,10 +337,14 @@ procedure Crucible_Main is
    end Prove_Unit_Text;
 
    --  The forge tool: the one-line pipeline report for the sheet argument of Line.
+   --  SLOT BEGIN (reef-pin)
    --  palais.enrol: one step of enrolment with the Reef (DESIGN_palais_enrol_2026-09-19). The edge decides nothing;
-   --  Reef_Key_Claim_Pkg does. The pinned Reef signers digest is 64 zeros until the Reef has a signing key, so every
-   --  enrolment is honestly refused no_reef_key_pinned until then.
-   Pinned_Reef_Signers : constant String := (1 .. 64 => '0');
+   --  Reef_Key_Claim_Pkg does. v20: the pinned Reef signers digest is the SHA-256 (lower-case hex, WITHOUT the line
+   --  feed) of the df-reef-key signer line (key ceremony 2026-10-14), line 1 of config/reef-allowed-signers:
+   --    reef namespaces="df-reef-key" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBu2EBctq0dWu1yOic1cWAKbPntc9Oi0cSllsJ1Aaif0
+   --  It is also the network id. A signers file whose line 1 is any other line is refused no_reef_key_pinned.
+   Pinned_Reef_Signers : constant String := "0a1aeac7fce06149f18be9bc1f649779ba903e0b2b9c854479b3164f6193adc2";
+   --  SLOT END (reef-pin)
 
    --  ★ RAIL.SHOW (lineage 12, v0.3 Phase 7). Read-only: which models this factory is pointed at. The door
    --  reads config/rail.conf (the self-root has already put it in its install root) and, for every line
@@ -799,7 +808,6 @@ procedure Crucible_Main is
               """,""hint"":""restore the base bundle this binary was built with, or replace the binary""}";
          end if;
       end;
-      --  SLOT BEGIN (fetch-call)
       --  v19: BEFORE the import, the FETCH edge asks the Reef (through the reef rail's relay) for the freshness index
       --  and, when the proven Tower_Index_Pkg finds a version above the running one, brings that ONE file down into
       --  tower/sharer.bundle for the import below to judge. It decides nothing, is rate-limited by its own row in
@@ -813,7 +821,6 @@ procedure Crucible_Main is
          when others =>
             Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_fetch: unreadable");
       end;
-      --  SLOT END (fetch-call)
       --  v10: the SHARER bundle is imported, best effort, once the base has let the door through and before the
       --  sheet is looked for. Tower_Import_Pkg measures, the proven Tower_Admission_Pkg decides, the proven
       --  Tower_Ledger_Fold_Pkg folds the ledger, and the word is recorded in state/tower.jsonl. THE FORGE NEVER WAITS
