@@ -4,30 +4,14 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 6ab5f60e7453787827ac761106c7a47e9994d245dad379a48c5d79b92bd6095b
+--  Unstamped source sha256: 81987b7b28d7e39364b3f456e56103c6729405743bd19ba086ff3882225ec953
 --
---  Tower_Fetch_Pkg body -- seat-written plumbing, no slot (the loopback build brief of 2026-09-21, piece B; the cover
---  table BRIEF_tower_index_pkg_cover_table_2026-09-21 section 4). Every judgement is a call into a proven package.
---  PROVENANCE OF THE TEXT, said so that nobody has to guess:
---    LIFTED from shipped text, unchanged but for names:
---      Strip, One_Based, Write_Bytes, Remove, Now_Text, Img, Signers_Path, Is_Safe_Name, First_Line, Measure_Seal,
---      Read_Ledger, Append_Row ...................... Tower_Import_Pkg body (2026-09-21); the verify call is the one
---                                                    Palais_Enrol_Pkg forged (find-principals, then -Y verify).
---      Ask (one line out on the reef rail, one line back) ... Palais_Enrol_Pkg body, with the reply bound a parameter
---                                                    because the fetch reply outgrows the rail line's max_reply_bytes.
---      the reef line from config/rail.conf ........... Palais_Enrol_Pkg.Step (Rail_Config_Pkg judges validity).
---    SEAT-WRITTEN here, I/O only: the row; hex decode into a heap buffer; the first line feed's position and the brace
---      positions (handed to Tower_Index_Pkg.Two_Lines_At / Object_At, which judge them); text-to-number of a version
---      ('Value, as the import edge does it); writing tower/sharer.bundle; the word as text.
---    JUDGED by proven packages and nothing else: Tower_Index_Pkg (Reply_Is, Hex_Last, Two_Lines_At, Index_Ok, Fresh,
---      Entry_Ok, Object_At, Taken, Consider, May_Ask, Digest_Names, Outcome), Tower_Receipt_Pkg (Is_Seal_Line,
---      Seal_Last: the index envelope), Tower_Payload_Pkg (Version_Span, Expires_Span, Is_Seconds_Text),
---      Tower_Ledger_Fold_Pkg (Running), Rail_Config_Pkg, Hex_Text_Pkg, Tower_Stamp_Pkg.
---    Every version and every name is read from SIGNED text only: nothing in the index is read before its seal verifies.
+--  SLOT BEGIN (context)
 with Ada.Calendar;
 with Ada.Calendar.Conversions;
 with Ada.Command_Line;
 with Ada.Directories;
+with Ada.Environment_Variables;
 with Ada.Streams;
 with Ada.Streams.Stream_IO;
 with Ada.Strings;
@@ -39,6 +23,7 @@ with GNAT.OS_Lib;
 with GNAT.SHA256;
 with Interfaces.C;
 with Crucible_Tower;
+with Fetch_Sign_Pkg;
 with Hex_Text_Pkg;
 with Json_Scan_Pkg;
 with Rail_Config_Pkg;
@@ -49,11 +34,16 @@ with Tower_Index_Pkg;
 with Tower_Ledger_Fold_Pkg;
 with Tower_Payload_Pkg;
 with Tower_Receipt_Pkg;
+with Tower_Scan_Pkg;
 with Tower_Stamp_Pkg;
+
+use type Fetch_Sign_Pkg.Fetch_Word;
+--  SLOT END (context)
 
 package body Tower_Fetch_Pkg with SPARK_Mode => Off is
 
    use type Json_Scan_Pkg.Kind_Type;
+   use type Tower_Scan_Pkg.Kind_Type;
    use type Rail_Config_Pkg.Rail_Kind;
    use type Tower_Admission_Pkg.Version_Number;
    use type Tower_Index_Pkg.Outcome_Kind;
@@ -369,7 +359,8 @@ package body Tower_Fetch_Pkg with SPARK_Mode => Off is
          Over_Bound      => Over_Bound,
          Complete        => Complete);
       if Complete then
-         Answer := new String'(Buf (1 .. Len));
+         Answer := new String (1 .. Len);
+         Answer.all := Buf (1 .. Len);
          Ok := True;
       end if;
       Free (Buf);
@@ -379,6 +370,152 @@ package body Tower_Fetch_Pkg with SPARK_Mode => Off is
          Ok := False;
          Free (Buf);
    end Ask;
+
+   --  SLOT BEGIN (signed-line)
+   Enrol_Path        : constant String := "state/reef-key.json";
+   Reef_Signers_Path : constant String := "config/reef-allowed-signers";
+   Fetch_Namespace   : constant String := "df-fetch";
+   Key_Under_Home    : constant String := "/.crucible/key/id_ed25519";
+
+   function Line_One (Path : String) return String is
+      File : Ada.Text_IO.File_Type;
+      Buf  : String (1 .. Line_Bound);
+      Last : Natural;
+   begin
+      if not Ada.Directories.Exists (Path) then
+         return "";
+      end if;
+      Ada.Text_IO.Open (File, Ada.Text_IO.In_File, Path);
+      Ada.Text_IO.Get_Line (File, Buf, Last);
+      if Last = Line_Bound then
+         Ada.Text_IO.Close (File);
+         return "";
+      end if;
+      Ada.Text_IO.Close (File);
+      return Strip (Buf (1 .. Last));
+   exception
+      when others =>
+         if Ada.Text_IO.Is_Open (File) then
+            Ada.Text_IO.Close (File);
+         end if;
+         return "";
+   end Line_One;
+
+   function Read_Small (Path : String) return String is
+      File : Ada.Streams.Stream_IO.File_Type;
+   begin
+      if not Ada.Directories.Exists (Path) then
+         return "";
+      end if;
+      Ada.Streams.Stream_IO.Open (File, Ada.Streams.Stream_IO.In_File, Path);
+      declare
+         Size : constant Natural := Natural (Ada.Streams.Stream_IO.Size (File));
+      begin
+         if Size = 0 or else Size > 4_096 then
+            Ada.Streams.Stream_IO.Close (File);
+            return "";
+         end if;
+         declare
+            R : String (1 .. Size);
+         begin
+            String'Read (Ada.Streams.Stream_IO.Stream (File), R);
+            Ada.Streams.Stream_IO.Close (File);
+            return R;
+         exception
+            when others =>
+               if Ada.Streams.Stream_IO.Is_Open (File) then
+                  Ada.Streams.Stream_IO.Close (File);
+               end if;
+               return "";
+         end;
+      end;
+   exception
+      when others =>
+         if Ada.Streams.Stream_IO.Is_Open (File) then
+            Ada.Streams.Stream_IO.Close (File);
+         end if;
+         return "";
+   end Read_Small;
+
+   function Signed_Fetch_Line (Name : String) return String is
+      Home     : constant String :=
+        (if Ada.Environment_Variables.Exists ("HOME") then Ada.Environment_Variables.Value ("HOME") else "");
+      Key_Path : constant String := Home & Key_Under_Home;
+      Pub_Path : constant String := Key_Path & ".pub";
+      Network  : constant String :=
+        (if Line_One (Reef_Signers_Path) = "" then "" else GNAT.SHA256.Digest (Line_One (Reef_Signers_Path)));
+      Sender   : constant String :=
+        (if Line_One (Enrol_Path) = "" then "" else Value_Text (Line_One (Enrol_Path), "fingerprint"));
+      Key_Hex  : constant String :=
+        (if Line_One (Pub_Path) = "" then "" else Hex_Text_Pkg.Encode (Line_One (Pub_Path)));
+      Minute   : constant String :=
+        (if Seconds_Of (Now_Text) < 0 then "" else Img (Natural (Seconds_Of (Now_Text) / 60)));
+      Msg_Path : constant String := Ada.Directories.Compose
+        (Work_Dir, "fetch-" & Ada.Strings.Fixed.Trim
+           (Integer'Image (GNAT.OS_Lib.Pid_To_Integer (GNAT.OS_Lib.Current_Process_Id)), Ada.Strings.Both) & ".txt");
+      Sig_File : constant String := Msg_Path & ".sig";
+      Code     : aliased Integer := 1;
+   begin
+      if Home = "" then
+         return "";
+      end if;
+      if not Fetch_Sign_Pkg.Is_Digest (Network) or else not Fetch_Sign_Pkg.Is_Digest (Sender) or else
+        not Fetch_Sign_Pkg.Is_Key_Hex (Key_Hex) or else not Fetch_Sign_Pkg.Is_Minute (Minute) or else
+        not Fetch_Sign_Pkg.Is_Name (Name)
+      then
+         return "";
+      end if;
+      if not Ada.Directories.Exists (Work_Dir) then
+         Ada.Directories.Create_Path (Work_Dir);
+      end if;
+      Remove (Sig_File);
+      Write_Bytes (Msg_Path, Fetch_Sign_Pkg.Signed_Text (Network, Sender, Minute, Name));
+      declare
+         Args     : GNAT.OS_Lib.Argument_List :=
+           (new String'("-Y"), new String'("sign"), new String'("-n"), new String'(Fetch_Namespace),
+            new String'("-f"), new String'(Key_Path), new String'(Msg_Path));
+         Out_Text : constant String :=
+           GNAT.Expect.Get_Command_Output (Ssh_Keygen, Args, "", Code'Access, Err_To_Out => True);
+      begin
+         pragma Unreferenced (Out_Text);
+         for A of Args loop
+            GNAT.OS_Lib.Free (A);
+         end loop;
+      end;
+      declare
+         Sig : constant String := Read_Small (Sig_File);
+      begin
+         Remove (Msg_Path);
+         Remove (Sig_File);
+         if Code /= 0 or else Sig = "" then
+            return "";
+         end if;
+         declare
+            Sig_Hex : constant String := Hex_Text_Pkg.Encode (Sig);
+         begin
+            if Fetch_Sign_Pkg.Check (Network, Sender, Key_Hex, Minute, Name, Sig_Hex) = Fetch_Sign_Pkg.Fetch_Ok then
+               return Fetch_Sign_Pkg.Line (Network, Sender, Key_Hex, Minute, Name, Sig_Hex);
+            end if;
+         end;
+      end;
+      return "";
+   exception
+      when others =>
+         begin
+            Remove (Msg_Path);
+         exception
+            when others =>
+               null;
+         end;
+         begin
+            Remove (Sig_File);
+         exception
+            when others =>
+               null;
+         end;
+         return "";
+   end Signed_Fetch_Line;
+   --  SLOT END (signed-line)
 
    --  The word, as text, for the proven decider's outcome.
    function Word_Of (O : Tower_Index_Pkg.Outcome_Kind) return String is
@@ -562,7 +699,7 @@ package body Tower_Fetch_Pkg with SPARK_Mode => Off is
                --  8. Walk EVERY entry of `current` (an array: one stream today, more than one source later), handing
                --  each to the proven fold: the pick is the highest version forward of running, whatever its name.
                declare
-                  Cur  : constant Json_Scan_Pkg.Span_Type := Tower_Index_Pkg.Current_Span (L1);
+                  Cur  : constant Tower_Scan_Pkg.Span_Type := Tower_Index_Pkg.Current_Span (L1);
                   I    : Positive := Cur.first + 1;
                   Pick : Tower_Index_Pkg.Pick_State;
                   Best_Entry : U.Unbounded_String;
@@ -616,19 +753,41 @@ package body Tower_Fetch_Pkg with SPARK_Mode => Off is
                         Reply : Text_Access;
                         F_Ok  : Boolean;
                      begin
-                        Ask (Conf, Fetch_Head & U.To_String (Name) & Fetch_Tail,
-                             Tower_Index_Pkg.Fetch_Max_Reply, Reply, F_Ok);
+                        --  SLOT BEGIN (fetch-ask)
+                        declare
+                           L : constant String := Signed_Fetch_Line (U.To_String (Name));
+                        begin
+                           if L'Length = 0 then
+                              Reply := new String'("");
+                              F_Ok := False;
+                           else
+                              Ask (Conf, L, Tower_Index_Pkg.Fetch_Max_Reply, Reply, F_Ok);
+                           end if;
+                        end;
+                        --  SLOT END (fetch-ask)
                         if not F_Ok or else not Tower_Index_Pkg.Reply_Is (Reply.all, Tower_Index_Pkg.Fetch_Reply_Head) then
                            Free (Reply);
                            Finish (With_Row => True);   --  fetch_failed
                            return;
                         end if;
                         declare
-                           Data : constant Text_Access := new String'
-                             (Hex_Text_Pkg.Decode
-                                (Reply (Tower_Index_Pkg.Fetch_Reply_Head'Length + 1
-                                        .. Tower_Index_Pkg.Hex_Last (Reply.all, Tower_Index_Pkg.Fetch_Reply_Head))));
+                           Hex_First : constant Positive := Tower_Index_Pkg.Fetch_Reply_Head'Length + 1;
+                           Hex_Last  : constant Natural  := Tower_Index_Pkg.Hex_Last (Reply.all, Tower_Index_Pkg.Fetch_Reply_Head);
+                           Data      : constant Text_Access := new String (1 .. (Hex_Last - Hex_First + 1) / 2);
+                           Chunk     : constant := 65_536;
+                           Done      : Natural := 0;     --  hex characters decoded so far
+                           Pos       : Natural := 1;     --  next index in Data
                         begin
+                           while Done < Hex_Last - Hex_First + 1 loop
+                              declare
+                                 N    : constant Natural := Natural'Min (Chunk, Hex_Last - Hex_First + 1 - Done);
+                                 Part : constant String := Hex_Text_Pkg.Decode (Reply (Hex_First + Done .. Hex_First + Done + N - 1));
+                              begin
+                                 Data (Pos .. Pos + Part'Length - 1) := Part;
+                                 Pos  := Pos + Part'Length;
+                                 Done := Done + N;
+                              end;
+                           end loop;
                            Free (Reply);
                            Bytes := Data'Length;
                            Digest := U.To_Unbounded_String (GNAT.SHA256.Digest (Data.all));
