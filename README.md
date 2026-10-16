@@ -201,17 +201,18 @@ available, and it does not care who wrote the code.
 
 ## Licence and contributions
 
-CRUCIBLE is **AGPL-3.0-or-later** (`LICENSE`, the FSF's unmodified text). A commercial licence over the same
-source is available on request — see `COMMERCIAL-LICENCE.md`. No legal wording in this repository is drafted by
-us.
+CRUCIBLE is **AGPL-3.0-or-later** (`LICENSE`, the FSF's unmodified text). A commercial licence is available
+only by a signed agreement with The Dark Factory Ltd, for work produced by our online factory — see
+`COMMERCIAL-LICENCE.md`. Apart from that short notice, no legal wording in this repository is drafted by us.
 
 Contributions are welcome under the Harmony Contributor License Agreement v1.0, licence variant, Outbound
 Licence Option Five, governed by the laws of England and Wales. It is a licence, not an assignment: you keep your
 copyright, and your contribution stays AGPL. See `CLA.md` and `CONTRIBUTING.md`.
 
 The AGPL edition emits **AGPL only**. Ask it to emit under any other licence and it refuses. That is a statement
-of licence rather than a lock: one tree builds either edition, and anyone may build the commercial one — the
-refusal tells you what this binary is, it does not stop you.
+of licence rather than a lock: one tree builds either edition, but building the commercial edition grants no
+licence. Whatever a build of your own produces is AGPL. A commercial licence is available only by a signed
+agreement with The Dark Factory Ltd, for work produced by our online factory.
 
 ---
 

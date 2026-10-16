@@ -1,7 +1,8 @@
 # Contributing to CRUCIBLE
 
-CRUCIBLE is dual-licensed: AGPL-3.0-or-later, and a commercial grant held by The Dark Factory
-Ltd over the same tree. Contributions are welcome under the Contributor Licence Agreement, which is the Harmony
+CRUCIBLE is AGPL-3.0-or-later. The Dark Factory Ltd reserves the right to license its own code
+in this tree commercially; such a licence is available only by a signed agreement with The Dark
+Factory Ltd, for work produced by our online factory (see `COMMERCIAL-LICENCE.md`). Contributions are welcome under the Contributor Licence Agreement, which is the Harmony
 Contributor License Agreement v1.0, licence variant, Outbound Licence Option Five, governed by
 the laws of England and Wales (the unmodified templates and the fills are in ada-factory,
 `CLA.md` and `cla/`). It is a licence, not an assignment: you keep your copyright.
@@ -12,8 +13,8 @@ including the commercial edition: findings, shapes and techniques are ideas, and
 copyrighted; your code is not copied there. A patch to an existing house file is taken under the
 CLA's sublicense, because a file cannot be half-excluded.
 
-Refusing the CLA refuses the merge, the commercial tier and a register account. It never
-refuses you the AGPL software.
+Refusing the CLA refuses the merge and a register account. It never refuses you the AGPL
+software, and signing it never gives you a commercial licence.
 
 **On GitHub:** signing is handled by **CLA Assistant** (cla-assistant.io), the standard signing
 tool many open-source projects use. On your first pull request its bot posts a link; you read the
