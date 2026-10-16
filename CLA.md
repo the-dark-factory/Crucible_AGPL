@@ -3,8 +3,9 @@
 **The CLA is the Harmony Contributor License Agreement, version 1.0 (2011-07-04), LICENCE
 variant (not the assignment variant), Outbound Licence OPTION FIVE, governed by the laws of
 England and Wales.** It is a licence, not an assignment: you keep your copyright. It is not a
-software licence: CRUCIBLE itself is, and remains, AGPL-3.0-or-later (with a commercial grant
-held by The Dark Factory Ltd over the same tree).
+software licence: CRUCIBLE itself is, and remains, AGPL-3.0-or-later. A commercial licence is
+available only by a signed agreement with The Dark Factory Ltd, for work produced by our online
+factory (see `COMMERCIAL-LICENCE.md`).
 
 **The agreements to read and sign are:**
 
@@ -37,9 +38,11 @@ the condition that we also license it under the project's licence on the day you
 is AGPL-3.0-or-later. Your contribution therefore always stays AGPL. Our own rule goes further —
 see CONTRIBUTING.md.
 
-Refusing to sign refuses the merge, the commercial tier and an account on the registers. It
-never refuses you the AGPL software.
+Refusing to sign refuses the merge and an account on the registers. It never refuses you the
+AGPL software. Signing never gives you a commercial licence either: that is available only by a
+signed agreement with The Dark Factory Ltd, for work produced by our online factory.
 
 The agreement texts are the unmodified published Harmony templates and the software licence is the
-FSF's unmodified AGPL-3.0: nothing in this repository is legal wording drafted by us. Nobody has
+FSF's unmodified AGPL-3.0: apart from the short notice in `COMMERCIAL-LICENCE.md`, nothing in this
+repository is legal wording drafted by us. Nobody has
 signed yet.
