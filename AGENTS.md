@@ -17,6 +17,10 @@ The important property, and the one that makes the rest of this file make sense:
 would rather refuse than hand you something that only looks right.* A refusal is a result.
 If you treat a refusal as a failure to be worked around, you will misuse this tool.
 
+A refusal is still the honest answer: the unit could not be proved as asked, and the right move is to change
+the request, not to work around it. From v0.4.0, refused and unmeasured forges are also flagged
+`isError: true`, so a host can never mistake one for success.
+
 It speaks MCP over stdio: JSON-RPC 2.0, one object per line. `initialize`, then
 `notifications/initialized`, then `tools/list` and `tools/call` as normal.
 

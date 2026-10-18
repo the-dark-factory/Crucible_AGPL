@@ -12,6 +12,10 @@ hands both to AdaCore's prover. If the prover closes every check, you get the un
 re-derive. If it does not, you get a refusal that names the stage it stopped at, and the case is *parked*, not
 thrown away. A parked case can be packed into a catalog and sent up the tower, where another factory may take it.
 
+A refusal is still the honest answer: the unit could not be proved as asked, and the right move is to change the
+request, not to work around it. From v0.4.0, refused and unmeasured forges are also flagged `isError: true`, so a
+host can never mistake one for success.
+
 **It does not finish most of the time yet.** On the sheets we have measured it on, the whole pipeline ends in a
 proved unit in a minority of runs — figures below, ours, unflattering. What we claim is narrower and we think
 more useful: **when it says proved, the prover said so; when it cannot, it says why; and what crosses the network

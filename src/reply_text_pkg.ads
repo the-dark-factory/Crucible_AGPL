@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 30706e9e91e0cc4b5e9dce6bc3bf0cc4ab2a7ecada4ddf1145de8ccf30018ab5
+--  Unstamped source sha256: 88f86aada1868a7aed53055c511bc11f4af55746326d56c6acccdf94ed905458
 --
 with Palais_Tools_Pkg;
 
@@ -184,5 +184,29 @@ package Reply_Text_Pkg with SPARK_Mode is
      is ("{" & Content_Key & "[" & "{" & Type_Key & Text_Word & "," & Text_Key & Q (Escape_Quotes (Inner)) & "}" & "]" & "," & Structuredcontent_Key & Inner & "}")
      with Pre  => (Inner'First = 1 and then Inner'Length <= 4096),
           Post => (Tool_Call_Result'Result'Length >= 2 and then Tool_Call_Result'Result (Tool_Call_Result'Result'First) = '{' and then Tool_Call_Result'Result (Tool_Call_Result'Result'Last) = '}' and then Tool_Call_Result'Result'Length <= 32768);
+
+   Iserror_Key : constant String := Q ("isError") & ":";
+   Forge_Refused_Head : constant String := "{" & Q ("final") & ":" & Q ("refused");
+   Forge_Unmeasured_Head : constant String := "{" & Q ("final") & ":" & Q ("unmeasured");
+
+   function Starts_With (S : String; Head : String) return Boolean
+     is ((if S'Length >= Head'Length then S (S'First .. S'First + (Head'Length - 1)) = Head else False))
+     with Post => (Starts_With'Result = (if S'Length >= Head'Length then S (S'First .. S'First + (Head'Length - 1)) = Head else False));
+
+   function Forge_Failed (Forge_Text : String) return Boolean
+     is (Starts_With (Forge_Text, Forge_Refused_Head) or else Starts_With (Forge_Text, Forge_Unmeasured_Head))
+     with Post => (Forge_Failed'Result = (Starts_With (Forge_Text, Forge_Refused_Head) or else Starts_With (Forge_Text, Forge_Unmeasured_Head)));
+
+   function Tool_Call_Error_Result (Inner : String) return String
+     is ("{" & Content_Key & "[" & "{" & Type_Key & Text_Word & "," & Text_Key & Q (Escape_Quotes (Inner)) & "}" & "]" & "," & Structuredcontent_Key & Inner & "," & Iserror_Key & "true}")
+     with Pre  => (Inner'First = 1 and then Inner'Length <= 4096),
+          Post => (Tool_Call_Error_Result'Result'Length >= 2 and then Tool_Call_Error_Result'Result (Tool_Call_Error_Result'Result'First) = '{' and then Tool_Call_Error_Result'Result (Tool_Call_Error_Result'Result'Last) = '}' and then Tool_Call_Error_Result'Result'Length <= 32768);
+
+   function Forge_Call_Result (Inner : String) return String
+     is ((if Forge_Failed (Inner) then Tool_Call_Error_Result (Inner) else Tool_Call_Result (Inner)))
+     with Pre  => (Inner'First = 1 and then Inner'Length <= 4096),
+          Post => (Forge_Call_Result'Result = (if Forge_Failed (Inner) then Tool_Call_Error_Result (Inner) else Tool_Call_Result (Inner))
+                   and then Forge_Call_Result'Result'Length >= 2
+                   and then Forge_Call_Result'Result'Length <= 32768);
 
 end Reply_Text_Pkg;

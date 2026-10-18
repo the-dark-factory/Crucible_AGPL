@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 7ad418d14cb61ff4df5c527c42ef52f8c9b77a24aa64250f2fd180cd198f5106
+--  Unstamped source sha256: 6ecacc112d0088ba04d00c54f19d2eb20e5c94ea1c5f7b870cd50d9083fc9125
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -55,6 +55,10 @@
 --  (BRIEF_reef_enrol_service_2026-10-12 section 6, rule M5), line 1 of config/reef-allowed-signers. That digest is
 --  also the network id. Enrolment is no longer refused no_reef_key_pinned for want of a key; a signers file whose
 --  line 1 is any other line still is. ONE slot (reef-pin).
+--  v21 (lineage 21, 2026-10-18; Tony 17:05 "stick em all in", fix 1 of the fail-loudly audit): a forge whose final
+--  state is refused or unmeasured is an MCP ERROR: its tool result carries "isError":true. The forge dispatch calls
+--  Reply_Text_Pkg.Forge_Call_Result (lineage 17), which decides; every other tool and reply is byte-identical. ONE slot
+--  (forge-dispatch).
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -337,14 +341,12 @@ procedure Crucible_Main is
    end Prove_Unit_Text;
 
    --  The forge tool: the one-line pipeline report for the sheet argument of Line.
-   --  SLOT BEGIN (reef-pin)
    --  palais.enrol: one step of enrolment with the Reef (DESIGN_palais_enrol_2026-09-19). The edge decides nothing;
    --  Reef_Key_Claim_Pkg does. v20: the pinned Reef signers digest is the SHA-256 (lower-case hex, WITHOUT the line
    --  feed) of the df-reef-key signer line (key ceremony 2026-10-14), line 1 of config/reef-allowed-signers:
    --    reef namespaces="df-reef-key" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBu2EBctq0dWu1yOic1cWAKbPntc9Oi0cSllsJ1Aaif0
    --  It is also the network id. A signers file whose line 1 is any other line is refused no_reef_key_pinned.
    Pinned_Reef_Signers : constant String := "0a1aeac7fce06149f18be9bc1f649779ba903e0b2b9c854479b3164f6193adc2";
-   --  SLOT END (reef-pin)
 
    --  ★ RAIL.SHOW (lineage 12, v0.3 Phase 7). Read-only: which models this factory is pointed at. The door
    --  reads config/rail.conf (the self-root has already put it in its install root) and, for every line
@@ -965,7 +967,10 @@ begin
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Prove_Unit then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Forge then
-                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Forge_Text (Line))));
+                        --  SLOT BEGIN (forge-dispatch)
+                        --  v21: a refused or unmeasured forge is an MCP error ("isError":true); Reply_Text_Pkg decides.
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Forge_Call_Result (Forge_Text (Line))));
+                        --  SLOT END (forge-dispatch)
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Palais_Enrol then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Show then
