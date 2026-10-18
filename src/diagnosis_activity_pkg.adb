@@ -1,17 +1,23 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 8e0bcdd48d0b4ec9d63533733cf01fecfd31bd5703d7fedb04814255e97ca7a2
+--  Unstamped source sha256: aff3885ade7a0d9bfacd2c6c1ea665ed1adccea91fb5365d35c1603d3c6b6221
 --
 --  Diagnosis_Activity_Pkg body -- template (seat-written plumbing) with ONE slot (source-word), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step5a3_diagnosis_layer_2026-09-17 (5a-3d/e).
+--  Lineage 2 (2026-10-18, Tony 17:05 "stick em all in", fix 4 of the fail-loudly audit, item 4): the earlier slot is
+--  frozen; SIX slots: failed-decl, refusal-decl, reasoner-call (the four-parameter Complete), reasoner-failed (a reasoner
+--  that does not answer gives its own source word, reasoner-failed:<outcome>, and a standard-error line), source-word (the
+--  word chosen from it), catch (the catch-all names the exception in the source word and on standard error).
 with Ada.Characters.Handling;
 with Model_Rail_Call_Pkg;
 with Model_Reply_Pkg;
 with Reasoner_Check_Pkg;
+with Ada.Exceptions;
+with Ada.Text_IO;
 
 package body Diagnosis_Activity_Pkg with SPARK_Mode => Off is
 
@@ -102,6 +108,10 @@ package body Diagnosis_Activity_Pkg with SPARK_Mode => Off is
    is
       E  : Diagnosis_Class_Pkg.Evidence;
       Ch : Diagnosis_Select_Pkg.Choice;
+      --  SLOT BEGIN (failed-decl)
+      --  Lineage 2: the reasoner's outcome word when it did not answer; empty otherwise.
+      Failed_Word : Unbounded_String;
+      --  SLOT END (failed-decl)
    begin
       Text := Null_Unbounded_String;
       Class_Word := To_Unbounded_String ("no_hint");
@@ -125,8 +135,13 @@ package body Diagnosis_Activity_Pkg with SPARK_Mode => Off is
               "THE SPECIFICATION:" & LF & Spec_Text & LF & LF & "THE BODY:" & LF & Body_Text & LF;
             Reply  : Model_Rail_Call_Pkg.Text_Access;
             MO     : Model_Reply_Pkg.Outcome_Kind;
+            --  SLOT BEGIN (refusal-decl)
+            Refusal : Unbounded_String;
+            --  SLOT END (refusal-decl)
          begin
-            Model_Rail_Call_Pkg.Complete (Prompt, Reply, MO);
+            --  SLOT BEGIN (reasoner-call)
+            Model_Rail_Call_Pkg.Complete (Prompt, Reply, MO, Refusal);
+            --  SLOT END (reasoner-call)
             if Model_Reply_Pkg.Is_Text (MO) then
                declare
                   Claimed  : constant Diagnosis_Class_Pkg.Catalogue_Class := Claimed_Class (Reply.all);
@@ -139,7 +154,15 @@ package body Diagnosis_Activity_Pkg with SPARK_Mode => Off is
                      Text := To_Unbounded_String ("REASONER (class " & Lower (Diagnosis_Class_Pkg.Catalogue_Class'Image (Believed)) & ", checked):" & LF & Reply.all);
                   end if;
                end;
+            --  SLOT BEGIN (reasoner-failed)
+            else
+               --  Lineage 2: the reasoner did not answer; that is its own source word, never "unclassified" (audit item 4).
+               Failed_Word := To_Unbounded_String (Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO)));
+               Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+                 "diagnosis: reasoner-failed:" & To_String (Failed_Word) &
+                 (if Length (Refusal) > 0 then " (" & To_String (Refusal) & ")" else ""));
             end if;
+            --  SLOT END (reasoner-failed)
          end;
       end if;
 
@@ -147,15 +170,22 @@ package body Diagnosis_Activity_Pkg with SPARK_Mode => Off is
       Source_Word := To_Unbounded_String
         (if Ch.source = Diagnosis_Select_Pkg.Deterministic then "deterministic"
          elsif Ch.source = Diagnosis_Select_Pkg.Reasoner then
-           (if To_String (Catalogue_Word) = "unclassified" then "reasoner-unclassified" else "reasoner-agreed")
+           (if Length (Failed_Word) > 0 then "reasoner-failed:" & To_String (Failed_Word)
+            elsif To_String (Catalogue_Word) = "unclassified" then "reasoner-unclassified" else "reasoner-agreed")
          else "none");
       --  SLOT END (source-word)
 
       State := Diagnosis_Select_Pkg.Record_Sent (State, Ch);
    exception
-      when others =>
+      --  SLOT BEGIN (catch)
+      when E : others =>
+         --  Lineage 2: the exception is named in the source word and on standard error, never a silent "none" (audit item 4).
          Text := Null_Unbounded_String;
-         Source_Word := To_Unbounded_String ("none");
+         Source_Word := To_Unbounded_String ("internal-fault:" & Ada.Exceptions.Exception_Name (E));
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "diagnosis: internal fault: " & Ada.Exceptions.Exception_Name (E) & ": " &
+           Ada.Exceptions.Exception_Message (E));
+      --  SLOT END (catch)
    end Diagnose;
 
 end Diagnosis_Activity_Pkg;

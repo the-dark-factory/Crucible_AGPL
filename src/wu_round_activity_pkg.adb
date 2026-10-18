@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 4cc4f95e49c78b348418ef6b2fc80496232344507e918e161e06ae63a89657a2
+--  Unstamped source sha256: 94f727bc127771c3544b1ba46564254c24c72ec8bd0a42df424f7d030121c74b
 --
 --  Wu_Round_Activity_Pkg body -- template (seat-written plumbing) with FOUR slots (gate-facts, route, emission-facts, fit),
 --  filled by a Wu edge round. Brief BRIEF_crucible_step5a2_wu_spec_round_2026-09-17 (5a-2f).
@@ -15,6 +15,11 @@
 --  focus-fn + focus-call (the first compiler error and the source line it names head the repair section) and
 --  prev-letter + progress-check (a round repeating the previous unit byte for byte stops the stage: no_progress,
 --  decided by the admitted Round_Progress_Pkg).
+--  Lineage 9 (2026-10-18, Tony 17:05 "stick em all in", fix 3 of the fail-loudly audit, items 3 and 6; ruling D7): the
+--  earlier slots are frozen; the old Run is now Run_Rounds, unchanged inside but for its catch-all; FIVE slots: log-flags,
+--  log-catch and spec-catch (a round-log or spec-file write failure is said on standard error and named in the stage
+--  reason), inner-catch (the catch-all names the exception), run-wrapper (the new Run: the last job's state/spec.ads is
+--  set aside as state/spec.ads.prev first, then Run_Rounds, then the write-failure notes).
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Characters.Handling;
@@ -33,6 +38,8 @@ with Contract_Emission_Pkg;
 with Stage_Outcome_Map_Pkg;
 with Json_String_Pkg;
 with Round_Progress_Pkg;
+with Ada.Exceptions;
+with Ada.Directories;
 
 package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
 
@@ -44,6 +51,11 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
 
    Rounds_Path : constant String := "state/rounds.jsonl";
    Spec_Path   : constant String := "state/spec.ads";
+   --  SLOT BEGIN (log-flags)
+   --  Lineage 9: set when a write of the round log or of the spec file fails during this job; Run names them in the reason.
+   Log_Unwritten  : Boolean := False;
+   Spec_Unwritten : Boolean := False;
+   --  SLOT END (log-flags)
 
    function Lower (S : String) return String renames Ada.Characters.Handling.To_Lower;
 
@@ -150,8 +162,13 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Ada.Text_IO.Put_Line (F, Line);
       Ada.Text_IO.Close (F);
    exception
-      when others =>
-         null;   --  a file failure never changes a stage outcome
+      --  SLOT BEGIN (log-catch)
+      when E : others =>
+         --  Lineage 9: a file failure still never changes a stage outcome, but it is said and named (audit item 6).
+         Log_Unwritten := True;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "emit_contract: " & Rounds_Path & " unwritable: " & Ada.Exceptions.Exception_Name (E));
+      --  SLOT END (log-catch)
    end Log_Round;
 
    procedure Write_Spec (Text : String) is
@@ -161,8 +178,13 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       Ada.Text_IO.Put (F, Text);
       Ada.Text_IO.Close (F);
    exception
-      when others =>
-         null;
+      --  SLOT BEGIN (spec-catch)
+      when E : others =>
+         --  Lineage 9: the spec file was not written; said here and named in the stage reason (audit item 6).
+         Spec_Unwritten := True;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "emit_contract: " & Spec_Path & " unwritable: " & Ada.Exceptions.Exception_Name (E));
+      --  SLOT END (spec-catch)
    end Write_Spec;
 
    function Json_Of (S : String) return String is
@@ -211,7 +233,6 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
          raise;
    end Diag_Field;
 
-   --  SLOT BEGIN (focus-fn)
    --  Lineage 6 (Tony 2026-09-28 18:05, fix 2): the compiler's FIRST error line and the unit's source line it names,
    --  quoted at the top of the repair section. A measurement, deciding nothing: the first line of Diag holding
    --  ": error:", the decimal number between that line's first and second colon, and the line of Unit with that
@@ -294,9 +315,8 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       return "FIRST ERROR (fix this one first): " & Diag (E_First .. E_Last) & LF &
         (if S_First > 0 and then S_Last >= S_First then "  the line it names: " & Unit (S_First .. S_Last) & LF else "") & LF;
    end First_Error_Focus;
-   --  SLOT END (focus-fn)
 
-   procedure Run
+   procedure Run_Rounds
      (Sheet     : String;
       Design    : String;
       Unit_Name : out Unbounded_String;
@@ -313,10 +333,8 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
       S         : Round_Budget_Pkg.Budget_State := Round_Budget_Pkg.Fresh;
       Prev_Unit : Unbounded_String;
       Prev_Diag : Unbounded_String;
-      --  SLOT BEGIN (prev-letter)
       --  Lineage 6: the round letter of the unit held in Prev_Unit (the round a repeat names).
       Prev_Letter : Character := 'A';
-      --  SLOT END (prev-letter)
       Last_Word : Unbounded_String := To_Unbounded_String ("none");
       Last_Hint : Unbounded_String;   --  Gate_Hint & Substance_Hint of the previous refused round
       Last_Subst : Unbounded_String;  --  the substance faults of the last round whose route passed but may_emit did not
@@ -344,9 +362,7 @@ package body Wu_Round_Activity_Pkg with SPARK_Mode => Off is
                  LF & "REPAIR MODE. The previous round emitted the unit shown at the end, and the compiler/prover reported" & LF &
                  "the lines below. Start FROM that unit; do NOT write a new one from scratch. Change ONLY what those lines" & LF &
                  "or the sheet name; re-emit the whole unit." & LF & LF &
-                 --  SLOT BEGIN (focus-call)
                  First_Error_Focus (To_String (Prev_Diag), To_String (Prev_Unit)) &
-                 --  SLOT END (focus-call)
                  "WHY IT WAS REFUSED (" & To_String (Last_Word) & "):" & LF & To_String (Last_Hint) & LF &
                  "THE PROVER'S LINES:" & LF &
                  To_String (Prev_Diag) & LF & "THE UNIT THE PREVIOUS ROUND EMITTED:" & LF & To_String (Prev_Unit) & LF
@@ -558,7 +574,6 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                                                  V.fault_vocabulary_open, V.fault_over_bound, not EF.preconditions_stated)
                                else ""));
                         end;
-                        --  SLOT BEGIN (progress-check)
                         --  Lineage 6 (Tony 2026-09-28 18:05, fix 2): a round whose unit is byte-identical to the previous
                         --  round's made no progress: the model ignored the compiler's lines, and every further round on the
                         --  same prompt is wasted. The admitted Round_Progress_Pkg decides; the stage stops, refused by name.
@@ -574,7 +589,6 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
                            return;
                         end if;
                         Prev_Letter := Letter;
-                        --  SLOT END (progress-check)
                         Prev_Unit := To_Unbounded_String (Unit);
                         if Length (Prev_Unit) > Max_Repair_Chars then
                            Prev_Unit := Head (Prev_Unit, Max_Repair_Chars);
@@ -592,9 +606,52 @@ Result := Stage_Outcome_Map_Pkg.From_Verdict (Fit);
         ("emit_contract refused: budget spent after " & Img (Natural (S.rounds_used)) & " rounds; last: " & To_String (Last_Word) &
          (if Length (Last_Subst) > 0 then "; substance: " & To_String (Last_Subst) else ""));
    exception
-      when others =>
+      --  SLOT BEGIN (inner-catch)
+      when E : others =>
+         --  Lineage 9: the catch-all names the exception, in the reason and on standard error (audit item 3).
          Result := Pipeline_Stage_Pkg.Unmeasured_Here;
-         Reason := To_Unbounded_String ("emit_contract: unreadable");
+         Reason := To_Unbounded_String ("emit_contract: internal fault: " & Ada.Exceptions.Exception_Name (E));
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "emit_contract: internal fault: " & Ada.Exceptions.Exception_Name (E) & ": " &
+           Ada.Exceptions.Exception_Message (E));
+      --  SLOT END (inner-catch)
+   end Run_Rounds;
+
+   --  SLOT BEGIN (run-wrapper)
+   procedure Run
+     (Sheet     : String;
+      Design    : String;
+      Unit_Name : out Unbounded_String;
+      Spec_Text : out Unbounded_String;
+      Result    : out Pipeline_Stage_Pkg.Outcome;
+      Reason    : out Unbounded_String)
+   is
+      Prev_Path : constant String := Spec_Path & ".prev";
+   begin
+      Log_Unwritten := False;
+      Spec_Unwritten := False;
+      --  Lineage 9 (ruling D7): the last job's spec is set aside as state/spec.ads.prev BEFORE this job starts, so a stale
+      --  file can never pass for this job's spec, and the last job's evidence stays readable.
+      begin
+         if Ada.Directories.Exists (Spec_Path) then
+            if Ada.Directories.Exists (Prev_Path) then
+               Ada.Directories.Delete_File (Prev_Path);
+            end if;
+            Ada.Directories.Rename (Spec_Path, Prev_Path);
+         end if;
+      exception
+         when E : others =>
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+              "emit_contract: " & Spec_Path & " could not be set aside: " & Ada.Exceptions.Exception_Name (E));
+      end;
+      Run_Rounds (Sheet, Design, Unit_Name, Spec_Text, Result, Reason);
+      if Log_Unwritten then
+         Append (Reason, "; round log unwritten (" & Rounds_Path & ")");
+      end if;
+      if Spec_Unwritten then
+         Append (Reason, "; spec file unwritten (" & Spec_Path & ")");
+      end if;
    end Run;
+   --  SLOT END (run-wrapper)
 
 end Wu_Round_Activity_Pkg;

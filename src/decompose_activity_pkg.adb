@@ -4,13 +4,16 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: ebe456c117b08dab949a9d44f2bed352d9e1ffa676d4c7d4d9f5699a4afeea8e
+--  Unstamped source sha256: 70c049809c5a3ed1c19bcbad5213849806f98a42a4a31a074496a6a3c8b2e44c
 --
 --  Decompose_Activity_Pkg body -- template (seat-written plumbing) with TWO slots (model_result, design_result), filled
 --  by a Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 3, Decompose).
 --  Lineage 3 (2026-09-28, Tony A11: refusals name the real fault): the earlier slots are frozen; ONE slot, model-reason:
 --  the four-parameter Model_Rail_Call_Pkg.Complete hands back a refusal the rail names (prompt_exceeds_context, with
 --  the estimated tokens and the budget), and the Reason carries it instead of the bare outcome word.
+--  Lineage 6 (2026-10-18, Tony 17:05 "stick em all in", fix 3 of the fail-loudly audit, item 3): the earlier slot is
+--  frozen; ONE slot, inner-catch: the catch-all names the exception, in the reason and on standard error, instead of
+--  the old bare unreadable word.
 with Ada.Characters.Handling;
 with Model_Reply_Pkg;
 with Model_Rail_Call_Pkg;
@@ -18,6 +21,8 @@ with Mascot_Scan_Pkg;
 with Mascot_Measure_Pkg;
 with Mascot_Judge_Pkg;
 with Stage_Outcome_Map_Pkg;
+with Ada.Exceptions;
+with Ada.Text_IO;
 
 package body Decompose_Activity_Pkg with SPARK_Mode => Off is
 
@@ -42,13 +47,11 @@ package body Decompose_Activity_Pkg with SPARK_Mode => Off is
       Why      : Unbounded_String;   --  lineage 3: a refusal the model rail names (prompt_exceeds_context)
    begin
       Design := Null_Unbounded_String;
-      --  SLOT BEGIN (model-reason)
       Model_Rail_Call_Pkg.Complete (Design_Instruction & Brief, Text, O, Why);
 
       if not Model_Reply_Pkg.Is_Text (O) then
          Reason := To_Unbounded_String
            ("model: " & (if Length (Why) > 0 then To_String (Why) else Lower (Model_Reply_Pkg.Outcome_Kind'Image (O))));
-      --  SLOT END (model-reason)
          Result := Stage_Outcome_Map_Pkg.From_Model (O);
          return;
       end if;
@@ -146,10 +149,16 @@ package body Decompose_Activity_Pkg with SPARK_Mode => Off is
 
       Result := Stage_Outcome_Map_Pkg.From_Verdict (Accepted);
    exception
-      when others =>
-         Reason := To_Unbounded_String ("decompose: unreadable");
+      --  SLOT BEGIN (inner-catch)
+      when E : others =>
+         --  Lineage 6: the catch-all names the exception, in the reason and on standard error (audit item 3).
+         Reason := To_Unbounded_String ("decompose: internal fault: " & Ada.Exceptions.Exception_Name (E));
          Result := Pipeline_Stage_Pkg.Unmeasured_Here;
          Design := Null_Unbounded_String;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "decompose: internal fault: " & Ada.Exceptions.Exception_Name (E) & ": " &
+           Ada.Exceptions.Exception_Message (E));
+      --  SLOT END (inner-catch)
    end Run_Keeping_Design;
 
    procedure Run

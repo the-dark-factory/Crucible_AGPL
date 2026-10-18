@@ -4,12 +4,17 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 25675b1d6e2f6e1b2c58219973851e65ab9c910d941c298fc1675c03c60d2824
+--  Unstamped source sha256: a70b31807009c0d84d035adfb448951c4e0905113cddc86401e0cfc71fef2ef7
 --
 --  Body_Fill_Activity_Pkg body — the template: plumbing fixed by the seat; the FOUR slots are the planner's.
 --  Lineage 4 (2026-09-28, Tony A11: refusals name the real fault): the earlier slots are frozen; ONE slot, model-reason:
 --  the four-parameter Model_Rail_Call_Pkg.Complete hands back a refusal the rail names (prompt_exceeds_context, with
 --  the estimated tokens and the budget), and the Reason carries it instead of the bare outcome word.
+--  Lineage 8 (2026-10-18, Tony 17:05 "stick em all in", fix 3 of the fail-loudly audit, items 3 and 6; ruling D7): the
+--  earlier slots are frozen; the old Run is now Run_Rounds, unchanged inside but for its catch-all; FIVE slots: log-flags,
+--  log-catch and body-catch (a round-log or body-file write failure is said on standard error and named in the stage
+--  reason), inner-catch (the catch-all names the exception), run-wrapper (the new Run: the last job's state/body.adb is
+--  set aside as state/body.adb.prev first, then Run_Rounds, then the write-failure notes).
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Characters.Handling;
@@ -30,6 +35,8 @@ with Diagnosis_Select_Pkg;
 with Diagnosis_Activity_Pkg;
 with Stage_Outcome_Map_Pkg;
 with Json_String_Pkg;
+with Ada.Exceptions;
+with Ada.Directories;
 
 package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
 
@@ -42,6 +49,11 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
 
    Rounds_Path : constant String := "state/body-rounds.jsonl";
    Body_Path   : constant String := "state/body.adb";
+   --  SLOT BEGIN (log-flags)
+   --  Lineage 8: set when a write of the round log or of the body file fails during this job; Run names them in the reason.
+   Log_Unwritten  : Boolean := False;
+   Body_Unwritten : Boolean := False;
+   --  SLOT END (log-flags)
 
    function Lower (S : String) return String renames Ada.Characters.Handling.To_Lower;
 
@@ -65,8 +77,13 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
       Ada.Text_IO.Put_Line (F, Line);
       Ada.Text_IO.Close (F);
    exception
-      when others =>
-         null;   --  a file failure never changes a stage outcome
+      --  SLOT BEGIN (log-catch)
+      when E : others =>
+         --  Lineage 8: a file failure still never changes a stage outcome, but it is said and named (audit item 6).
+         Log_Unwritten := True;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "fill_body: " & Rounds_Path & " unwritable: " & Ada.Exceptions.Exception_Name (E));
+      --  SLOT END (log-catch)
    end Log_Round;
 
    --  D2 (crucible-report): the prover's own lines for this round, as a JSON field of the round row, so a
@@ -101,8 +118,13 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
       Ada.Text_IO.Put (F, Text);
       Ada.Text_IO.Close (F);
    exception
-      when others =>
-         null;
+      --  SLOT BEGIN (body-catch)
+      when E : others =>
+         --  Lineage 8: the body file was not written; said here and named in the stage reason (audit item 6).
+         Body_Unwritten := True;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "fill_body: " & Body_Path & " unwritable: " & Ada.Exceptions.Exception_Name (E));
+      --  SLOT END (body-catch)
    end Write_Body;
 
    --  Idiom splices at PROVEN positions; the result is re-judged CLEAN by the core before it is used. Returns False when
@@ -170,7 +192,7 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
       end loop;
    end Blank_Duplicates;
 
-   procedure Run
+   procedure Run_Rounds
      (Spec_Text : String;
       Unit_Name : String;
       Body_Text : out Unbounded_String;
@@ -241,14 +263,12 @@ package body Body_Fill_Activity_Pkg with SPARK_Mode => Off is
             R    : Round_Budget_Pkg.Round_Result := Round_Budget_Pkg.Result_No_Unit;
             Why  : Unbounded_String;   --  lineage 4: a refusal the model rail names (prompt_exceeds_context)
          begin
-            --  SLOT BEGIN (model-reason)
             Model_Rail_Call_Pkg.Complete (Prompt, Text, MO, Why);
             if not Model_Reply_Pkg.Is_Text (MO) then
                Result := Stage_Outcome_Map_Pkg.From_Model (MO);
                Reason := To_Unbounded_String
                  ("fill_body: model: " &
                   (if Length (Why) > 0 then To_String (Why) else Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO))));
-            --  SLOT END (model-reason)
                Log_Round ("{""stage"":""fill_body"",""round"":""" & Letter & """,""word"":""unmeasured"",""model"":""" &
                           Lower (Model_Reply_Pkg.Outcome_Kind'Image (MO)) & """}");
                return;
@@ -411,9 +431,51 @@ Diagnosis_Activity_Pkg.Diagnose (Diag.all, Spec, Unit, DS, D_Text, D_Class, D_Ca
         ("fill_body refused: budget spent after " & Img (Natural (S.rounds_used)) & " rounds; last: " &
          To_String (Last_Word) & "; last class: " & To_String (Last_Class));
    exception
-      when others =>
+      --  SLOT BEGIN (inner-catch)
+      when E : others =>
+         --  Lineage 8: the catch-all names the exception, in the reason and on standard error (audit item 3).
          Result := Pipeline_Stage_Pkg.Unmeasured_Here;
-         Reason := To_Unbounded_String ("fill_body: unreadable");
+         Reason := To_Unbounded_String ("fill_body: internal fault: " & Ada.Exceptions.Exception_Name (E));
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "fill_body: internal fault: " & Ada.Exceptions.Exception_Name (E) & ": " &
+           Ada.Exceptions.Exception_Message (E));
+      --  SLOT END (inner-catch)
+   end Run_Rounds;
+
+   --  SLOT BEGIN (run-wrapper)
+   procedure Run
+     (Spec_Text : String;
+      Unit_Name : String;
+      Body_Text : out Unbounded_String;
+      Result    : out Pipeline_Stage_Pkg.Outcome;
+      Reason    : out Unbounded_String)
+   is
+      Prev_Path : constant String := Body_Path & ".prev";
+   begin
+      Log_Unwritten := False;
+      Body_Unwritten := False;
+      --  Lineage 8 (ruling D7): the last job's body is set aside as state/body.adb.prev BEFORE this job starts, so a stale
+      --  file can never pass for this job's body, and the last job's evidence stays readable.
+      begin
+         if Ada.Directories.Exists (Body_Path) then
+            if Ada.Directories.Exists (Prev_Path) then
+               Ada.Directories.Delete_File (Prev_Path);
+            end if;
+            Ada.Directories.Rename (Body_Path, Prev_Path);
+         end if;
+      exception
+         when E : others =>
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+              "fill_body: " & Body_Path & " could not be set aside: " & Ada.Exceptions.Exception_Name (E));
+      end;
+      Run_Rounds (Spec_Text, Unit_Name, Body_Text, Result, Reason);
+      if Log_Unwritten then
+         Append (Reason, "; round log unwritten (" & Rounds_Path & ")");
+      end if;
+      if Body_Unwritten then
+         Append (Reason, "; body file unwritten (" & Body_Path & ")");
+      end if;
    end Run;
+   --  SLOT END (run-wrapper)
 
 end Body_Fill_Activity_Pkg;
