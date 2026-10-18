@@ -4,12 +4,16 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 0ab7e24a7e567a06a2f29a3fbe777c7a440890cc7ebb73ad93c71455a06cf86a
+--  Unstamped source sha256: 5ad937cbc7d16d80686c79e88d5e9c4504f0dc99d11f94689ac059a62b6ab6b2
 --
 --  Vacuity_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (request-facts, reply-facts),
 --  filled by a Wu edge round. Sibling of the prover rail client edge (wu-crucible-prover-rail-call), whose
 --  fixed text this reproduces line for line but for the rail, the request line and the trailer's meaning.
 --  Brief BRIEF_crucible_step5a5_vacuity_rail_2026-09-18 (5a-5c-3).
+--  Lineage 3 (2026-10-18, Tony 17:05 "stick em all in", fix 7 of the fail-loudly audit, item 10): the earlier slots
+--  are frozen; FOUR slots, as the prover rail client edge lineage 2: say (Say_Rail: one row on standard error and in
+--  state/vacuity-rail.jsonl), conf-decl, conf-catch (conf_unreadable, with the exception) and no-line (no_vacuity_line).
+--  The outcome is still not_sent; the reply side is fix 12's warnings.
 with Ada.Text_IO;
 with GNAT.SHA256;
 with Json_Scan_Pkg;
@@ -18,6 +22,7 @@ with Rail_Socket_Edge;
 with Sovereign_Gate_Pkg;
 with Hex_Text_Pkg;
 with Vacuity_Facts_Pkg;
+with Ada.Exceptions;
 
 package body Vacuity_Rail_Call_Pkg with SPARK_Mode => Off is
 
@@ -82,6 +87,27 @@ package body Vacuity_Rail_Call_Pkg with SPARK_Mode => Off is
       end if;
    end Read_Count;
 
+   --  SLOT BEGIN (say)
+   --  Lineage 3: one vacuity-rail row, on standard error and in state/vacuity-rail.jsonl; a file failure never changes the
+   --  outcome, and the row has already reached standard error.
+   procedure Say_Rail (Row : String) is
+      F : Ada.Text_IO.File_Type;
+   begin
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, Row);
+      begin
+         Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, "state/vacuity-rail.jsonl");
+      exception
+         when Ada.Text_IO.Name_Error =>
+            Ada.Text_IO.Create (F, Ada.Text_IO.Out_File, "state/vacuity-rail.jsonl");
+      end;
+      Ada.Text_IO.Put_Line (F, Row);
+      Ada.Text_IO.Close (F);
+   exception
+      when others =>
+         null;
+   end Say_Rail;
+   --  SLOT END (say)
+
    procedure Judge_Full
      (Unit_Name : String;
       Spec_Text : String;
@@ -95,6 +121,9 @@ package body Vacuity_Rail_Call_Pkg with SPARK_Mode => Off is
       Conf_Buf : String (1 .. Max_Conf_Line);
       Conf_Len : Natural := 0;
       Found    : Boolean := False;   --  a valid rail line whose rail is "vacuity" was read
+      --  SLOT BEGIN (conf-decl)
+      Conf_Error : Boolean := False;   --  Lineage 3: config/rail.conf could not be read to its end
+      --  SLOT END (conf-decl)
    begin
       Grades := new String'("");
       --  Configuration: ONLY from the file; the first VALID vacuity line (Rail_Config_Pkg judges validity).
@@ -119,10 +148,20 @@ package body Vacuity_Rail_Call_Pkg with SPARK_Mode => Off is
          end loop;
          Ada.Text_IO.Close (F);
       exception
-         when others =>
+         --  SLOT BEGIN (conf-catch)
+         when E : others =>
             Found := False;
             Conf_Len := 0;
+            Conf_Error := True;
+            Say_Rail ("{""rail"":""vacuity"",""refused"":""conf_unreadable"",""path"":""" & Conf_Path &
+                      """,""exception"":""" & Ada.Exceptions.Exception_Name (E) & """}");
+         --  SLOT END (conf-catch)
       end;
+      --  SLOT BEGIN (no-line)
+      if not Found and then not Conf_Error then
+         Say_Rail ("{""rail"":""vacuity"",""refused"":""no_vacuity_line"",""path"":""" & Conf_Path & """}");
+      end if;
+      --  SLOT END (no-line)
 
       declare
          Conf       : constant String (1 .. Conf_Len) := Conf_Buf (1 .. Conf_Len);
@@ -146,12 +185,10 @@ package body Vacuity_Rail_Call_Pkg with SPARK_Mode => Off is
             Digest := GNAT.SHA256.Digest (Ctx);
          end;
 
-         --  SLOT BEGIN (request-facts)
 Request.rail_is_vacuity := Found;
 Request.endpoint_on_estate := On_Estate;
 Request.unit_bytes := Unit_Bytes;
 Request.max_unit_bytes := Max_Unit_Bytes;
-         --  SLOT END (request-facts)
 
          if Vacuity_Rail_Pkg.May_Send (Request) then
             declare
@@ -216,7 +253,6 @@ Request.max_unit_bytes := Max_Unit_Bytes;
                         Read_Count (R, "runtime_only_count", Ro, Ro_Ok);
                         Read_Count (R, "unexercised_count", Un, Un_Ok);
                         Read_Count (R, "refused_count", Rf, Rf_Ok);
-                        --  SLOT BEGIN (reply-facts)
 Reply.reply_well_formed := Is_Present (R, "digest") and then Is_Present (R, "battery") and then Is_Present (R, "battery_ran") and then Is_Present (R, "refusal_present") and then Is_Present (R, "refusal") and then Err_Ok and then Rd_Ok and then Gr_Ok and then Def_Ok and then Dec_Ok and then Pr_Ok and then Th_Ok and then Ro_Ok and then Un_Ok and then Rf_Ok;
 Reply.digest_matches := Value_Text (R, "digest") = Digest;
 --  Lineage 2 (Tony 2026-09-28, launcher item 3): the release ships the Ada vacuity-battery; its wire keeps the name
@@ -234,7 +270,6 @@ Reply.facts.theorem_count := Th;
 Reply.facts.runtime_only_count := Ro;
 Reply.facts.unexercised_count := Un;
 Reply.facts.refused_count := Rf;
-                        --  SLOT END (reply-facts)
 
                         --  Grades: kept only when the declared count and the complete lines received agree.
                         Read_Natural (R, "grade_lines", N, N_Ok);

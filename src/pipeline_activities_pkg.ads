@@ -1,10 +1,10 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: b617681e96618faa4a7559e7a1edd080d301bb57361a1d8e1646a7712c6b90f0
+--  Unstamped source sha256: c8657984570aca4e41ca28319300a6b1d5a770fcb6b4345b2d9ad8519dc68170
 --
 --  Pipeline_Activities_Pkg -- the in-process MASCOT activities of CRUCIBLE's pipeline that need no model (step 4c unit 3).
 --  Purpose: each activity gathers the facts for ONE stage and returns that stage's outcome as decided by a proven core;
@@ -39,11 +39,14 @@ package Pipeline_Activities_Pkg with SPARK_Mode => Off is
      (Result : out Pipeline_Stage_Pkg.Outcome;
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
 
+   --  Lineage 3 (2026-10-18, fail-loudly audit item 5): Recorded is False when the row could not be written to
+   --  Audit_Path; the in-memory ledger entry stands either way, and the caller names the loss in its reply.
    procedure Audit
      (Ledger : in out Audit_Ledger_Pkg.Ledger;
       Seq    : Natural;
       S      : Pipeline_Stage_Pkg.Stage;
       O      : Pipeline_Stage_Pkg.Outcome;
-      Reason : String);
+      Reason   : String;
+      Recorded : out Boolean);
 
 end Pipeline_Activities_Pkg;

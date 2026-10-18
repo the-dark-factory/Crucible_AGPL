@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: c7ee13651c8934624815d7b8d797182907b87c1bd96b622baf825f2998a23009
+--  Unstamped source sha256: 4948cf9e190c93301a46a8afc09369debd4cac297bfc701ba2b0b96f289cf8f6
 --
 --  Model_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (sent_fact, reply_facts), filled by a
 --  Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (step 5 unit 5).
@@ -20,6 +20,11 @@
 --  runaway-decl, runaway-measure (the longest blank run and longest one-character run over the decoded reply, judged by
 --  the admitted Reply_Runaway_Pkg; a runaway is said and handed back as reply_runaway) and runaway-verdict (a runaway
 --  reply is never text: Reply_Unreadable). The request itself gains the stop sequence in Model_Request_Pkg lineage 6.
+--  Lineage 8 (2026-10-18, Tony 17:05 "stick em all in", fix 6 of the fail-loudly audit, items 8 and 9): every earlier
+--  slot frozen; FIVE slots: say (Say marks that the call said something, and a failed rail-log write is said and
+--  flagged), detail-decl + call-reset, http-detail (an unusable HTTP reply keeps its status line and up to 256 body
+--  bytes), outcome-notes (a non-text outcome not already said is said; the caller is handed the server's words and a
+--  note when the rail log is incomplete). Every other reason the caller builds is unchanged.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -33,6 +38,8 @@ with Http_Reply_Pkg;
 with Rail_Socket_Edge;
 with Sovereign_Gate_Pkg;
 with Reply_Runaway_Pkg;
+with Ada.Exceptions;
+with Ada.Characters.Handling;
 
 package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
 
@@ -52,9 +59,15 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
          when Model_Tier_Select_Pkg.Duplicate_Tier   => "duplicate_tier",
          when Model_Tier_Select_Pkg.No_Standard_Line => "no_standard_line");
 
+   --  SLOT BEGIN (say)
+   --  Lineage 8: whether this call said anything, and whether a row could not be written to state/model-rail.jsonl.
+   Said_This_Call : Boolean := False;
+   Say_Unwritten  : Boolean := False;
+
    procedure Say (Row : String) is
       F : Ada.Text_IO.File_Type;
    begin
+      Said_This_Call := True;
       Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, Row);
       begin
          Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, "state/model-rail.jsonl");
@@ -65,9 +78,25 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
       Ada.Text_IO.Put_Line (F, Row);
       Ada.Text_IO.Close (F);
    exception
-      when others =>
-         null;   --  a file failure never changes the rail outcome
+      when E : others =>
+         --  Lineage 8: a file failure still never changes the rail outcome, but the caller is told the log is
+         --  incomplete (audit item 8).
+         Say_Unwritten := True;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "model rail: state/model-rail.jsonl unwritable: " & Ada.Exceptions.Exception_Name (E));
    end Say;
+
+   --  Lineage 8: S as the contents of a JSON string, encoded by the proven Json_String_Pkg.
+   function Json_Text (S : String) return String is
+      S1  : constant String (1 .. S'Length) := S;
+      Buf : String (1 .. Natural'Max (1, 6 * S1'Length));
+      Len : Natural;
+      Ok  : Boolean;
+   begin
+      Json_String_Pkg.Encode (S1, Buf, Len, Ok);
+      return (if Ok then Buf (1 .. Len) else "unencodable");
+   end Json_Text;
+   --  SLOT END (say)
 
    Max_Conf_Line : constant := 4096;
    CRLF          : constant String := Character'Val (13) & Character'Val (10);
@@ -97,15 +126,21 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
       Tally    : Model_Tier_Select_Pkg.Tier_Tally := Model_Tier_Select_Pkg.Empty;   --  v0.3 I-tiers: EVERY valid model line, by tier
       Std_Seen : Boolean := False;   --  the first STANDARD line is held in Conf_Buf; any other line only counts
       Conf_Err : Boolean := False;   --  the file could not be read to its end: a partial tally is never trusted
-      --  SLOT BEGIN (runaway-decl)
       --  Lineage 7: the two run lengths the edge measures over a decoded reply, and the admitted verdict on them.
       Blank_Run : Natural := 0;
       Same_Run  : Natural := 0;
       Runaway   : Boolean := False;
-      --  SLOT END (runaway-decl)
+      --  SLOT BEGIN (detail-decl)
+      --  Lineage 8: the status line and a bounded body slice of an HTTP reply that was not usable (audit item 9).
+      Http_Detail : Ada.Strings.Unbounded.Unbounded_String;
+      --  SLOT END (detail-decl)
    begin
       Text := null;
       Refusal := Ada.Strings.Unbounded.Null_Unbounded_String;
+      --  SLOT BEGIN (call-reset)
+      Said_This_Call := False;
+      Say_Unwritten := False;
+      --  SLOT END (call-reset)
 
       declare
          File : Ada.Text_IO.File_Type;
@@ -248,6 +283,28 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                      R : constant String (1 .. Reply_Len) := Reply_Buf (1 .. Reply_Len);
                   begin
                      Http_Ok := Http_Reply_Pkg.Is_Usable (R);
+                     --  SLOT BEGIN (http-detail)
+                     if not Http_Ok then
+                        --  Lineage 8: keep what the server said -- its status line (to the first CR or LF, at most 80
+                        --  characters) and up to 256 bytes of its body -- so "model not found" is not just http_error.
+                        declare
+                           Stop  : Natural := Natural'Min (R'Last, 80);
+                           First : constant Natural := Http_Reply_Pkg.Body_First (R);
+                        begin
+                           for I in 1 .. Natural'Min (R'Last, 80) loop
+                              if R (I) = Http_Reply_Pkg.CR or else R (I) = Http_Reply_Pkg.LF then
+                                 Stop := I - 1;
+                                 exit;
+                              end if;
+                           end loop;
+                           Http_Detail := Ada.Strings.Unbounded.To_Unbounded_String (R (1 .. Stop));
+                           if First /= 0 and then First <= R'Last then
+                              Ada.Strings.Unbounded.Append
+                                (Http_Detail, "; body: " & R (First .. Natural'Min (R'Last, First + 255)));
+                           end if;
+                        end;
+                     end if;
+                     --  SLOT END (http-detail)
                      if Http_Ok then
                         declare
                            Payload : constant String (1 .. R'Last - Http_Reply_Pkg.Body_First (R) + 1) :=
@@ -306,7 +363,6 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
             raise;
       end;
 
-      --  SLOT BEGIN (runaway-measure)
       --  Lineage 7 (Tony 2026-09-28 18:05, fix 3): a reply that ran away (blanks, or one character, on and on) is refused
       --  by name. The edge MEASURES the longest run of blanks and the longest run of one repeated character over the
       --  decoded reply, whether or not the model was cut at max_tokens; the admitted Reply_Runaway_Pkg decides.
@@ -346,18 +402,38 @@ package body Model_Rail_Call_Pkg with SPARK_Mode => Off is
                ", reply " & Img (Text.all'Length) & " bytes)");
          end if;
       end if;
-      --  SLOT END (runaway-measure)
       Outcome := Model_Reply_Pkg.Decide (F);
       if not Model_Reply_Pkg.Is_Text (Outcome) then
          Text := null;
       end if;
-      --  SLOT BEGIN (runaway-verdict)
       --  Lineage 7: a runaway reply is never text, whatever the other facts said (a cut at max_tokens included).
       if Runaway then
          Text := null;
          Outcome := Model_Reply_Pkg.Reply_Unreadable;
       end if;
-      --  SLOT END (runaway-verdict)
+      --  SLOT BEGIN (outcome-notes)
+      --  Lineage 8: a non-text outcome this call did not already say is said now, with the server's words when it gave
+      --  any (audit item 9); the caller gets those words, and a note when the rail log is incomplete (audit item 8).
+      if not Model_Reply_Pkg.Is_Text (Outcome) and then not Said_This_Call then
+         Say ("{""rail"":""model"",""outcome"":""" &
+              Ada.Characters.Handling.To_Lower (Model_Reply_Pkg.Outcome_Kind'Image (Outcome)) & """" &
+              (if Ada.Strings.Unbounded.Length (Http_Detail) > 0
+               then ",""http"":""" & Json_Text (Ada.Strings.Unbounded.To_String (Http_Detail)) & """" else "") & "}");
+      end if;
+      if not Model_Reply_Pkg.Is_Text (Outcome) and then Ada.Strings.Unbounded.Length (Http_Detail) > 0
+        and then Ada.Strings.Unbounded.Length (Refusal) = 0
+      then
+         Refusal := Ada.Strings.Unbounded.To_Unbounded_String
+           (Ada.Characters.Handling.To_Lower (Model_Reply_Pkg.Outcome_Kind'Image (Outcome)) & " (" &
+            Ada.Strings.Unbounded.To_String (Http_Detail) & ")");
+      end if;
+      if Say_Unwritten then
+         Refusal := Ada.Strings.Unbounded.To_Unbounded_String
+           ((if Ada.Strings.Unbounded.Length (Refusal) > 0 then Ada.Strings.Unbounded.To_String (Refusal)
+             else Ada.Characters.Handling.To_Lower (Model_Reply_Pkg.Outcome_Kind'Image (Outcome))) &
+            "; model-rail log unwritten (state/model-rail.jsonl)");
+      end if;
+      --  SLOT END (outcome-notes)
    exception
       when others =>
          --  Anything unexpected is never text: the facts gathered so far are judged as they stand.

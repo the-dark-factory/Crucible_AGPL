@@ -4,16 +4,19 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: c1fa34f463b948eb55ca4cc343439af954e0175ea6fc85d58b21ef04c40709f0
+--  Unstamped source sha256: 7f1f4b80e8447315c11a43d96e804fae19e549320d6bff46afd1b16a45faa45a
 --
 --  Pipeline_Activities_Pkg body -- template (seat-written plumbing) with TWO slots (intake_result, prove_result), filled
 --  by a Wu edge round. Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 3).
---  SLOT BEGIN (context)
+--  Lineage 3 (2026-10-18, Tony 17:05 "stick em all in", fix 5 of the fail-loudly audit, item 5): the earlier slots are
+--  frozen; THREE slots: audit-params (Audit gains Recorded, out Boolean, as the specification now declares), recorded
+--  (True once the row is closed in the file) and audit-catch (a failed write sets Recorded False and is said on standard
+--  error; the in-memory ledger entry still stands).
 with Ada.Unchecked_Deallocation;
---  SLOT END (context)
 with Ada.Text_IO;
 with Ada.Characters.Handling;
 with Json_String_Pkg;
+with Ada.Exceptions;
 with Intake_Line_Pkg;
 with Intake_Measure_Pkg;
 with Intake_Refusal_Pkg;
@@ -127,24 +130,23 @@ Result := Stage_Outcome_Map_Pkg.From_Prover (O);
       Seq    : Natural;
       S      : Pipeline_Stage_Pkg.Stage;
       O      : Pipeline_Stage_Pkg.Outcome;
-      Reason : String)
+      --  SLOT BEGIN (audit-params)
+      Reason   : String;
+      Recorded : out Boolean)
+      --  SLOT END (audit-params)
    is
       Code    : constant Natural := Stage_Outcome_Map_Pkg.Audit_Code (S, O);
       R1      : constant String (1 .. Reason'Length) := Reason;
-      --  SLOT BEGIN (encode-buffer)
       type Buf_Access is access String;
       procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
       Enc     : Buf_Access := new String (1 .. Natural'Max (1, 6 * R1'Length));
-      --  SLOT END (encode-buffer)
       Enc_Len : Natural;
       Enc_Ok  : Boolean;
       F       : Ada.Text_IO.File_Type;
    begin
       Ledger := Audit_Ledger_Pkg.Appended
         (Ledger, (Source => Audit_Ledger_Pkg.Door_Listener, Code => Audit_Ledger_Pkg.Event_Code (Code)));
-      --  SLOT BEGIN (encode-call)
       Json_String_Pkg.Encode (R1, Enc.all, Enc_Len, Enc_Ok);
-      --  SLOT END (encode-call)
       begin
          Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, Audit_Path);
       exception
@@ -156,15 +158,19 @@ Result := Stage_Outcome_Map_Pkg.From_Prover (O);
             """,""outcome"":""" & Lower (Pipeline_Stage_Pkg.Outcome'Image (O)) & """,""code"":""" & Img (Code) &
             """,""reason"":""" & (if Enc_Ok then Enc (1 .. Enc_Len) else "unencodable") & """}");
       Ada.Text_IO.Close (F);
-      --  SLOT BEGIN (release)
+      --  SLOT BEGIN (recorded)
+      Recorded := True;
+      --  SLOT END (recorded)
       Free (Enc);
-      --  SLOT END (release)
    exception
-      when others =>
-         --  SLOT BEGIN (release-on-failure)
+      --  SLOT BEGIN (audit-catch)
+      when E : others =>
+         --  Lineage 3: the in-memory ledger entry stands, but the lost row is said and reported (audit item 5).
          Free (Enc);
-         --  SLOT END (release-on-failure)
-         null;  --  the in-memory ledger entry stands; a file failure never changes a stage outcome
+         Recorded := False;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "audit: " & Audit_Path & " unwritable: " & Ada.Exceptions.Exception_Name (E));
+      --  SLOT END (audit-catch)
    end Audit;
 
 end Pipeline_Activities_Pkg;

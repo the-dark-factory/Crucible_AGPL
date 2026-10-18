@@ -4,10 +4,14 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 9bd1442778faa25e85130490c335223e41a04737a0e6a3f2b9b40cc5644a9233
+--  Unstamped source sha256: ee2cf5985faf7552821e1bf4e1f5a0461ca59a7fcca2286d6c2d153d5cb0a290
 --
 --  Pipeline_Run_Pkg body -- template (seat-written plumbing) with ONE slot (transition), filled by a Wu edge round.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4c unit 4).
+--  Lineage 4 (2026-10-18, Tony 17:05 "stick em all in", fix 5 of the fail-loudly audit, items 5 and 7): the earlier
+--  slots are frozen; SIX slots: flags + record-catch (vacuity evidence that could not be written is said on standard
+--  error and remembered), run-decl + run-reset + audit-call (Audit now reports a row it could not write; Run counts them),
+--  run-notes (the reply names audit_unrecorded and unrecorded vacuity evidence). Pipeline_Activities_Pkg lineage 3 carried.
 with Audit_Ledger_Pkg;
 with Job_Record_Pkg;
 with Pipeline_Activities_Pkg;
@@ -31,13 +35,12 @@ with Admission_Decision_Pkg;
 with Crucible_Build;
 with Crucible_Edition;
 with GNAT.SHA256;
---  SLOT BEGIN (context)
 with Ada.Unchecked_Deallocation;
---  SLOT END (context)
 with Ada.Characters.Handling;
 with Ada.Text_IO;
 with Ada.Directories;
 with Json_String_Pkg;
+with Ada.Exceptions;
 
 package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 
@@ -61,7 +64,6 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
 
    --  The activities' own idiom: Encode is a procedure with a bound, so a string too long to encode is reported
    --  as such rather than silently truncated -- a record that lies by omission is worse than one that says it cannot.
-   --  SLOT BEGIN (json-of)
    function Json_Of (S : String) return String is
       type Buf_Access is access String;
       procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
@@ -88,7 +90,6 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
             raise;
       end;
    end Json_Of;
-   --  SLOT END (json-of)
 
    --  The faults by name, so a refusal says WHICH promise was empty rather than only that one was.
    function Fault_Names (V : Vacuity_Facts_Pkg.Verdict_Type) return String is
@@ -99,6 +100,11 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
       (if V.fault_nothing_graded then " nothing_graded" else "") &
       (if V.fault_not_theorem then " not_theorem" else "") &
       (if V.fault_inconsistent then " inconsistent" else ""));
+
+   --  SLOT BEGIN (flags)
+   --  Lineage 4: set when this job's vacuity evidence could not be written; Run names it in the reply (audit item 7).
+   Vacuity_Unrecorded : Boolean := False;
+   --  SLOT END (flags)
 
    --  One JSON line into state/vacuity.jsonl: the counts the verdict was reached from, and the battery's own grade
    --  lines. A stage that refuses must leave behind the evidence it refused on.
@@ -141,10 +147,16 @@ package body Pipeline_Run_Pkg with SPARK_Mode => Off is
             """,""grades"":" & Json_Of ((if Grades = null then "" else Grades.all)) & "}");
          Ada.Text_IO.Close (F);
       exception
-         when others =>
+         --  SLOT BEGIN (record-catch)
+         when E : others =>
             if Ada.Text_IO.Is_Open (F) then
                Ada.Text_IO.Close (F);
             end if;
+            --  Lineage 4: the evidence was not written; said here and named in the reply (audit item 7).
+            Vacuity_Unrecorded := True;
+            Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+              "vacuity: " & Vacuity_Path & " unwritable: " & Ada.Exceptions.Exception_Name (E));
+         --  SLOT END (record-catch)
       end;
    end Record_Vacuity;
 
@@ -483,7 +495,15 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
       Unit_Name : Unbounded_String;
       Spec_Text : Unbounded_String;
       Body_Text : Unbounded_String;
+      --  SLOT BEGIN (run-decl)
+      --  Lineage 4: audit rows that could not be written in this job (audit item 5).
+      Unrecorded : Natural := 0;
+      Recorded   : Boolean;
+      --  SLOT END (run-decl)
    begin
+      --  SLOT BEGIN (run-reset)
+      Vacuity_Unrecorded := False;
+      --  SLOT END (run-reset)
       for Step in 1 .. Max_Transitions loop
          exit when Pipeline_Stage_Pkg.Is_Terminal (S);
 
@@ -521,13 +541,27 @@ O := Stage_Outcome_Map_Pkg.From_Verdict (Route = Fill_Route_Pkg.Route_Fill);
          end case;
 
          Seq := Seq + 1;
-         Pipeline_Activities_Pkg.Audit (L, Seq, S, O, To_String (R));
+         --  SLOT BEGIN (audit-call)
+         Pipeline_Activities_Pkg.Audit (L, Seq, S, O, To_String (R), Recorded);
+         if not Recorded then
+            Unrecorded := Unrecorded + 1;
+         end if;
+         --  SLOT END (audit-call)
          Last_S := S;
 
 J := Job_Record_Pkg.Record_Outcome (J, S, O);
 S := Pipeline_Stage_Pkg.Next (S, O);
       end loop;
 
+      --  SLOT BEGIN (run-notes)
+      --  Lineage 4: a lost audit row or lost vacuity evidence is named in the reply, never silent (audit items 5 and 7).
+      if Unrecorded > 0 then
+         Append (R, "; audit_unrecorded (" & Img (Unrecorded) & " of " & Img (Seq) & " rows)");
+      end if;
+      if Vacuity_Unrecorded then
+         Append (R, "; vacuity evidence unrecorded (" & Vacuity_Path & ")");
+      end if;
+      --  SLOT END (run-notes)
       return (Final        => S,
               Stopped_At   => Last_S,
               Reason       => R,

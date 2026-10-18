@@ -1,14 +1,18 @@
---  Copyright (C) 2026 Anthony Gair
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
 --  Forged and machine-checked by The Dark Factory. This file is the
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 826f8b0923bf5268c033a9b9492fc789ebc6f6776d1d86a66c23cb434b000cb0
+--  Unstamped source sha256: 3dffe5760a670abba236a3b20fab57cafc1c1e8343ade1dba411e285a7ddf30f
 --
 --  Prover_Rail_Call_Pkg body -- template (seat-written plumbing) with TWO slots (request-facts, reply-facts),
 --  filled by a Wu edge round; the slot prose is the prover rail client edge's, whose fills passed its probes.
 --  Brief BRIEF_crucible_step4_wiring_2026-09-17 (4b unit 3).
+--  Lineage 2 (2026-10-18, Tony 17:05 "stick em all in", fix 7 of the fail-loudly audit, item 10): the earlier slots
+--  are frozen; FOUR slots: say (Say_Rail: one row on standard error and in state/prover-rail.jsonl), conf-decl, conf-catch
+--  (an unreadable rail.conf is said as conf_unreadable, with the exception) and no-line (a readable rail.conf with no
+--  valid prover line is said as no_prover_line). The outcome is still not_sent; the reply side is fix 12's warnings.
 with Ada.Text_IO;
 with GNAT.SHA256;
 with Json_Scan_Pkg;
@@ -17,6 +21,7 @@ with Rail_Socket_Edge;
 with Sovereign_Gate_Pkg;
 with Hex_Text_Pkg;
 with Prover_Verdict_Pkg;
+with Ada.Exceptions;
 
 package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
 
@@ -70,6 +75,27 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       return S (S'First + 1 .. S'Last);
    end Img;
 
+   --  SLOT BEGIN (say)
+   --  Lineage 2: one prover-rail row, on standard error and in state/prover-rail.jsonl; a file failure never changes the
+   --  outcome, and the row has already reached standard error.
+   procedure Say_Rail (Row : String) is
+      F : Ada.Text_IO.File_Type;
+   begin
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, Row);
+      begin
+         Ada.Text_IO.Open (F, Ada.Text_IO.Append_File, "state/prover-rail.jsonl");
+      exception
+         when Ada.Text_IO.Name_Error =>
+            Ada.Text_IO.Create (F, Ada.Text_IO.Out_File, "state/prover-rail.jsonl");
+      end;
+      Ada.Text_IO.Put_Line (F, Row);
+      Ada.Text_IO.Close (F);
+   exception
+      when others =>
+         null;
+   end Say_Rail;
+   --  SLOT END (say)
+
    procedure Prove_Full
      (Unit_Name   : String;
       Spec_Text   : String;
@@ -85,6 +111,9 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       Conf_Buf : String (1 .. Max_Conf_Line);
       Conf_Len : Natural := 0;
       Found    : Boolean := False;   --  a valid rail line whose rail is "prover" was read
+      --  SLOT BEGIN (conf-decl)
+      Conf_Error : Boolean := False;   --  Lineage 2: config/rail.conf could not be read to its end
+      --  SLOT END (conf-decl)
    begin
       Diagnostics := new String'("");
       --  Configuration: ONLY from the file; the first VALID prover line (Rail_Config_Pkg judges validity).
@@ -109,10 +138,20 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
          end loop;
          Ada.Text_IO.Close (F);
       exception
-         when others =>
+         --  SLOT BEGIN (conf-catch)
+         when E : others =>
             Found := False;
             Conf_Len := 0;
+            Conf_Error := True;
+            Say_Rail ("{""rail"":""prover"",""refused"":""conf_unreadable"",""path"":""" & Conf_Path &
+                      """,""exception"":""" & Ada.Exceptions.Exception_Name (E) & """}");
+         --  SLOT END (conf-catch)
       end;
+      --  SLOT BEGIN (no-line)
+      if not Found and then not Conf_Error then
+         Say_Rail ("{""rail"":""prover"",""refused"":""no_prover_line"",""path"":""" & Conf_Path & """}");
+      end if;
+      --  SLOT END (no-line)
 
       declare
          Conf       : constant String (1 .. Conf_Len) := Conf_Buf (1 .. Conf_Len);
@@ -135,13 +174,11 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
             Digest := GNAT.SHA256.Digest (Ctx);
          end;
 
-         --  SLOT BEGIN (request-facts)
       Request.rail_is_prover := Found;
       Request.endpoint_on_estate := On_Estate;
       Request.unit_bytes := Unit_Bytes;
       Request.max_unit_bytes := Max_Unit_Bytes;
       Request.level_demanded := Level;
-         --  SLOT END (request-facts)
 
          if Prover_Rail_Pkg.May_Send (Request) then
             declare
@@ -199,7 +236,6 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
                         Read_Natural (R, "checks_unproved", Unp, Unp_Ok);
                         Read_Natural (R, "checks_justified", Jus, Jus_Ok);
                         Read_Natural (R, "subprograms_skipped", Skp, Skp_Ok);
-                        --  SLOT BEGIN (reply-facts)
       Reply.reply_well_formed :=
         Is_Present (R, "digest") and then
         Is_Present (R, "prover") and then
@@ -225,7 +261,6 @@ package body Prover_Rail_Call_Pkg with SPARK_Mode => Off is
       Reply.run.checks_unproved := Unp;
       Reply.run.checks_justified := Jus;
       Reply.run.level_demanded := Request.level_demanded;
-                        --  SLOT END (reply-facts)
 
                         --  Diagnostics: kept only when the declared count and the complete lines received
                         --  agree and the trailer is within the collector's bound (60 lines of 512 + LF).
