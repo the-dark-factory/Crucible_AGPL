@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: a5d71133fbdeab0d3fcc36dd46a2c87860fce301aade9b20b8d06e713ecfccdc
+--  Unstamped source sha256: b55eda3462ae0a55ad34935152530abeb5d87bcaeae0472006d9782d5aee090b
 --
 --  mascot_scan_pkg.adb
 --
@@ -108,12 +108,9 @@ package body Mascot_Scan_Pkg with SPARK_Mode => On is
 
       Result.Table.Last := S.Count;
 
-      for I in 1 .. S.Count loop
-         Result.Table.Nodes (I) := Node_Of (S, I);
-         pragma Loop_Invariant (Result.Table.Last = S.Count);
-         pragma Loop_Invariant
-           (for all J in 1 .. I => Result.Table.Nodes (J) = Node_Of (S, J));
-      end loop;
+      Result.Table.Nodes :=
+        (for I in Mascot_Measure_Pkg.Node_Index =>
+           (if I <= S.Count then Node_Of (S, I) else Blank_Node));
 
       Result.Ok    := True;
       Result.Fault := No_Fault;

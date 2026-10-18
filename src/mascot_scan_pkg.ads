@@ -1,12 +1,11 @@
+--  Copyright (C) 2026 The Dark Factory Ltd
 --  SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-DarkFactory-Commercial-1.0
---  Mascot_Scan_Pkg lineage 6 (2026-09-13): lineage 5 verbatim plus ONE fact, Every_Word_Activity — the third of the
---  word-kind family beside Every_Word_Declared and Every_Word_Plumbing: every word of a value names a declared
---  ACTIVITY line. Why: a channel's producer, producers and consumer words must name activities; Every_Word_Declared
---  (applied to those keys by the emit core, lineage 7) says only that each word names some line, so a producer naming
---  a channel or a pool still passed (brief Amendment 4 erratum 24's remainder, r5's F.10). Scratch-proved locally first
---  (339 checks, 0 unproved), then lane wu-crucible-mascot-scan-6 round A, planner qwen3.8-27b-ada:v0.3, accepted first
---  round, 0 unproved, 211 GPU s. Body (Slice_Of, Scan) carried unchanged. Never hand-edited. Comment-stripped sha
---  equals the round-A spec.
+--  Forged and machine-checked by The Dark Factory. This file is the
+--  vendored copy of an IMMUTABLE wu round output. This comment block is
+--  the only difference from it; nothing below this line is altered.
+--  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
+--  Unstamped source sha256: 622bc11bb003357659c53de77c8cd45d7ec236d6a23e77b8f26891027ee8463c
+--
 with Json_Scan_Pkg;
 with Mascot_Measure_Pkg;
 
@@ -155,8 +154,69 @@ package Mascot_Scan_Pkg with SPARK_Mode is
         Pre    => Key'First = 1 and then Key'Length >= 1 and then Key'Length <= 64 and then Upto <= S.Count and then I <= S.Count,
         Subprogram_Variant => (Decreases => Upto);
 
+   function Names_Producer (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; J : Mascot_Measure_Pkg.Node_Index) return Boolean
+   is (Refers (S, I, Key_Producer, J) or else Refers (S, I, Key_Producers, J))
+   with Global => null,
+        Pre    => I <= S.Count and then J <= S.Count;
+
+   function Names_Consumer (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; J : Mascot_Measure_Pkg.Node_Index) return Boolean
+   is (Refers (S, I, Key_Consumer, J) or else Refers (S, I, Key_Consumers, J))
+   with Global => null,
+        Pre    => I <= S.Count and then J <= S.Count;
+
+   function Last_Producer (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Upto : Mascot_Measure_Pkg.Node_Count) return Mascot_Measure_Pkg.Node_Ref
+   is (if Upto = 0 then 0 elsif Names_Producer (S, I, Upto) then Upto else Last_Producer (S, I, Upto - 1))
+   with Global => null,
+        Pre    => I <= S.Count and then Upto <= S.Count,
+        Subprogram_Variant => (Decreases => Upto);
+
+   function First_Consumer (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Left : Mascot_Measure_Pkg.Node_Count) return Mascot_Measure_Pkg.Node_Ref
+   is (if Left = 0 then 0 elsif Names_Consumer (S, I, S.Count - Left + 1) then S.Count - Left + 1 else First_Consumer (S, I, Left - 1))
+   with Global => null,
+        Pre    => I <= S.Count and then Left <= S.Count,
+        Subprogram_Variant => (Decreases => Left);
+
+   function Producer_Ref (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Mascot_Measure_Pkg.Node_Ref
+   is (Last_Producer (S, I, S.Count))
+   with Global => null,
+        Pre    => I <= S.Count;
+
+   function Consumer_Ref (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Mascot_Measure_Pkg.Node_Ref
+   is (First_Consumer (S, I, S.Count))
+   with Global => null,
+        Pre    => I <= S.Count;
+
+   function Last_Producer_Is_Last (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Upto : Mascot_Measure_Pkg.Node_Count) return Boolean
+   is (if Upto = 0 then True else Last_Producer_Is_Last (S, I, Upto - 1))
+   with Ghost,
+        Global => null,
+        Pre    => I <= S.Count and then Upto <= S.Count,
+        Subprogram_Variant => (Decreases => Upto),
+        Post   => Last_Producer_Is_Last'Result and then Last_Producer (S, I, Upto) <= Upto and then (if Last_Producer (S, I, Upto) = 0 then (for all J in 1 .. Upto => not Names_Producer (S, I, J)) else Names_Producer (S, I, Last_Producer (S, I, Upto)) and then (for all J in Last_Producer (S, I, Upto) + 1 .. Upto => not Names_Producer (S, I, J)));
+
+   function First_Consumer_Is_First (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index; Left : Mascot_Measure_Pkg.Node_Count) return Boolean
+   is (if Left = 0 then True else First_Consumer_Is_First (S, I, Left - 1))
+   with Ghost,
+        Global => null,
+        Pre    => I <= S.Count and then Left <= S.Count,
+        Subprogram_Variant => (Decreases => Left),
+        Post   => First_Consumer_Is_First'Result and then (if First_Consumer (S, I, Left) = 0 then (for all K in S.Count - Left + 1 .. S.Count => not Names_Consumer (S, I, K)) else First_Consumer (S, I, Left) >= S.Count - Left + 1 and then First_Consumer (S, I, Left) <= S.Count and then Names_Consumer (S, I, First_Consumer (S, I, Left)) and then (for all K in S.Count - Left + 1 .. First_Consumer (S, I, Left) - 1 => not Names_Consumer (S, I, K)));
+
+   function Back_Pair (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Boolean
+   is (for some J in 1 .. S.Count => Names_Producer (S, I, J) and then (for some K in 1 .. J => Names_Consumer (S, I, K)))
+   with Ghost,
+        Global => null,
+        Pre    => I <= S.Count;
+
+   function Ordered_Back (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Boolean
+   is (Last_Producer_Is_Last (S, I, S.Count) and then First_Consumer_Is_First (S, I, S.Count) and then Producer_Ref (S, I) /= 0 and then Consumer_Ref (S, I) /= 0 and then Producer_Ref (S, I) >= Consumer_Ref (S, I))
+   with Ghost,
+        Global => null,
+        Pre    => I <= S.Count,
+        Post   => Ordered_Back'Result = Back_Pair (S, I);
+
    function Node_Of (S : Line_Set; I : Mascot_Measure_Pkg.Node_Index) return Mascot_Measure_Pkg.Node
-   is ((Kind => Kind_Of (S.Lines (I)), Rank => I, Has_Element => Present (S.Lines (I), Key_Element), Has_Buffer => Present (S.Lines (I), Key_Buffer), Producer_Count => One_Or_Many (S.Lines (I), Key_Producer, Key_Producers), Consumer_Count => One_Or_Many (S.Lines (I), Key_Consumer, Key_Consumers), Producer => (if One_Or_Many (S.Lines (I), Key_Producer, Key_Producers) = 1 then Find_Ref (S, I, Key_Producer, S.Count) else 0), Consumer => (if One_Or_Many (S.Lines (I), Key_Consumer, Key_Consumers) = 1 then Find_Ref (S, I, Key_Consumer, S.Count) else 0), Is_Reporting => Is_Reporting (S.Lines (I)), Data_Reads => (if Present (S.Lines (I), Key_Reads) then 1 else 0), Data_Writes => (if Present (S.Lines (I), Key_Writes) then 1 else 0), Has_Reporting => (Find_Ref (S, I, Key_Reports, S.Count) in 1 .. S.Count and then Kind_Is (S.Lines (Find_Ref (S, I, Key_Reports, S.Count)), Lit_Channel) and then Is_Reporting (S.Lines (Find_Ref (S, I, Key_Reports, S.Count)))), Accessor_Count => (if Present (S.Lines (I), Key_Accessed) then 1 else 0), Discharge_Present => Present (S.Lines (I), Key_Discharge), Child_Count => (if Present (S.Lines (I), Key_Children) then 1 else 0)))
+   is ((Kind => Kind_Of (S.Lines (I)), Rank => I, Has_Element => Present (S.Lines (I), Key_Element), Has_Buffer => Present (S.Lines (I), Key_Buffer), Producer_Count => One_Or_Many (S.Lines (I), Key_Producer, Key_Producers), Consumer_Count => One_Or_Many (S.Lines (I), Key_Consumer, Key_Consumers), Producer => Producer_Ref (S, I), Consumer => Consumer_Ref (S, I), Is_Reporting => Is_Reporting (S.Lines (I)), Data_Reads => (if Present (S.Lines (I), Key_Reads) then 1 else 0), Data_Writes => (if Present (S.Lines (I), Key_Writes) then 1 else 0), Has_Reporting => (Find_Ref (S, I, Key_Reports, S.Count) in 1 .. S.Count and then Kind_Is (S.Lines (Find_Ref (S, I, Key_Reports, S.Count)), Lit_Channel) and then Is_Reporting (S.Lines (Find_Ref (S, I, Key_Reports, S.Count)))), Accessor_Count => (if Present (S.Lines (I), Key_Accessed) then 1 else 0), Discharge_Present => Present (S.Lines (I), Key_Discharge), Child_Count => (if Present (S.Lines (I), Key_Children) then 1 else 0)))
    with Global => null,
         Pre    => I <= S.Count and then Kind_Known (S.Lines (I));
 
