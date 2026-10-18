@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 6ecacc112d0088ba04d00c54f19d2eb20e5c94ea1c5f7b870cd50d9083fc9125
+--  Unstamped source sha256: c77098c7b62b395ee6da9a50ea538c37e1ab21efffc719e83f1388c76d163113
 --
 --  Crucible_Main v7 -- the door's edge: a read loop, one declare block, one call into the frame
 --  decider, one case over the action calling the proved cores. It holds no decision.
@@ -59,6 +59,11 @@
 --  state is refused or unmeasured is an MCP ERROR: its tool result carries "isError":true. The forge dispatch calls
 --  Reply_Text_Pkg.Forge_Call_Result (lineage 17), which decides; every other tool and reply is byte-identical. ONE slot
 --  (forge-dispatch).
+--  v22 (lineage 22, 2026-10-18; Tony 17:05 "stick em all in", fix 2 of the fail-loudly audit + rulings D2/D6): the
+--  forge catch-all names the phase it was in and the exception (stopped_at <phase>, reason internal_fault:<name>, and a
+--  standard-error line) instead of calling every fault an unreadable intake; the door stops on an unknown fault with exit
+--  status 70 and a standard-error line (EOF stays 0); a prove_unit answered not_proved is an MCP error through
+--  Reply_Text_Pkg.Prove_Call_Result (lineage 18). SEVEN slots.
 with Ada.Unchecked_Deallocation;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
@@ -95,6 +100,7 @@ with Rail_Verb_Pkg;
 with Report_Mode_Pkg;
 with Ada.Strings.Fixed;
 with GNAT.OS_Lib;
+with Ada.Exceptions;
 
 procedure Crucible_Main is
    Null_Id       : constant String := "null";
@@ -752,6 +758,10 @@ procedure Crucible_Main is
       use Ada.Strings.Unbounded;
       function Low (S : String) return String renames Ada.Characters.Handling.To_Lower;
       Span : constant Json_Scan_Pkg.Span_Type := Frame_Facts_Pkg.Sheet_Span (Line);
+      --  SLOT BEGIN (phase-decl)
+      --  v22: the phase the forge is in, named by the catch-all below if anything raises (audit item 2).
+      Phase : Unbounded_String := To_Unbounded_String ("report");
+      --  SLOT END (phase-decl)
    begin
       --  v14: the REPORT-MODE switch is read FIRST, on every forge call, before the tower. The door decides nothing
       --  here: the edge reads config/report.conf WHOLE, line by line with the unbounded Get_Line (never a fixed buffer,
@@ -796,6 +806,9 @@ procedure Crucible_Main is
             end if;
             Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "report: " & Conf & " unreadable; report mode is OFF");
       end;
+      --  SLOT BEGIN (phase-tower)
+      Phase := To_Unbounded_String ("tower");
+      --  SLOT END (phase-tower)
       --  v9: the tower base is checked FIRST, before the sheet is looked for. The door decides nothing here:
       --  the edge measures, Tower_Base_Verdict_Pkg.May_Forge permits or refuses, Reason_Word names the refusal.
       declare
@@ -837,6 +850,9 @@ procedure Crucible_Main is
          when others =>
             Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "tower_import: unreadable");
       end;
+      --  SLOT BEGIN (phase-intake)
+      Phase := To_Unbounded_String ("intake");
+      --  SLOT END (phase-intake)
       if not (Span.found and then Span.kind = Json_Scan_Pkg.K_String and then Span.first < Span.last) then
          return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""no sheet""}";
       end if;
@@ -851,6 +867,9 @@ procedure Crucible_Main is
          if not Ok then
             return "{""final"":""refused"",""stopped_at"":""intake"",""reason"":""bad_string""}";
          end if;
+         --  SLOT BEGIN (phase-pipeline)
+         Phase := To_Unbounded_String ("pipeline");
+         --  SLOT END (phase-pipeline)
          declare
             type Buf_Access is access String;
             procedure Free is new Ada.Unchecked_Deallocation (String, Buf_Access);
@@ -880,8 +899,15 @@ procedure Crucible_Main is
          end;
       end;
    exception
-      when others =>
-         return "{""final"":""unmeasured"",""stopped_at"":""intake"",""reason"":""unreadable""}";
+      --  SLOT BEGIN (forge-catch)
+      when E : others =>
+         --  v22: name the phase and the exception, on standard error and in the reply (audit item 2).
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+           "forge: internal fault in " & To_String (Phase) & ": " & Ada.Exceptions.Exception_Name (E) & ": " &
+           Ada.Exceptions.Exception_Message (E));
+         return "{""final"":""unmeasured"",""stopped_at"":""" & To_String (Phase) &
+           """,""reason"":""internal_fault:" & Ada.Exceptions.Exception_Name (E) & """}";
+      --  SLOT END (forge-catch)
    end Forge_Text;
 
 begin
@@ -965,12 +991,13 @@ begin
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Intake_Check then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Intake_Check_Text (Line))));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Prove_Unit then
-                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Prove_Unit_Text (Line))));
+                        --  SLOT BEGIN (prove-dispatch)
+                        --  v22: a prove_unit answered not_proved is an MCP error ("isError":true); Reply_Text_Pkg decides.
+                        Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Prove_Call_Result (Prove_Unit_Text (Line))));
+                        --  SLOT END (prove-dispatch)
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Forge then
-                        --  SLOT BEGIN (forge-dispatch)
                         --  v21: a refused or unmeasured forge is an MCP error ("isError":true); Reply_Text_Pkg decides.
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Forge_Call_Result (Forge_Text (Line))));
-                        --  SLOT END (forge-dispatch)
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Palais_Enrol then
                         Ada.Text_IO.Put_Line (Reply_Text_Pkg.Result_Reply (Id, Reply_Text_Pkg.Tool_Call_Result (Palais_Enrol_Text (Line))));
                      elsif Frame_Facts_Pkg.Tool_Of (Line) = Frame_Facts_Pkg.T_Rail_Show then
@@ -988,4 +1015,14 @@ begin
          end;
       end if;
    end loop;
+   --  SLOT BEGIN (main-fault)
+exception
+   when E : others =>
+      --  v22: an unknown fault stops the door with exit status 70 (EX_SOFTWARE), set first, and one line on standard
+      --  error; no further frame is served (audit item 15, ruling D6). End of input still exits 0.
+      Ada.Command_Line.Set_Exit_Status (70);
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+        "crucible: internal fault, stopping: " & Ada.Exceptions.Exception_Name (E) & ": " &
+        Ada.Exceptions.Exception_Message (E));
+   --  SLOT END (main-fault)
 end Crucible_Main;

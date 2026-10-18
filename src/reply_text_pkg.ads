@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 88f86aada1868a7aed53055c511bc11f4af55746326d56c6acccdf94ed905458
+--  Unstamped source sha256: 1a3b9e90d750ce43b980da5012b9be0ab205cf907123271847f54e1b909ccaf2
 --
 with Palais_Tools_Pkg;
 
@@ -91,7 +91,7 @@ package Reply_Text_Pkg with SPARK_Mode is
    String_Word : constant String := Q ("string");
    Version_Word : constant String := Q ("2.0");
    Protocol_Word : constant String := Q ("2025-06-18");
-   Server_Version_Word : constant String := Q ("0.3.0");
+   Server_Version_Word : constant String := Q ("0.4.0");
    Agpl_Word : constant String := Q ("agpl");
    Commercial_Word : constant String := Q ("commercial");
    Text_Word : constant String := Q ("text");
@@ -208,5 +208,18 @@ package Reply_Text_Pkg with SPARK_Mode is
           Post => (Forge_Call_Result'Result = (if Forge_Failed (Inner) then Tool_Call_Error_Result (Inner) else Tool_Call_Result (Inner))
                    and then Forge_Call_Result'Result'Length >= 2
                    and then Forge_Call_Result'Result'Length <= 32768);
+
+   Not_Proved_Text : constant String := "{" & Q ("outcome") & ":" & Q ("not_proved") & "}";
+
+   function Prove_Failed (Prove_Text : String) return Boolean
+     is (Prove_Text = Not_Proved_Text)
+     with Post => (Prove_Failed'Result = (Prove_Text = Not_Proved_Text));
+
+   function Prove_Call_Result (Inner : String) return String
+     is ((if Prove_Failed (Inner) then Tool_Call_Error_Result (Inner) else Tool_Call_Result (Inner)))
+     with Pre  => (Inner'First = 1 and then Inner'Length <= 4096),
+          Post => (Prove_Call_Result'Result = (if Prove_Failed (Inner) then Tool_Call_Error_Result (Inner) else Tool_Call_Result (Inner))
+                   and then Prove_Call_Result'Result'Length >= 2
+                   and then Prove_Call_Result'Result'Length <= 32768);
 
 end Reply_Text_Pkg;
