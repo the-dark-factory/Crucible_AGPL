@@ -4,7 +4,7 @@
 --  vendored copy of an IMMUTABLE wu round output. This comment block is
 --  the only difference from it; nothing below this line is altered.
 --  Reproduce with scripts/stamp-licence.sh in the ada-factory repo.
---  Unstamped source sha256: 2267c9a9492ef866b551a083f2db2496c534cb794a1c47634ce778037ebf1cdc
+--  Unstamped source sha256: 354c63ad6c0a9badffc36f18580a7a7c8939ddaf6ae83cecf1d2a53a4345d002
 --
 --  Tower_Keys_Pkg -- the two catalog public keys a puller trusts under ONE stream, PINNED IN THE BUILD, plus the
 --  index signer's public key. Seat-written constants, no code: the way Crucible_Tower.Base_Digest and the door's
@@ -52,8 +52,8 @@ package Tower_Keys_Pkg with SPARK_Mode is
    --  CONSTANTS ONLY (the owner's lean, 2026-09-21: no shape predicates here; the stamp tool writes the pins blindly,
    --  and whether the written file is one ssh-keygen accepts is the probe's row A2, not a theorem of this unit).
 
-   --  ADMISSION ROOTS (key ceremony 2026-10-08, ObVault/designs/RUNBOOK_admission_key_ceremony_2026-09-07.md).
-   --  Admission receipts from 2026-10-08 are signed by the admitter TOKEN on gertrude through an OpenSSH
+   --  ADMISSION ROOTS (key ceremony 2026-10-08).
+   --  Admission receipts from 2026-10-08 are signed by the admitter TOKEN on the admission host through an OpenSSH
    --  certificate that one of these roots issued (principals admitter + Principal, ~90-day validity). The trust
    --  file names each root as a cert-authority under Admission_Namespace, so ssh-keygen accepts a receipt only
    --  while its certificate is valid. Both roots were generated ON their tokens, offline; neither private half
