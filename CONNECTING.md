@@ -9,7 +9,7 @@ the door needs — including the reef relay that reaches the tower — with one 
 Crucible needs its rails on `127.0.0.1`; nothing listens off-host except the reef relay's outbound
 TLS to the tower. From a release tarball you already have the binaries:
 
-- Unpack `crucible-v0.3.0-<platform>.tar.gz` and `cd crucible-v0.3.0`.
+- Unpack `crucible-v0.4.0-<platform>.tar.gz` and `cd crucible-v0.4.0`.
 - Provide a model on `127.0.0.1`, named in `config/rail.conf`. The shipped default is
   `qwen3-coder:30b` on ollama:
   ```sh
@@ -29,7 +29,7 @@ when the door exits. You do not start them by hand.
 One command — point it at the launcher in your unpacked directory:
 
 ```sh
-claude mcp add crucible -- /absolute/path/to/crucible-v0.3.0/crucible-launch.sh
+claude mcp add crucible -- /absolute/path/to/crucible-v0.4.0/crucible-launch.sh
 ```
 
 ## Claude Desktop
@@ -40,7 +40,7 @@ Add this to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "crucible": {
-      "command": "/absolute/path/to/crucible-v0.3.0/crucible-launch.sh"
+      "command": "/absolute/path/to/crucible-v0.4.0/crucible-launch.sh"
     }
   }
 }
@@ -60,7 +60,7 @@ shipped battery path — nothing outside the install directory is written.
 If you would rather wire it by hand, the equivalent is:
 
 ```sh
-cd /absolute/path/to/crucible-v0.3.0
+cd /absolute/path/to/crucible-v0.4.0
 bin/prover_service_main & bin/vacuity_service_main & bin/reef_relay_main &
 exec bin/crucible-agpl
 ```
@@ -85,7 +85,7 @@ forges on what you already have.
 Run the launcher's self-check — it starts the rails, reports which are up, and stops them:
 
 ```sh
-/absolute/path/to/crucible-v0.3.0/crucible-launch.sh --check
+/absolute/path/to/crucible-v0.4.0/crucible-launch.sh --check
 #   prover  8471 up
 #   vacuity 8472 up
 #   reef    8473 up
@@ -101,7 +101,7 @@ the wrong directory (use the launcher) or `config/rail.conf` has no valid `prove
 
 Every `forge` begins by asking the tower what catalogue is current, and the door records the outcome
 of that one exchange — one row per attempt — in `state/tower-fetch.jsonl` (relative to your
-`crucible-v0.3.0/` directory). Run any `forge`, then read the newest row:
+`crucible-v0.4.0/` directory). Run any `forge`, then read the newest row:
 
 ```sh
 tail -n1 state/tower-fetch.jsonl

@@ -11,12 +11,12 @@
 # WHAT IT CHECKS.
 #   1. src/reply_text_pkg.ads  Server_Version_Word  == alire.toml  version
 #   2. if a tag/expected version is given (arg 1, or $CRUCIBLE_EXPECTED_VERSION), both == that.
-# A leading "v" on the tag is tolerated (v0.3.0 == 0.3.0).
+# A leading "v" on the tag is tolerated (v0.4.0 == 0.4.0).
 #
 # USAGE (wire into the build and the packaging step, before gprbuild and before tar):
 #   scripts/check-version.sh              # source files must agree with each other
-#   scripts/check-version.sh v0.3.0       # ...and with the tag you are about to cut
-#   CRUCIBLE_EXPECTED_VERSION=0.3.0 scripts/check-version.sh
+#   scripts/check-version.sh v0.4.0       # ...and with the tag you are about to cut
+#   CRUCIBLE_EXPECTED_VERSION=0.4.0 scripts/check-version.sh
 # EXIT: 0 all agree | 1 a mismatch (message on stderr) | 2 could not read a version
 
 set -u

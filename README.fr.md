@@ -7,6 +7,11 @@ Le noyau de décision prouvé d'une usine qui transformera une spécification é
 accompagné d'une preuve vérifiée par machine, et qui refusera de livrer ce qu'elle n'aura pas pu
 prouver.
 
+Un refus reste la réponse honnête : l'unité n'a pas pu être prouvée telle que demandée, et la bonne
+réaction est de changer la demande, pas de la contourner. À partir de la v0.4.0, les forges refusées
+ou non mesurées sont aussi signalées par `isError: true`, afin qu'un hôte ne puisse jamais les prendre
+pour un succès.
+
 **Ce qu'est cette version, sans détour :** elle ne prend pas encore de spécification et ne forge
 rien. Elle vous donne les cœurs de décision prouvés de l'usine, que vous pouvez reprouver sur votre
 propre matériel plutôt que de nous croire, et une porte MCP dont le seul outil fonctionnel est une

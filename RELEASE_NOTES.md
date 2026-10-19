@@ -1,3 +1,28 @@
+# Crucible v0.4.0
+
+In this release a refused or unmeasured `forge`, and a `prove_unit` that does not prove,
+come back as MCP errors (`"isError": true`). Internal faults name the stage and the exception, and the door exits
+with code 70 when it stops on one. Write failures and rail failures that were silent are now reported.
+
+This is 0.4.0, not 0.3.1, because host programs see the change. The full list is in `CHANGELOG.md`.
+
+## Upgrading a host program
+
+- If your host treats every tool result as success, it will now see errors for refused and unmeasured forges and
+  for `not_proved`. Read `structuredContent` as before: it is unchanged. The `isError` field is the only addition.
+- A refusal is still the correct answer. Change the specification and ask again. Do not retry the same request.
+- If you start the door yourself, treat exit code 70 as an internal fault. Exit code 0 still means end of input.
+- If you read `state/spec.ads` or `state/body.adb` after a job, note that the previous job's copies are now kept
+  as `state/spec.ads.prev` and `state/body.adb.prev`.
+- No configuration change is needed.
+
+## Known limitations
+
+See `CHANGELOG.md`. There are no deadlines yet. A live FLOOR 1 forge with the default local model may be refused
+at `fill_body`; the 0.3 build does the same.
+
+---
+
 # Crucible v0.2.1
 
 > v0.2.1 is v0.2.0 with the install made honest: the tarball unpacks into a working directory that

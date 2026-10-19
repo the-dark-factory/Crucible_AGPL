@@ -4,7 +4,7 @@
 # Ships in the release tarball at its root. A stranger unpacks the tarball, points their MCP host
 # at this script, and the door comes up already connected to the tower:
 #
-#     claude mcp add crucible -- /absolute/path/to/crucible-v0.3.0/crucible-launch.sh
+#     claude mcp add crucible -- /absolute/path/to/crucible-v0.4.0/crucible-launch.sh
 #
 # WHY IT IS NEEDED. The door resolves config/rail.conf, tower/base.bundle, config/reef-relay.conf
 # and state/ RELATIVE TO THE DIRECTORY IT IS STARTED IN. Started anywhere else it refuses every

@@ -156,9 +156,12 @@ qwen3.8-27b model tuned for the dialect.
 
 ## Get it
 
+This release is 0.4.0, not 0.3.1, because refusals and unproved results now come back as MCP errors; host programs
+see a change in behaviour. See `CHANGELOG.md`.
+
 This tagged release ships factory-built, signed tarballs — one per platform — plus one checksum file:
-`crucible-v0.3.0-macos-arm64.tar.gz`, `crucible-v0.3.0-linux-x86_64.tar.gz`, and
-`RELEASE_TARBALLS.sha256`. Each tarball unpacks to `crucible-v0.3.0/` — a working directory with a
+`crucible-v0.4.0-macos-arm64.tar.gz`, `crucible-v0.4.0-linux-x86_64.tar.gz`, and
+`RELEASE_TARBALLS.sha256`. Each tarball unpacks to `crucible-v0.4.0/` — a working directory with a
 `crucible-launch.sh`, `bin/`, `config/` and `tower/` — that connects to the tower out of the box. The
 macOS binary is Developer-ID signed and notarized (a bare CLI tool, so it cannot be stapled; clear the
 quarantine attribute if a browser download is blocked). Check the download, unpack, then verify the
@@ -166,7 +169,7 @@ signed set inside:
 
 ```sh
 sha256sum -c RELEASE_TARBALLS.sha256
-tar xzf crucible-v0.3.0-<platform>.tar.gz && cd crucible-v0.3.0
+tar xzf crucible-v0.4.0-<platform>.tar.gz && cd crucible-v0.4.0
 sha256sum -c SHA256SUMS
 ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
 ```
