@@ -147,8 +147,9 @@ will require signing the CLA (sending them will not).
 ## The model
 
 Crucible does not ship a model and does not need ours. The `model` line of `config/rail.conf` takes any endpoint
-you run. The shipped default is `qwen3-coder:30b`: install ollama and `ollama pull qwen3-coder:30b`, or point the
-`model` line at any other model you run on localhost; the rail speaks plain HTTP to a local
+you run. The shipped default is `qwen3.8:27b` (needs ollama 0.32.12 or newer): install ollama and
+`ollama pull qwen3.8:27b`, or point the `model` line at `qwen3-coder:30b` or any other model you run on localhost
+(`INSTALL.md` lists what we measured for each); the rail speaks plain HTTP to a local
 endpoint by design, so nothing leaves the box but what you send. The house figures above were measured with a
 qwen3.8-27b model tuned for the dialect.
 
@@ -159,16 +160,18 @@ qwen3.8-27b model tuned for the dialect.
 This release is 0.4.0, not 0.3.1, because refusals and unproved results now come back as MCP errors; host programs
 see a change in behaviour. See `CHANGELOG.md`.
 
-This tagged release ships factory-built, signed tarballs — one per platform — plus one checksum file:
-`crucible-v0.4.0-macos-arm64.tar.gz`, `crucible-v0.4.0-linux-x86_64.tar.gz`, and
-`RELEASE_TARBALLS.sha256`. Each tarball unpacks to `crucible-v0.4.0/` — a working directory with a
-`crucible-launch.sh`, `bin/`, `config/` and `tower/` — that connects to the tower out of the box. The
-macOS binary is Developer-ID signed and notarized (a bare CLI tool, so it cannot be stapled; clear the
-quarantine attribute if a browser download is blocked). Check the download, unpack, then verify the
-signed set inside:
+This tagged release ships factory-built, signed tarballs plus one checksum file,
+`RELEASE_TARBALLS.sha256`. **Linux first:** `crucible-v0.4.0-linux-x86_64.tar.gz` ships now.
+`crucible-v0.4.0-macos-arm64.tar.gz` follows once its binaries are Developer-ID signed and notarized
+(a bare CLI tool, so it cannot be stapled; clear the quarantine attribute if a browser download is
+blocked). Each tarball unpacks to `crucible-v0.4.0/`: a working directory with a `crucible-launch.sh`,
+`bin/`, `config/`, `tower/` and an empty `state/`. It forges on the catalog it ships with. To fetch
+newer catalogs from the tower, enrol it (`palais.enrol`; see `INSTALL.md`). Until then the tower
+fetch row reads `fetch_failed`, which is expected. You also need gnatprove, a local model and `ssh-keygen`
+(see `INSTALL.md`). Check the download, unpack, then verify the signed set inside:
 
 ```sh
-sha256sum -c RELEASE_TARBALLS.sha256
+sha256sum -c --ignore-missing RELEASE_TARBALLS.sha256
 tar xzf crucible-v0.4.0-<platform>.tar.gz && cd crucible-v0.4.0
 sha256sum -c SHA256SUMS
 ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS

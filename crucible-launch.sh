@@ -96,7 +96,7 @@ STATE="$ROOT/state"
 
 # find_gnatprove -> absolute path to a gnatprove that RUNS on this box, or empty.
 # 2026-09-28 (Tony: "fix the four launcher items"): the first gnatprove FOUND is not good enough -- a shared home can
-# hold a toolchain built for another machine (gertrude held a Mach-O gnatprove beside its x86-64 one), and the prover
+# hold a toolchain built for another machine (one of our build hosts held a Mach-O gnatprove beside its x86-64 one), and the prover
 # rail then refuses to serve. Each candidate, in order (EVERY gnatprove on PATH, in PATH order, then Alire's releases,
 # then ~/.alire), must answer `gnatprove --version`; the first that does is chosen and named on stderr, and every
 # skipped one is named too.

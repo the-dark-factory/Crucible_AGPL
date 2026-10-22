@@ -16,10 +16,54 @@ This is 0.4.0, not 0.3.1, because host programs see the change. The full list is
   as `state/spec.ads.prev` and `state/body.adb.prev`.
 - No configuration change is needed.
 
+## The default model is now `qwen3.8:27b`
+
+`config/rail.conf` now names `qwen3.8:27b` (it was `qwen3-coder:30b`). Why: on the `Saturating_Add` sheet, `qwen3.8:27b`
+reached `done` in 1 run of 3 in a clean container; `qwen3-coder:30b` reached it in 0 of 3, and in 0 of 13 on our v0.3
+parity sheets. These are small samples. `qwen3.8:27b` needs ollama 0.32.12 or newer.
+
+The choice is still yours. Name `qwen3-coder:30b`, or any other model you run, on the `"rail":"model"` line. If you
+upgrade and keep your own `config/rail.conf`, nothing changes for you.
+
+## Platforms
+
+Linux first. The Linux x86_64 tarball ships with this release. The macOS arm64 tarball follows once its
+binaries are Developer-ID signed and notarised. Until then, macOS users can build from source (`INSTALL.md`).
+
+## The tower: the catalog needs an enrolment
+
+- In 0.4.0 every catalog fetch is signed with your install's own key. The tower serves the catalog only to an
+  enrolled install. v0.2.1 fetched without a key; 0.4.0 does not.
+- A fresh install forges on the catalog it ships with (`tower/base.bundle`). Its fetch row in
+  `state/tower-fetch.jsonl` reads `fetch_failed` until it is enrolled. That is expected, not a fault.
+- To enrol, call the `palais.enrol` tool with a codename, then call it again to collect the record. The Dark
+  Factory admits members in waves. While a wave is open and has room, approval is automatic; otherwise your key is
+  queued for the next wave. `INSTALL.md` ("Enrol") has every step and every answer.
+- `palais.enrol` is no longer refused with `no_reef_key_pinned`. The Reef's key is pinned in this build and shipped
+  in `config/reef-allowed-signers`.
+- `tower/sharer.bundle` is no longer in the tarball. The door fetches it once the install is enrolled.
+- You need `ssh-keygen` at `/usr/bin/ssh-keygen` (a minimal Ubuntu does not have it: `apt-get install openssh-client`). The signature check, enrolment and the
+  signed fetch all use it.
+
+## Install
+
+`INSTALL.md` has every step. In short:
+
+- **gnatprove** (the prover rail needs it; no compiler is needed): on Linux x86_64, download
+  `alr-2.1.0-bin-x86_64-linux.zip` from the Alire releases and run `alr -n install gnatprove=15.1.0`. The
+  launcher finds `~/.alire/bin/gnatprove` by itself.
+- **ollama:** `ollama pull qwen3.8:27b`. It needs ollama 0.32.12 or newer. Tested with 0.33.2, the ROCm build, on
+  an AMD Radeon R9700. The model is named on the `"rail":"model"` line of `config/rail.conf`.
+- **First forge:** `INSTALL.md` prints a three-line sheet (`Saturating_Add`) and the exact call, with and
+  without an MCP host. On a clean Ubuntu 24.04 with `qwen3.8:27b`, 1 run of 3 reached `done`; the other two were
+  refused at `vacuity`, which is a correct refusal.
+- `crucible-launch.sh --check` exits 0 even when the prover rail is `DOWN`. Read its lines.
+- A second forge within the hour adds no row to `state/tower-fetch.jsonl` (`rate_limited` on standard error).
+
 ## Known limitations
 
-See `CHANGELOG.md`. There are no deadlines yet. A live FLOOR 1 forge with the default local model may be refused
-at `fill_body`; the 0.3 build does the same.
+See `CHANGELOG.md`. There are no deadlines yet. A live FLOOR 1 forge with `qwen3-coder:30b` (the earlier
+default) may be refused at `fill_body`; the 0.3 build does the same.
 
 ---
 
