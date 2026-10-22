@@ -23,8 +23,13 @@ page.
    ```
 
 3. Verify the signed file set INSIDE the tarball (this is the df-release signature). This needs
-   `ssh-keygen`. A minimal Ubuntu does not have it; install it first, as root:
-   `apt-get install openssh-client`. (Enrolment and the signed catalog fetch need it too.)
+   `ssh-keygen`. A fresh Ubuntu does not have it, and has no package lists yet. Install it first, as
+   root (or with `sudo`). Enrolment and the signed catalog fetch need it too.
+   ```sh
+   apt-get update
+   apt-get install openssh-client
+   ```
+   Then:
    ```sh
    sha256sum -c SHA256SUMS
    ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk \
@@ -74,7 +79,7 @@ this install is enrolled (see "What connecting to the tower does").
 | `config/reef-allowed-signers` | the Reef's key. Enrolment checks the Reef's signed record against it, and the signed fetch names the network by it | us — in the tarball |
 | gnatprove | behind the prover service, so it can prove locally | you — see "Install gnatprove". The launcher finds it. Without it the prover rail is off, and no `forge` can end in a proved unit |
 | model endpoint | the model rail (ollama, or any OpenAI-shaped server) on `127.0.0.1` | you — any model; we ship none |
-| `ssh-keygen` at `/usr/bin/ssh-keygen` | makes this install's key, signs each catalog fetch, and checks signatures | you — a minimal Ubuntu does not have it: `apt-get install openssh-client` |
+| `ssh-keygen` at `/usr/bin/ssh-keygen` | makes this install's key, signs each catalog fetch, and checks signatures | you — a fresh Ubuntu does not have it: `apt-get update`, then `apt-get install openssh-client` |
 
 Nothing listens off-host: every service binds `127.0.0.1`. The reef relay is the one component
 that leaves the box, and only to `https://thereef.ink/rail`. It sends no unit of yours. What it does
@@ -87,22 +92,15 @@ You need gnatprove only, not a GNAT compiler. The route we tested installs it wi
 **Linux x86_64** (tested on a clean Ubuntu 24.04; about 3 minutes):
 
 ```sh
-# as root
+# as root (or with sudo)
+apt-get update
 apt-get install curl ca-certificates unzip git
-# as yourself
+# as yourself, in an empty directory
 curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
-unzip alr.zip
+unzip alr.zip                         # puts the program at bin/alr
+bin/alr -n install gnatprove=15.1.0
+~/.alire/bin/gnatprove --version      # prints FSF 15.0: that is the 15.1.0 release
 ```
-
-Then run the `alr` program from the unpacked zip:
-
-```sh
-alr -n install gnatprove=15.1.0       # use the path to the unpacked alr
-~/.alire/bin/gnatprove --version      # FSF 15.0
-```
-
-(Not yet tested as written: our rehearsal did not record which folder `unzip` puts `alr` in. Use
-`unzip -l alr.zip` to see it.)
 
 You do not need to add `~/.alire/bin` to your `PATH`. The launcher finds `~/.alire/bin/gnatprove` by
 itself and names it on standard error (`prover: gnatprove chosen: …`).
@@ -129,12 +127,12 @@ The choice is yours. Name any model you have pulled on that line. What we know a
 
 | model | what we measured |
 |---|---|
-| `qwen3.8:27b` (default) | on the `Saturating_Add` sheet in "First forge": 1 run of 3 reached `done`, in a clean Ubuntu 24.04 container (ollama 0.33.2 ROCm, AMD R9700) |
-| `qwen3-coder:30b` (the default before 0.4.0) | on the same sheet: 0 runs of 3 reached `done` (ollama 0.32.9, macOS). On our v0.3 parity sheets: 0 of 13 |
+| `qwen3.8:27b` (default) | the `Negate` sheet in "First forge": 7 runs of 10 reached `done`, about 15 s each. The harder `Saturating_Add` sheet: 1 of 16. (ollama 0.33.2 ROCm, AMD R9700) |
+| `qwen3-coder:30b` (the default before 0.4.0) | `Saturating_Add`: 0 runs of 3 reached `done` (ollama 0.32.9, macOS). On our v0.3 parity sheets: 0 of 13. Not measured on `Negate` |
 | `qwen3.6:27b` | not measured in 0.4.0 |
 | any other model you run | not measured by us |
 
-All of these are small samples.
+These are small samples.
 
 Edit only the `"rail":"model"` line. The file has another line that names the same model: the first
 line, `"rail":"ollama"`, is kept for an older runner and the door does not read it.
@@ -199,20 +197,21 @@ It answers `{"outcome":"proved"}`. Change `(X + 1)` to `(X + 2)` and it answers
 
 ### 2. The whole pipeline
 
-Give `forge` this three-line sheet. The tarball ships no `examples/` directory, so here is the text;
-it is `examples/saturating_add.sheet` in the source tree:
+Give `forge` this three-line sheet. It is the sheet our release probe uses
+(`tools/release-probe.bb` in the source tree). The tarball ships no example sheets, so here is the text:
 
 ```text
-delivers: Saturating_Add
-function Saturating_Add (A, B : Integer) return Integer
-post: saturates to Integer'Last on overflow and Integer'First on underflow, else equals A + B
+delivers: package Probe_Pkg with SPARK_Mode, Pure
+function Negate (A : Boolean) return Boolean
+post: the result is True exactly when A is False
 ```
 
 **In Claude Code:** ask Claude to call the `crucible` server's `forge` tool with that text as its
-`sheet` argument. (Not yet tested through Claude Code: our rehearsal drove the door with the raw form
+`sheet` argument. (Not yet tested through Claude Code: our rehearsals drove the door with the raw form
 below.)
 
-**Without an MCP host:** the door reads JSON-RPC lines on standard input. Put these lines in
+**Without an MCP host:** the door reads JSON-RPC lines on standard input. Every file you send starts
+with the two handshake lines (`initialize`, then `notifications/initialized`). Put these lines in
 `reqs.jsonl`, each on one line:
 
 ```json
@@ -220,8 +219,8 @@ below.)
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"rail.show","arguments":{}}}
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"intake_check","arguments":{"sheet":"delivers: Saturating_Add\nfunction Saturating_Add (A, B : Integer) return Integer\npost: saturates to Integer'Last on overflow and Integer'First on underflow, else equals A + B\n"}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"forge","arguments":{"sheet":"delivers: Saturating_Add\nfunction Saturating_Add (A, B : Integer) return Integer\npost: saturates to Integer'Last on overflow and Integer'First on underflow, else equals A + B\n"}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"intake_check","arguments":{"sheet":"delivers: package Probe_Pkg with SPARK_Mode, Pure\nfunction Negate (A : Boolean) return Boolean\npost: the result is True exactly when A is False"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"forge","arguments":{"sheet":"delivers: package Probe_Pkg with SPARK_Mode, Pure\nfunction Negate (A : Boolean) return Boolean\npost: the result is True exactly when A is False"}}}
 ```
 
 then run, from the install directory:
@@ -231,40 +230,83 @@ then run, from the install directory:
 ```
 
 The launcher starts the rails, the door answers each line, and everything stops at the end of the
-input. The `prove_unit` check above works the same way:
+input. Each run is a fresh door. It reads your key from `~/.crucible/key/` and everything else from
+the install directory, so nothing is lost between runs.
+
+The `prove_unit` check above, the same way. `prove-ok.jsonl` (answers `proved`):
 
 ```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"prove_unit","arguments":{"unit":"Inc_Pkg","spec":"package Inc_Pkg with SPARK_Mode is\n   function Inc (X : Integer) return Integer with Pre => X < Integer'Last, Post => Inc'Result = X + 1;\nend Inc_Pkg;\n","body":"package body Inc_Pkg with SPARK_Mode is\n   function Inc (X : Integer) return Integer is (X + 1);\nend Inc_Pkg;\n","level":"2"}}}
 ```
+
+`prove-bad.jsonl` (answers `not_proved`):
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"prove_unit","arguments":{"unit":"Inc_Pkg","spec":"package Inc_Pkg with SPARK_Mode is\n   function Inc (X : Integer) return Integer with Pre => X < Integer'Last, Post => Inc'Result = X + 1;\nend Inc_Pkg;\n","body":"package body Inc_Pkg with SPARK_Mode is\n   function Inc (X : Integer) return Integer is (X + 2);\nend Inc_Pkg;\n","level":"2"}}}
+```
+
+Run each as `./crucible-launch.sh < prove-ok.jsonl`.
 
 ### What a forge answers
 
 `intake_check` answers `{"verdict":"may_forge","operation_count":"1"}`. The `forge` reply is one of:
 
-- **Done.**
-  `{"final":"done","stopped_at":"emit","transitions":"11","emit_allowed":"true","reason":"emit: wrote saturating_add_pkg.ads, saturating_add_pkg.adb and receipt.json"}`.
+- **Done.** A real reply from our measurement:
+  `{"final":"done","stopped_at":"emit","transitions":"11","emit_allowed":"true","reason":"emit: wrote negate_pkg.ads, no body (none needed) and receipt.json"}`.
   The unit and its receipt are in `out/`. All ten gates passed: intake, decompose, emit_contract,
-  prove_spec, vacuity, fill_body, prove_body, seam, provenance, admission. Read the contract in
-  `out/saturating_add_pkg.ads` yourself: "proved" means the body meets that contract.
+  prove_spec, vacuity, fill_body, prove_body, seam, provenance, admission.
+  **The package is named `Negate_Pkg`, not `Probe_Pkg`.** The model chooses the name, and it drops
+  `Pure`. The unit is one expression function, so there is no body file. A typical contract is
+  `Post => Negate'Result = (not A)`. Read the contract in `out/negate_pkg.ads` yourself: "proved"
+  means the code meets that contract.
 - **Refused.** For example
-  `{"final":"refused","stopped_at":"vacuity",…,"reason":"vacuity: outcome_hollow, faults: not_theorem"}`,
+  `{"final":"refused","stopped_at":"vacuity",…,"reason":"vacuity: outcome_hollow, faults: refused errors not_theorem inconsistent"}`,
   flagged `"isError":true`. This is a real outcome, not a broken install: the model wrote a contract
-  that the vacuity check would not accept, so nothing was emitted. Run the same forge again; a later
-  run can reach `done`.
+  that the vacuity check would not accept, so nothing was emitted. A second try usually does it.
 
-What we measured on a clean Ubuntu 24.04 container with the Linux tarball, ollama 0.33.2 (ROCm) on an
-AMD R9700, and the shipped default model `qwen3.8:27b`: on this sheet, 1 run of 3 reached `done`; the
-other two were refused at `vacuity`. Three runs is a small sample. Crucible finishes a minority of
-runs (see `README.md`).
+What we measured: 10 runs of this sheet, each in a fresh unpack of the signed Linux tarball, with the
+shipped `config/rail.conf` (`qwen3.8:27b`, ollama 0.33.2 ROCm, AMD R9700). **7 of 10 reached `done`,
+about 15 s each.** The other 3 were refused at `vacuity` (a hollow contract). It is a very small unit:
+it shows the install works end to end (model, prover, vacuity, emit). It says little about harder
+sheets.
+
+**A harder sheet.** `examples/saturating_add.sheet` in the source tree reached `done` in 1 run of 16 on
+`qwen3.8:27b`; most runs were refused at `vacuity`. Crucible finishes a minority of runs on real
+sheets (see `README.md`).
 
 ### If it stops
 
-A reply names the stage it stopped at.
-- `"stopped_at":"tower"`: the door was started from the wrong directory. Use the launcher.
-- `unmeasured` at `decompose` with `model '…' not found`: the model named on the `"rail":"model"` line
+**The rule:** forge the `Negate` sheet up to 3 times. If any run reaches `done`, your install works.
+A refusal after that is the model's answer, not a fault. (At 7 in 10, three refusals in a row
+should happen about once in 37 tries.)
+
+**A broken install** shows itself before the model is judged:
+- `--check` prints `DOWN` for a rail. Fix that rail first (for the prover: "Install gnatprove").
+- `"final":"unmeasured"`: a rail or the model did not answer, so nothing was judged. For example
+  `unmeasured` at `decompose` with `model '…' not found`: the model named on the `"rail":"model"` line
   is not pulled.
-- A refusal at `vacuity`, `emit_contract` (for example `no_progress`) or `fill_body`: the model did not
-  get there this run. Try again.
+- `"stopped_at":"tower"`: the door was started from the wrong directory. Use the launcher.
+
+**A model refusal** is `"final":"refused"` at a stage, with a reason. Try again.
+- `decompose`: the judge refused the model's design (for example `no_duplicate_hop`).
+- `emit_contract`: the model ran out of rounds before it wrote a contract the prover accepts
+  (`budget spent after 8 rounds`, or `no_progress` when one round repeated the last).
+- `vacuity: outcome_hollow`: the contract compiled, but the vacuity battery found it says too little.
+  The `faults:` words name what it found:
+  - `refused`: the battery refused to grade something (we have seen this for an assumed body).
+  - `errors`: the battery reported at least one error reading it (we have seen a compile error here).
+  - `nothing_graded`: the contract has postconditions, but no function in it could be graded.
+  - `not_theorem`: at least one graded function is not a theorem (for example graded `run-time-only`).
+  - `inconsistent`: the battery's counts do not add up.
+
+To look closer, `state/vacuity.jsonl` holds the counts behind each vacuity verdict, and
+`state/spec.ads` the contract the model wrote last. The tarball ships the battery's grade edge
+(`bin/vacuity_verdict_main`) beside it. The "missing edge" warning under "Build from source" is for
+your own builds: there, every row of `state/vacuity.jsonl` would show `functions_read` 0.
 
 ## What connecting to the tower does
 
@@ -368,7 +410,7 @@ source. It is one tree; both editions build from it.
 - **git**
 - **curl** (Linux): Alire downloads the toolchain with it. If curl is missing, `alr update` tries to install it with
   `sudo apt-get install curl`; that fails where there is no sudo or no apt (a container, a minimal image). Install curl
-  first, e.g. `apt-get install curl ca-certificates` as root. (Measured 2026-09-28 in a Debian 12 build image.)
+  first, e.g. `apt-get update && apt-get install curl ca-certificates` as root. (Measured 2026-09-28 in a Debian 12 build image.)
 - Optional: **ollama**, for the model rail.
 
 ### 2. Fetch the pinned toolchain

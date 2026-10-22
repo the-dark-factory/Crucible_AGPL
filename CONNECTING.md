@@ -28,7 +28,8 @@ binaries:
   any value from 2048 to 262144), so you do not need to set `OLLAMA_CONTEXT_LENGTH`.
 - gnatprove, for the prover rail. See "Install gnatprove" in `INSTALL.md`.
 - `ssh-keygen` at `/usr/bin/ssh-keygen`. Enrolment makes your key with it and every catalog fetch is
-  signed with it. A minimal Ubuntu does not have it: `apt-get install openssh-client`.
+  signed with it. A fresh Ubuntu does not have it: `apt-get update`, then
+  `apt-get install openssh-client`.
 - `nc` (netcat) is optional; the launcher uses it to notice a rail that is already up.
 
 The launcher starts the prover rail, the vacuity rail, and the reef relay for you, and stops them

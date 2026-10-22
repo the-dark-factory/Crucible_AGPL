@@ -174,6 +174,7 @@ fetch row reads `fetch_failed`, which is expected. You also need gnatprove, a lo
 sha256sum -c --ignore-missing RELEASE_TARBALLS.sha256
 tar xzf crucible-v0.4.0-<platform>.tar.gz && cd crucible-v0.4.0
 sha256sum -c SHA256SUMS
+# ssh-keygen: on a fresh Ubuntu, first (as root) apt-get update && apt-get install openssh-client
 ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
 ```
 
