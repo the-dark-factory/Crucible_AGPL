@@ -1,7 +1,6 @@
 # CRUCIBLE — the inference rail (`rail.conf`)
 
-RULING (Tony, 2026-09-11 16:52): "leave Rosie in place at the moment, but include a method to
-repoint the llm." `rail.conf` IS that method. Edit it and restart; no rebuild.
+`rail.conf` is how you point Crucible at a different model. Edit it and restart; no rebuild.
 
 Format (2026-09-12 21:3x, first reader is the expand_brief runner): ONE JSON line, read with the
 proved `Json_Scan_Pkg`, so no new parser exists for it:
@@ -9,9 +8,9 @@ proved `Json_Scan_Pkg`, so no new parser exists for it:
     {"model":"<ollama model>","host":"<dotted address>","port":"<digits>","rail":"ollama","sovereign":true}
 
 - `sovereign` true marks the rail as sovereign: the front's `Sovereign_Gate_Pkg` then refuses any
-  host that is not on the estate (loopback / localhost). Set it false only for a rail that is
-  allowed to leave the estate.
-- ⛔ NOT an environment variable, and not an argument. `mui:edition-is-compiled-not-argued` forbids
+  host that is not on this machine (loopback / localhost). Set it false only for a rail that is
+  allowed to leave this machine.
+- ⛔ NOT an environment variable, and not an argument. A design rule (the edition is compiled, not argued) forbids
   `Ada.Environment_Variables` and `Ada.Command_Line` anywhere in src/, so that the EDITION cannot
   be talked out of its licence refusal. The rail is a different kind of thing — model choice moves
   cost, sovereignty and yield, never CORRECTNESS, because the proof gate decides correctness.
@@ -49,7 +48,7 @@ only three rail words is out of date: the five are `model prover vacuity palais 
 
 **A reef line ships** (since v0.3.0; the repo `rail.conf` is what the release tarball carries), pointing at the local
 relay on 8473 with `timeout_seconds` 600 and `max_reply_bytes` 1048576. Delete it to forge fully offline:
-`palais.enrol` then refuses with `no_reef_rail`. `sovereign` is `false` because this rail leaves the estate — it is the
+`palais.enrol` then refuses with `no_reef_rail`. `sovereign` is `false` because this rail leaves this machine — it is the
 only one that does.
 
 ## Tiers — a standard model and an elevated one (v0.3, `rail.conf.example`)

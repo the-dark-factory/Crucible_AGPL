@@ -12,7 +12,7 @@
 # that reaches thereef.ink) are separate processes nobody was starting. This launcher starts them
 # from the right directory and STOPS THEM AFTERWARDS -- nothing is left listening once the door exits.
 #
-# Ruled 2026-09-23 (Tony): a fresh install must connect to the one tower automatically, so this
+# Decided 2026-09-23: a fresh install must connect to the one tower automatically, so this
 # launcher starts the REEF RELAY alongside prover and vacuity -- the earlier launcher started only
 # two of the three, which is why a fresh install never reached the tower.
 #
@@ -95,7 +95,7 @@ port_up() {
 STATE="$ROOT/state"
 
 # find_gnatprove -> absolute path to a gnatprove that RUNS on this box, or empty.
-# 2026-09-28 (Tony: "fix the four launcher items"): the first gnatprove FOUND is not good enough -- a shared home can
+# 2026-09-28 (launcher fixes): the first gnatprove FOUND is not good enough -- a shared home can
 # hold a toolchain built for another machine (one of our build hosts held a Mach-O gnatprove beside its x86-64 one), and the prover
 # rail then refuses to serve. Each candidate, in order (EVERY gnatprove on PATH, in PATH order, then Alire's releases,
 # then ~/.alire), must answer `gnatprove --version`; the first that does is chosen and named on stderr, and every
@@ -211,7 +211,7 @@ start_rail prover  prover_service_main
 start_rail vacuity vacuity_service_main
 start_rail reef    reef_relay_main
 
-# ---- wait until every rail THIS launcher started is listening (2026-09-28, Tony: "fix the four launcher items") ----
+# ---- wait until every rail THIS launcher started is listening (2026-09-28, launcher fixes) ----
 # The door used to be served at once, and a tool call in the first second found its rail not yet listening
 # (prove_unit -> prover_unreachable on Linux, reproduced twice). Each started rail must accept connections within
 # RAIL_WAIT_SECONDS (default 30); a rail whose process exits, or that is not listening in time, is named and the

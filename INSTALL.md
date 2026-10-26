@@ -469,7 +469,7 @@ PATH="$TC" gnatmake -gnat2022 -gnatU -D obj/battery-verdict \
 The vacuity battery is `bin/vacuity-battery`: one executable that answers to each name in
 `battery/LINKS` (it dispatches on the name it was started under), so **the links must sit beside it**.
 It runs its stages as child processes by those names. Its sources are in `battery/`, each stamped and
-byte-identical below the stamp to the ada-factory round it came from (`battery/SOURCES.tsv` lists every
+byte-identical below the stamp to the source recorded in our factory's build records (`battery/SOURCES.tsv` lists every
 file's unstamped and stamped sha256 and its origin). It replaces the Go `check-cores-mcp`, whose `wire`
 output it reproduces byte for byte (485 of 485 on the oracle corpus, 2026-09-28).
 
@@ -479,7 +479,7 @@ that edge as a SIBLING of its own executable (`VACUITY_EDGE` overrides the path)
 the battery refuses everything (`functions_read: 0`, `package_grade: refused`) and the door then reports
 `vacuity: outcome_hollow` and emits nothing. **A missing edge looks exactly like a hollow contract, so this
 failure is silent and easy to misread.** The build above puts it in `bin/` next to `vacuity-battery`
-(from `battery/verdict/`, the admitted lineage 3 of `wu-vacuity-verdict-3/edge/`).
+(from `battery/verdict/`, the admitted third version of the grade edge).
 
 ### 4. Configure and start
 

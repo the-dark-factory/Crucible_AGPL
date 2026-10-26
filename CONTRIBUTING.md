@@ -4,7 +4,7 @@ CRUCIBLE is AGPL-3.0-or-later. The Dark Factory Ltd reserves the right to licens
 in this tree commercially; such a licence is available only by a signed agreement with The Dark
 Factory Ltd, for work produced by our online factory (see `COMMERCIAL-LICENCE.md`). Contributions are welcome under the Contributor Licence Agreement, which is the Harmony
 Contributor License Agreement v1.0, licence variant, Outbound Licence Option Five, governed by
-the laws of England and Wales (the unmodified templates and the fills are in ada-factory,
+the laws of England and Wales (the unmodified templates and the fills are in this repository,
 `CLA.md` and `cla/`). It is a licence, not an assignment: you keep your copyright.
 
 **Your contribution stays AGPL.** A component you contribute is used in the AGPL edition and is
