@@ -31,7 +31,14 @@ no change except the version the door reports.
 
 ### Docs
 
-- `INSTALL.md`: how to build and run the expansion runner ("Build from source", step 6), and its limits.
+- `INSTALL.md`: how to build and run the expansion runner ("Build from source", step 6): a brief that works,
+  the intake rules a brief must meet (it must contain `deliverable` or `Deliverable`, and not end in `?`), what
+  each refusal message means, the model caller's four-line input and two-line output, and its limits.
+- `README.md` and `INSTALL.md`: building from source starts from a git clone of the public repository; the
+  prerequisites name `libc6-dev` (without it every link fails on a fresh Ubuntu); the build stamp's line is
+  checked (`commit=<hash> clean=true`), because the stamp tool exits 0 outside a git clone.
+- Where to get ollama and how to check its version; the real shape of `crucible-launch.sh --check` output; the
+  model may or may not keep `Pure` on the `Negate` unit.
 - `README.md`: the install flow now includes gnatprove, the model and the self-check, not only the download
   and signature check.
 - `apt-get install` lines carry `-y`, so they run unattended (in a container, a script).

@@ -141,7 +141,9 @@ runner" under "Build from source"); the door does not read it.
 If the model is not there, the forge stops early and says so: `unmeasured` at `decompose`, with
 ollama's own message (`model '…' not found`).
 
-**ollama.** `qwen3.8:27b` needs ollama 0.32.12 or newer (the model's own requirement). We tested
+**ollama.** `qwen3.8:27b` needs ollama 0.32.12 or newer (the model's own requirement). Install it from
+<https://ollama.com/download>, and check the version with `ollama --version` (or, with the server running,
+`curl -s http://127.0.0.1:11434/api/version`). We tested
 ollama 0.33.2, the ROCm build (`ollama/ollama:0.33.2-rocm`), on an AMD Radeon R9700.
 
 The door asks ollama for a 32,768-token context by default (the model line's `"num_ctx":"32768"`;
@@ -158,13 +160,24 @@ That is the whole start. You do not start the rails by hand and you do not need 
 The launcher cds into the install directory for you. A quick self-check:
 
 ```sh
-/absolute/path/to/crucible-v0.4.1/crucible-launch.sh --check
-#   prover  8471 up
-#   vacuity 8472 up
-#   reef    8473 up
+/absolute/path/to/crucible-v0.4.1/crucible-launch.sh --check 2> check.txt; cat check.txt
 ```
 
-If gnatprove is not found, the line reads `prover  8471 DOWN` and the launcher says
+Everything it says goes to standard error: about a dozen lines. First the start-up lines, such as
+`prover: gnatprove chosen: …`, `prover: wrote config/prover-service.conf …` and
+`vacuity: wrote config/vacuity-service.conf …` (first start only), and `starting <rail> on <port>` and
+`<rail> rail listening on <port>` for each rail. The last three lines are the ones to read:
+
+```
+  prover 8471 up
+  vacuity 8472 up
+  reef 8473 up
+```
+
+Read them from the captured file after the command has ended, as above: on a terminal, the last line can
+appear after the prompt returns.
+
+If gnatprove is not found, the line reads `prover 8471 DOWN` and the launcher says
 "install a GNAT/SPARK toolchain". The reef relay and vacuity rail still come up. No `forge` can end in
 a proved unit until the prover rail is up. **Read the lines, not the exit code:** `--check` exits 0
 even when the prover is down (see "What does not work yet").
@@ -260,8 +273,8 @@ Run each as `./crucible-launch.sh < prove-ok.jsonl`.
   `{"final":"done","stopped_at":"emit","transitions":"11","emit_allowed":"true","reason":"emit: wrote negate_pkg.ads, no body (none needed) and receipt.json"}`.
   The unit and its receipt are in `out/`. All ten gates passed: intake, decompose, emit_contract,
   prove_spec, vacuity, fill_body, prove_body, seam, provenance, admission.
-  **The package is named `Negate_Pkg`, not `Probe_Pkg`.** The model chooses the name, and it drops
-  `Pure`. The unit is one expression function, so there is no body file. A typical contract is
+  **The package is named by the model, not by the sheet:** in our runs it was `Negate_Pkg`, not
+  `Probe_Pkg`. Some runs keep `Pure` and some drop it. The unit is one expression function, so there is no body file. A typical contract is
   `Post => Negate'Result = (not A)`. Read the contract in `out/negate_pkg.ads` yourself: "proved"
   means the code meets that contract.
 - **Refused.** For example
@@ -406,14 +419,36 @@ the relay via the launcher and forge again.
 A stranger who wants to build their own (a different platform, or their own network) builds from
 source. It is one tree; both editions build from it.
 
-### 1. Prerequisites
+### 1. Prerequisites, and the source
 
-- **Alire** (`alr`), 2.x: <https://alire.ada.dev>
+- **Alire** (`alr`), 2.x: <https://alire.ada.dev>. On Linux x86_64 the zip from "Install gnatprove" above
+  will do; put its `bin/` on your `PATH` (for example `export PATH="$HOME/alr/bin:$PATH"`).
 - **git**
 - **curl** (Linux): Alire downloads the toolchain with it. If curl is missing, `alr update` tries to install it with
   `sudo apt-get install curl`; that fails where there is no sudo or no apt (a container, a minimal image). Install curl
-  first, e.g. `apt-get update && apt-get install -y curl ca-certificates` as root. (Measured 2026-09-28 in a Debian 12 build image.)
+  first. (Measured 2026-09-28 in a Debian 12 build image.)
+- **The C library's development files** (Linux): `libc6-dev`. Without them every link fails with
+  `cannot find Scrt1.o`, `cannot find -lc` and `gnatmake: *** link failed.` (measured on a fresh Ubuntu 24.04).
+  We also install `binutils`, as an earlier clean-machine build needed it.
 - Optional: **ollama**, for the model rail.
+
+On a fresh Ubuntu, as root (or with `sudo`):
+
+```sh
+apt-get update
+apt-get install -y curl ca-certificates git unzip libc6-dev binutils
+```
+
+**Get the source as a git clone**, not as an archive or a copy: the build stamp in step 3 records the
+commit you build, and outside a git clone it has nothing to record.
+
+```sh
+git clone https://github.com/the-dark-factory/Crucible_AGPL.git
+cd Crucible_AGPL
+git checkout v0.4.1
+```
+
+Every command below runs from this directory, the tree's top.
 
 ### 2. Fetch the pinned toolchain
 
@@ -421,7 +456,7 @@ On Linux, install **curl** first (see Prerequisites): `alr update` downloads the
 
 ```sh
 cd toolchain
-alr update
+alr -n update                               # -n: answer no questions
 alr exec -- gnatprove --version
 alr exec -- which gnatprove gnat gprbuild   # keep these absolute paths
 cd ..
@@ -448,7 +483,8 @@ TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
 mkdir -p obj/harness obj/battery-verdict bin                     # gnatmake -D needs its object dir to exist
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
-bin/stamp_build_main || exit 1                                     # records the commit you are building; STOP if it refuses
+bin/stamp_build_main > obj/stamp.txt || exit 1; cat obj/stamp.txt   # records the commit you are building
+grep -Eq "commit=[0-9a-f]{12} clean=true" obj/stamp.txt || { echo "STOP: not a clean git clone" >&2; exit 1; }
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
     harness/stamp_tower_main.adb -o bin/stamp_tower_main          # the tower stamp tool (Ada)
 bin/stamp_tower_main || exit 1                                     # pins tower/base.bundle by digest and version; STOP if it refuses
@@ -465,6 +501,12 @@ for n in $(cat battery/LINKS); do ln -sfn vacuity-battery bin/$n; done   # the b
 PATH="$TC" gnatmake -gnat2022 -gnatU -D obj/battery-verdict \
     battery/verdict/vacuity_verdict_main.adb -o bin/vacuity_verdict_main   # -> bin/vacuity_verdict_main (the grade edge)
 ```
+
+**Check the build stamp.** `bin/stamp_build_main` prints one line:
+`stamped: src/generated/crucible_build.ads  commit=<first 12 characters of the commit> clean=true time=<unix time>`.
+STOP if it says `commit=none` or `clean=false`. Outside a git clone it prints `fatal: not a git repository`,
+stamps `commit=none clean=false time=none`, and still exits 0, so its exit code alone does not catch this;
+the `grep` line above does. `clean=false` means `git status --porcelain` is not empty: a file changed, or a new file git does not ignore.
 
 The vacuity battery is `bin/vacuity-battery`: one executable that answers to each name in
 `battery/LINKS` (it dispatches on the name it was started under), so **the links must sit beside it**.
@@ -526,13 +568,48 @@ for p in expand_front model_caller_main expand_back expand_brief_main; do
 done
 ```
 
-Run it from the tree's top directory. It reads ONE request line on standard input and writes one reply line:
+Run it from the tree's top directory, with the model on the first line of `config/rail.conf` pulled and
+ollama running. It reads ONE request line on standard input and writes one reply line. A brief that works:
 
 ```sh
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"expand_brief","arguments":{"brief":"<your brief>"}}}' \
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"expand_brief","arguments":{"brief":"Deliverable: a counter that counts from 0 to 10 and refuses to go past 10."}}}' \
   | bin/expand_brief_main
 ```
 
+An accepted design comes back as `{"jsonrpc":"2.0","id":1,"result":…}` carrying the design. Every refusal comes
+back as `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"…"}}`; the message says which stage refused.
+
+**What a brief must be.** Before anything is sent to the model, a proven intake gate checks the brief:
+- it is not empty;
+- it contains the word `deliverable` or `Deliverable` (anywhere, as written: `DELIVERABLE` alone does not
+  count). Starting the brief with `Deliverable:` is the simple way;
+- it is not a question: its last character, ignoring trailing spaces, is not `?`.
+
+The brief is used exactly as it appears inside the JSON string (escapes such as `\n` are not decoded).
+
+**What each refusal means.**
+
+| message | stage | what it means, and what to check |
+|---|---|---|
+| `intake refused 1` | front | the brief is empty |
+| `intake refused 2` | front | the brief does not contain `deliverable` or `Deliverable` |
+| `intake refused 3` | front | the brief ends with `?` |
+| `door refused 1` | front | the line is not a JSON-RPC `tools/call` request |
+| `door refused 2` | front | `params.name` is not `expand_brief` |
+| `door refused 3` | front | there is no string `brief` in `params.arguments` |
+| `door refused 4`, `door refused 5` | front | the licence check refused; not expected from the AGPL build of this tree |
+| `sovereign rail refuses off-estate endpoint` | front | the first line of `config/rail.conf` has `"sovereign":true` and a host that is not this machine (loopback) |
+| `rail config unreadable` | runner | `config/rail.conf` is missing, or its first line lacks a `host`, `port` or `model` string. Run from the tree's top directory |
+| `stage could not run`, `stage timed out` | runner | one of the three programs is missing from `bin/` (build all four), or did not answer in time (the model call has 700 s) |
+| `model reply fault 1` | model | nothing answered at the host and port on the first line of `config/rail.conf`: start ollama, check the port |
+| `model reply fault 2` | model | the model server stopped sending for 600 s before its answer was complete |
+| `model reply fault 3` | model | the model's reply was over 1,048,576 bytes |
+| `model reply fault prompt_over_bound`, `model reply fault prompt_not_utf8` | model | the prompt was over 262,144 bytes, or not UTF-8 |
+| `design text refused null` | judge | the model server answered, but with no text. Most often the model named on the FIRST line of `config/rail.conf` is not on that server (ollama answers with an error, not a reply): check `ollama list`, then `ollama pull` it or change that line |
+| `design text refused <word>` | judge | the model's text could not be read as a design (for example `too_many_lines`, `line_too_long`) |
+| `design refused by the judge …` | judge | the design was read, and the judge refused it; the names after it say which rules failed. A model refusal, not a broken install: try again |
+
+Notes:
 - It reads only the FIRST line of `config/rail.conf` (the `"rail":"ollama"` line) for the model, host and
   port. If you change the model on the `"rail":"model"` line, change it on the first line too.
 - The prompt is the door's own design instruction, one sentence asking for one activity per decision the
@@ -545,6 +622,31 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"expand_bri
   which holds about 67,800 bytes of brief; unlike the door, the caller does not refuse a prompt too long
   for that window.
 - The judge checks the design's structure, not that it is faithful to your brief. Read the design.
+- `bin/expand_front` run by hand expects four lines (host, port, `1` or `0` for sovereign, the request line),
+  not the request alone; given one line it exits 1 and prints nothing. Use `bin/expand_brief_main`.
+
+**Calling the model caller on its own.** `bin/model_caller_main` reads exactly four lines on standard input:
+1. the host, as a dotted IPv4 address (`127.0.0.1`);
+2. the port, digits only (`11434`);
+3. the model name (`qwen3.8:27b`);
+4. the prompt, on one line.
+
+```sh
+printf '127.0.0.1\n11434\nqwen3.8:27b\n%s\n' "Say OK." | bin/model_caller_main
+#   0
+#   {"content":"OK."}
+```
+
+It writes line 1, then at most line 2:
+- line 1 is `0` (the server was reached and answered), `1` (nothing answered at that address), `2` (the server
+  stopped sending for 600 s) or `3` (the answer was over 1,048,576 bytes); or `prompt_over_bound` /
+  `prompt_not_utf8`, in which case nothing was sent and there is no line 2;
+- line 2, only when line 1 is `0` and the answer carries text: `{"content":"<the model's text>"}`, with the
+  text's JSON escapes as the server sent them. Line 1 `0` with no line 2 means the server answered without
+  text, for example an HTTP error for a model it does not have.
+
+Give it all four lines. With fewer (for example `echo hello | bin/model_caller_main`) it stops with
+`raised ADA.IO_EXCEPTIONS.END_ERROR`.
 
 ## What does not work yet
 

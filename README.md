@@ -147,8 +147,9 @@ will require signing the CLA (sending them will not).
 ## The model
 
 Crucible does not ship a model and does not need ours. The `model` line of `config/rail.conf` takes any endpoint
-you run. The shipped default is `qwen3.8:27b` (needs ollama 0.32.12 or newer): install ollama and
-`ollama pull qwen3.8:27b`, or point the `model` line at `qwen3-coder:30b` or any other model you run on localhost
+you run. The shipped default is `qwen3.8:27b` (needs ollama 0.32.12 or newer): install ollama (<https://ollama.com/download>), check its
+version with `ollama --version` (or `curl -s http://127.0.0.1:11434/api/version`), then
+`ollama pull qwen3.8:27b`; or point the `model` line at `qwen3-coder:30b` or any other model you run on localhost
 (`INSTALL.md` lists what we measured for each); the rail speaks plain HTTP to a local
 endpoint by design, so nothing leaves the box but what you send. The house figures above were measured with a
 qwen3.8-27b model tuned for the dialect.
@@ -189,7 +190,8 @@ curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v
 unzip -o alr.zip && bin/alr -n install gnatprove=15.1.0
 cd -
 
-# 4. the model named in config/rail.conf (needs ollama 0.32.12 or newer)
+# 4. the model named in config/rail.conf (needs ollama 0.32.12 or newer: https://ollama.com/download)
+ollama --version          # or: curl -s http://127.0.0.1:11434/api/version
 ollama pull qwen3.8:27b
 
 # 5. self-check: read the lines, not the exit code
@@ -202,7 +204,16 @@ Anyone who wants to build their own network reads `INSTALL.md` and builds from s
 
 ## Build it
 
-Both editions build from the same source:
+Get the source as a git clone (the build stamp records the commit, so an archive or a copy will not do):
+
+```sh
+git clone https://github.com/the-dark-factory/Crucible_AGPL.git
+cd Crucible_AGPL
+git checkout v0.4.1
+```
+
+Both editions build from the same source. The full build, with the pinned toolchain, the stamp tools and the
+C library files a fresh Linux needs, is in `INSTALL.md` ("Build from source"). In outline:
 
 ```sh
 CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p     # bin/crucible-agpl

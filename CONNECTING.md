@@ -17,7 +17,7 @@ binaries:
   ```sh
   ollama pull qwen3.8:27b
   ```
-  It needs ollama 0.32.12 or newer. We tested ollama 0.33.2 (the ROCm build) on an AMD Radeon R9700.
+  It needs ollama 0.32.12 or newer (<https://ollama.com/download>; check with `ollama --version`). We tested ollama 0.33.2 (the ROCm build) on an AMD Radeon R9700.
   You may name `qwen3-coder:30b` or any other model instead; `INSTALL.md` ("Start it") lists what we
   measured for each.
 
@@ -126,11 +126,20 @@ Call the `palais.enrol` tool through your MCP host, for example by asking Claude
 Run the launcher's self-check. It starts the rails, reports which are up, and stops them:
 
 ```sh
-/absolute/path/to/crucible-v0.4.1/crucible-launch.sh --check
-#   prover  8471 up
-#   vacuity 8472 up
-#   reef    8473 up
+/absolute/path/to/crucible-v0.4.1/crucible-launch.sh --check 2> check.txt; cat check.txt
 ```
+
+It prints about a dozen lines on standard error (which gnatprove it chose, the rails it starts). The last
+three are the ones to read:
+
+```
+  prover 8471 up
+  vacuity 8472 up
+  reef 8473 up
+```
+
+Read them from the captured file after the command has ended: on a terminal, the last line can appear after
+the prompt returns. `INSTALL.md` ("Start it") shows the rest of the output.
 
 Then, in Claude, the `crucible` server should list its tools (`intake_check`, `prove_unit`, `forge`,
 and the rest). Ask it to `prove_unit` the small unit in `INSTALL.md` ("First forge"): `Inc` with
