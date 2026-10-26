@@ -479,6 +479,8 @@ Run every build command through the pinned toolchain, so that no other `gprbuild
 `PATH` gets mixed in (a real failure, 2026-09-16):
 
 ```sh
+(   # the whole block runs in a subshell: a STOP (exit 1) ends the subshell, not your terminal
+set -e   # any failing line stops the block
 TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
 mkdir -p obj/harness obj/battery-verdict bin                     # gnatmake -D needs its object dir to exist
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
@@ -500,6 +502,7 @@ PATH="$TC" gprbuild -P battery/vacuity_battery.gpr -p              # -> bin/vacu
 for n in $(cat battery/LINKS); do ln -sfn vacuity-battery bin/$n; done   # the battery's 38 kit names, links beside it
 PATH="$TC" gnatmake -gnat2022 -gnatU -D obj/battery-verdict \
     battery/verdict/vacuity_verdict_main.adb -o bin/vacuity_verdict_main   # -> bin/vacuity_verdict_main (the grade edge)
+)
 ```
 
 **Check the build stamp.** `bin/stamp_build_main` prints one line:
@@ -562,10 +565,14 @@ three programs in turn: `bin/expand_front` (checks the request and writes the pr
 (asks the model) and `bin/expand_back` (the judge). Build all four the same way as the services above:
 
 ```sh
+(   # a subshell, as in step 3: exit 1 ends it, not your terminal
+set -e   # any failing line stops the block
+TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
 for p in expand_front model_caller_main expand_back expand_brief_main; do
   PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
       harness/$p.adb -o bin/$p || exit 1
 done
+)
 ```
 
 Run it from the tree's top directory, with the model on the first line of `config/rail.conf` pulled and
