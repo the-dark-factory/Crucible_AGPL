@@ -149,9 +149,9 @@ will require signing the CLA (sending them will not).
 Crucible does not ship a model and does not need ours. The `model` line of `config/rail.conf` takes any endpoint
 you run. The shipped default is `qwen3.8:27b` (needs ollama 0.32.12 or newer): install ollama (<https://ollama.com/download>), check its
 version with `ollama --version` (or `curl -s http://127.0.0.1:11434/api/version`), then
-`ollama pull qwen3.8:27b`; or point the `model` line at `qwen3-coder:30b` or any other model you run on localhost
-(`INSTALL.md` lists what we measured for each); the rail speaks plain HTTP to a local
-endpoint by design, so nothing leaves the box but what you send. The house figures above were measured with a
+`ollama pull qwen3.8:27b`; or point the `model` line at `qwen3-coder:30b` or any other model you run
+(`INSTALL.md` lists what we measured for each). The rail speaks plain HTTP. As shipped it talks only to
+this machine; a server elsewhere needs `"sovereign":"false"` on that line ("Get it", step 4). The house figures above were measured with a
 qwen3.8-27b model tuned for the dialect.
 
 ---
@@ -222,7 +222,11 @@ bash and zsh alike.
    runs on another machine, the simplest way is to forward its port here, for example
    `ssh -N -L 11434:127.0.0.1:11434 you@model-host`, and change nothing. Otherwise put that machine's IPv4
    address in `host` and set `"sovereign":"false"` on that line: the door then talks to it in plain,
-   unencrypted HTTP.
+   unencrypted HTTP. If you change `host` but leave `"sovereign":"true"`, the door sends nothing:
+   `rail.show` says `refused_sovereign_off_estate` and `forge` says `model_not_sent`. `CONNECTING.md`
+   ("If the model is on another machine") explains both. In a source tree, the expansion runner reads
+   only the first line of `config/rail.conf`. For a remote server, put the same address in that line's
+   `host` and set `"sovereign":false` there too (no quotes, as the shipped `true` has none).
 
 5. Self-check. Read the lines, not the exit code (`INSTALL.md`, "Start it", shows what they say).
 

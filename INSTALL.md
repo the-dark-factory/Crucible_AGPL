@@ -78,11 +78,12 @@ this install is enrolled (see "What connecting to the tower does").
 | `config/reef-relay.conf` | the relay's port, the tower URL (`https://thereef.ink/rail`), and its staging dir | us — a working default is in the tarball |
 | `config/reef-allowed-signers` | the Reef's key. Enrolment checks the Reef's signed record against it, and the signed fetch names the network by it | us — in the tarball |
 | gnatprove | behind the prover service, so it can prove locally | you — see "Install gnatprove". The launcher finds it. Without it the prover rail is off, and no `forge` can end in a proved unit |
-| model endpoint | the model rail (ollama, or any OpenAI-shaped server) on `127.0.0.1` | you — any model; we ship none |
+| model endpoint | the model rail (ollama, or any OpenAI-shaped server), on `127.0.0.1` as shipped or on another machine (see "Start it") | you — any model; we ship none |
 | `ssh-keygen` at `/usr/bin/ssh-keygen` | makes this install's key, signs each catalog fetch, and checks signatures | you — a fresh Ubuntu does not have it: `apt-get update`, then `apt-get install -y openssh-client` |
 
 Nothing listens off-host: every service binds `127.0.0.1`. The reef relay is the one component
-that leaves the box, and only to `https://thereef.ink/rail`. It sends no unit of yours. What it does
+that leaves the box, and only to `https://thereef.ink/rail`, unless you point the model line at another
+machine (see "Start it"). It sends no unit of yours. What it does
 send is listed under "What connecting to the tower does".
 
 ### Install gnatprove
@@ -123,13 +124,36 @@ then `~/.alire/bin/gnatprove`. It names the one it chose on standard error.
 ## Start it
 
 The model is named in `config/rail.conf`, on the line that says `"rail":"model"`. The shipped default
-is `qwen3.8:27b` on ollama at `127.0.0.1:11434`. Pull it:
+is `qwen3.8:27b` on ollama at `127.0.0.1:11434`. It needs ollama 0.32.12 or newer (the model's own
+requirement; <https://ollama.com/download>). We tested ollama 0.33.2, the ROCm build
+(`ollama/ollama:0.33.2-rocm`), on an AMD Radeon R9700. There are three ways to provide it.
+
+**ollama on this machine.** Check its version and pull the model:
 
 ```sh
+ollama --version
 ollama pull qwen3.8:27b
 ```
 
-The choice is yours. Name any model you have pulled on that line. What we know about the options:
+**No `ollama` command here** (the server runs outside your container, or on this machine without its
+CLI). Ask the server itself. The first line prints its version; the second lists its models, and
+`qwen3.8:27b` must be among them (pull it on the machine that runs the server):
+
+```sh
+curl -s http://127.0.0.1:11434/api/version
+curl -s http://127.0.0.1:11434/api/tags
+```
+
+**A model server on another machine.** The model line says `"sovereign":"true"`, which allows only this
+machine (loopback). The simplest way is to forward the server's port here, for example
+`ssh -N -L 11434:127.0.0.1:11434 you@model-host`, and change nothing. Otherwise put that machine's IPv4
+address in `host` and set `"sovereign":"false"` on that line. The door then talks to it in plain,
+unencrypted HTTP, and what it sends the model (built from your sheet) leaves the box. If you change
+`host` but leave `"sovereign":"true"`, the door sends nothing: `rail.show` says
+`refused_sovereign_off_estate` and `forge` says `model_not_sent` (see "If it stops"). For the
+expansion runner in a source tree, change the first line too (see "The expansion runner").
+
+The choice of model is yours. Name any model you have pulled on that line. What we know about the options:
 
 | model | what we measured |
 |---|---|
@@ -146,13 +170,6 @@ runner" under "Build from source"); the door does not read it.
 
 If the model is not there, the forge stops early and says so: `unmeasured` at `decompose`, with
 ollama's own message (`model '…' not found`).
-
-**ollama.** `qwen3.8:27b` needs ollama 0.32.12 or newer (the model's own requirement). Install it from
-<https://ollama.com/download>, and check the version with `ollama --version` (or, with the server running,
-`curl -s http://127.0.0.1:11434/api/version`). We tested
-ollama 0.33.2, the ROCm build (`ollama/ollama:0.33.2-rocm`), on an AMD Radeon R9700.
-Without the `ollama` command on this machine, `curl -s http://127.0.0.1:11434/api/tags` lists the models the
-server has. For a model server on another machine, `README.md` ("Get it", step 4) says how to reach it.
 
 The door asks ollama for a 32,768-token context by default (the model line's `"num_ctx":"32768"`;
 change it to any value from 2048 to 262144, or leave it out for 32768), so you do not need to set
@@ -312,6 +329,15 @@ should happen about once in 37 tries.)
 - `"final":"unmeasured"`: a rail or the model did not answer, so nothing was judged. For example
   `unmeasured` at `decompose` with `model '…' not found`: the model named on the `"rail":"model"` line
   is not pulled.
+- `"final":"unmeasured"` with `"reason":"model: model_not_sent"`, and `rail.show` lists the model with
+  `"route":"refused_sovereign_off_estate"`: the model line names another machine but still says
+  `"sovereign":"true"`. The door refused to send anything, so nothing left the box. Set
+  `"sovereign":"false"` on that line, or forward the port with `ssh -L` and put `"host":"127.0.0.1"`
+  back (see "Start it").
+- `model: model_unreachable`, with `"route":"off_estate"` (another machine) or `"on_estate"` (this
+  one): nothing answered at that host and port. Check that the server is running and the port is
+  right. A server on another machine must also listen on an address this machine can reach, not only
+  on its own loopback.
 - `"stopped_at":"tower"`: the door was started from the wrong directory. Use the launcher.
 
 **A model refusal** is `"final":"refused"` at a stage, with a reason. Try again.
@@ -656,13 +682,18 @@ The brief is used exactly as it appears inside the JSON string (escapes such as 
 | `model reply fault 2` | model | the model server stopped sending for 600 s before its answer was complete |
 | `model reply fault 3` | model | the model's reply was over 1,048,576 bytes |
 | `model reply fault prompt_over_bound`, `model reply fault prompt_not_utf8` | model | the prompt was over 262,144 bytes, or not UTF-8 |
-| `design text refused null` | judge | the model server answered, but with no text. Most often the model named on the FIRST line of `config/rail.conf` is not on that server (ollama answers with an error, not a reply): check `ollama list`, then `ollama pull` it or change that line |
+| `design text refused null` | judge | the model server answered, but with no text. Most often the model named on the FIRST line of `config/rail.conf` is not on that server (ollama answers with an error, not a reply): check `ollama list` (or `curl -s http://<host>:<port>/api/tags`), then `ollama pull` it on the machine that runs the server, or change that line |
 | `design text refused <word>` | judge | the model's text could not be read as a design (for example `too_many_lines`, `line_too_long`) |
 | `design refused by the judge …` | judge | the design was read, and the judge refused it; the names after it say which rules failed. A model refusal, not a broken install: try again |
 
 Notes:
 - It reads only the FIRST line of `config/rail.conf` (the `"rail":"ollama"` line) for the model, host and
   port. If you change the model on the `"rail":"model"` line, change it on the first line too.
+- For a model server on another machine (without an `ssh -L` forward), the first line needs that
+  machine's IPv4 address in `host` and `"sovereign":false`. On this line `true` and `false` have no
+  quotes; any other value counts as `false`. Left at `true`, the runner answers
+  `sovereign rail refuses off-estate endpoint`. For example:
+  `{"model":"qwen3.8:27b","host":"192.168.0.201","port":"11434","rail":"ollama","sovereign":false}`.
 - The prompt is the door's own design instruction, one sentence asking for one activity per decision the
   brief names, then your brief.
 - Sizes. The model caller reads the prompt up to 262,144 bytes and refuses a longer one by name

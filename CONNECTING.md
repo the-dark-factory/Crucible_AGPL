@@ -6,23 +6,37 @@ the door needs, including the reef relay that reaches the tower, with one comman
 
 ## Prerequisites
 
-Crucible needs its rails on `127.0.0.1`; nothing listens off-host. The reef relay's outbound TLS to
-the tower is the only connection that leaves the box. From a release tarball you already have the
-binaries:
+Crucible's own rails listen on `127.0.0.1` only; nothing listens off-host. The reef relay's outbound
+TLS to the tower leaves the box. So does the model call, but only if you point the model line at
+another machine (below). From a release tarball you already have the binaries:
 
 - Unpack `crucible-v0.4.1-<platform>.tar.gz` and `cd crucible-v0.4.1`. (Linux x86_64 ships first;
   the macOS arm64 tarball follows once it is signed and notarised.)
-- Provide a model on `127.0.0.1`, named in `config/rail.conf`. The shipped default is
-  `qwen3.8:27b` on ollama:
+- A model, named on the `"rail":"model"` line of `config/rail.conf`. The shipped default is
+  `qwen3.8:27b` on ollama at `127.0.0.1:11434`. It needs ollama 0.32.12 or newer
+  (<https://ollama.com/download>). We tested ollama 0.33.2 (the ROCm build) on an AMD Radeon R9700.
+  With ollama on this machine, check its version and pull the model:
   ```sh
+  ollama --version
   ollama pull qwen3.8:27b
   ```
-  It needs ollama 0.32.12 or newer (<https://ollama.com/download>; check with `ollama --version`). We tested ollama 0.33.2 (the ROCm build) on an AMD Radeon R9700.
-  You may name `qwen3-coder:30b` or any other model instead; `INSTALL.md` ("Start it") lists what we
-  measured for each.
+  Without the `ollama` command here (the server runs elsewhere, or outside your container), ask the
+  server itself. The first line prints its version; the second lists its models, and `qwen3.8:27b`
+  must be among them (pull it on the machine that runs the server):
+  ```sh
+  curl -s http://127.0.0.1:11434/api/version
+  curl -s http://127.0.0.1:11434/api/tags
+  ```
+  The model line says `"sovereign":"true"`, which allows only this machine (loopback). If the server
+  runs on another machine, the simplest way is to forward its port here, for example
+  `ssh -N -L 11434:127.0.0.1:11434 you@model-host`, and change nothing. Otherwise put that machine's
+  IPv4 address in `host` and set `"sovereign":"false"` on that line. The door then talks to it in
+  plain, unencrypted HTTP, and what the door sends the model (built from your sheet) leaves the box.
+  "If the model is on another machine", below, says what the door answers when this is not right.
 
-  Crucible ships no model and needs none of ours. Any ollama- or OpenAI-shaped endpoint on
-  localhost works. To use another model, edit the line that says `"rail":"model"` (not the first
+  You may name `qwen3-coder:30b` or any other model instead; `INSTALL.md` ("Start it") lists what we
+  measured for each. Crucible ships no model and needs none of ours. Any ollama- or OpenAI-shaped
+  endpoint works. To use another model, edit the line that says `"rail":"model"` (not the first
   line, `"rail":"ollama"`, which the door does not read).
   The door asks ollama for a 32,768-token context by default (`"num_ctx":"32768"` on the model line;
   any value from 2048 to 262144), so you do not need to set `OLLAMA_CONTEXT_LENGTH`.
@@ -89,7 +103,9 @@ newer catalogue, the door asks for that one file with a request signed by this i
 **The tower serves the catalogue only to an enrolled install.** Until you enrol, the door sends no
 fetch, and the forge runs on the catalogue shipped in `tower/base.bundle`.
 
-**No unit of yours leaves the box**: not your specification, not the generated code, not the proof.
+**No unit of yours goes to the tower**: not your specification, not the generated code, not the
+proof. (A model on another machine is sent what the door asks it, which is built from your sheet. That
+is your choice; see "Prerequisites".)
 What does leave:
 - to ask what is current: nothing of yours.
 - to enrol (`palais.enrol`): your public key's fingerprint, a factory id, a one-time number, and the
@@ -97,7 +113,8 @@ What does leave:
 - to fetch: the catalogue's name, the minute, the network id, your key's fingerprint and public key,
   and a signature. The private key stays in `~/.crucible/key/`.
 
-The relay is the only component that opens an outbound connection, and only to the tower.
+The relay is the only component that opens an outbound connection, and only to the tower. The one
+exception is a model line with `"sovereign":"false"` and another machine's address.
 
 To forge fully offline, delete the `reef` line from `config/rail.conf` (or simply run the door
 without the relay). Everything else works unchanged; the door forges on what you already have.
@@ -152,6 +169,28 @@ has no valid `prover` line.
 
 For a first whole forge, and for driving the door without an MCP host, see "First forge" in
 `INSTALL.md`.
+
+## If the model is on another machine
+
+The `rail.show` tool lists the model line with a `"route"` word. The `forge` reply names the model's
+answer in its `"reason"`. Two pairs of words matter here:
+
+- `rail.show` says `"route":"refused_sovereign_off_estate"`, and `forge` answers `"final":"unmeasured"`
+  with `"reason":"model: model_not_sent"`. The model line names another machine but still says
+  `"sovereign":"true"`. The door refused to send the request, so nothing left the box and nothing was
+  judged. To fix it, set `"sovereign":"false"` on that line. Or forward the port with `ssh -L` and put
+  `"host":"127.0.0.1"` back.
+- `rail.show` says `"route":"off_estate"`, and `forge` answers `model: model_unreachable`. The door
+  tried that host and port, and nothing answered. Check the address and port. The server must also
+  listen on an address this machine can reach, not only on its own loopback.
+
+`"route":"on_estate"` means the host is this machine (`127.0.0.1`).
+
+The expansion runner in the source tree reads only the first line of `config/rail.conf`, the
+`"rail":"ollama"` line. For a model on another machine, change that line too: the same IPv4 address in
+`host`, and `"sovereign":false`. On that line `true` and `false` have no quotes. If you leave it
+`true`, the runner answers `sovereign rail refuses off-estate endpoint`. With an `ssh -L` forward, leave
+the line as it is. `INSTALL.md` ("The expansion runner") has the rest.
 
 ## Confirm it reached the tower
 
