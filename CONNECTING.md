@@ -36,8 +36,9 @@ another machine (below). From a release tarball you already have the binaries:
 
   You may name `qwen3-coder:30b` or any other model instead; `INSTALL.md` ("Start it") lists what we
   measured for each. Crucible ships no model and needs none of ours. Any ollama- or OpenAI-shaped
-  endpoint works. To use another model, edit the line that says `"rail":"model"` (not the first
-  line, `"rail":"ollama"`, which the door does not read).
+  endpoint works. To use another model, edit the line that says `"rail":"model"`; it is the only line
+  the door reads. The first line, `"rail":"ollama"`, is read only by the expansion runner in a source
+  tree: if you run it, change that line too (see "If the model is on another machine", below).
   The door asks ollama for a 32,768-token context by default (`"num_ctx":"32768"` on the model line;
   any value from 2048 to 262144), so you do not need to set `OLLAMA_CONTEXT_LENGTH`.
 - gnatprove, for the prover rail. See "Install gnatprove" in `INSTALL.md`.

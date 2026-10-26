@@ -164,9 +164,12 @@ The choice of model is yours. Name any model you have pulled on that line. What 
 
 These are small samples.
 
-Edit only the `"rail":"model"` line. The file has another line that names the same model: the first
-line, `"rail":"ollama"`, is read only by the expansion runner in the source tree (see "The expansion
-runner" under "Build from source"); the door does not read it.
+Which line to edit: the door reads only the `"rail":"model"` line, so with a tarball edit only that
+line. The file has another line that names the same model: the first line, `"rail":"ollama"`, is read
+only by the expansion runner in the source tree (see "The expansion runner" under "Build from source");
+the door does not read it, and a tarball has no expansion runner. In a source tree where you run the
+expansion runner, edit both lines: the same model on each, and for a model on another machine without
+an `ssh -L` forward, the same `host` and `"sovereign":false` on the first line.
 
 If the model is not there, the forge stops early and says so: `unmeasured` at `decompose`, with
 ollama's own message (`model '…' not found`).
