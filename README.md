@@ -157,28 +157,47 @@ qwen3.8-27b model tuned for the dialect.
 
 ## Get it
 
-This release is 0.4.0, not 0.3.1, because refusals and unproved results now come back as MCP errors; host programs
-see a change in behaviour. See `CHANGELOG.md`.
+This release is 0.4.1. It is 0.4.0 with the expansion runner in the source tree fixed (its reply now reaches the
+design judge, and it asks the model as the door does). The door reports version `0.4.1`; host programs see no
+other change. (0.4.0 was 0.4.0, not 0.3.1, because from then on refusals and unproved results come back as MCP
+errors.) See `CHANGELOG.md`.
 
 This tagged release ships factory-built, signed tarballs plus one checksum file,
-`RELEASE_TARBALLS.sha256`. **Linux first:** `crucible-v0.4.0-linux-x86_64.tar.gz` ships now.
-`crucible-v0.4.0-macos-arm64.tar.gz` follows once its binaries are Developer-ID signed and notarized
+`RELEASE_TARBALLS.sha256`. **Linux first:** `crucible-v0.4.1-linux-x86_64.tar.gz` ships now.
+`crucible-v0.4.1-macos-arm64.tar.gz` follows once its binaries are Developer-ID signed and notarized
 (a bare CLI tool, so it cannot be stapled; clear the quarantine attribute if a browser download is
-blocked). Each tarball unpacks to `crucible-v0.4.0/`: a working directory with a `crucible-launch.sh`,
+blocked). Each tarball unpacks to `crucible-v0.4.1/`: a working directory with a `crucible-launch.sh`,
 `bin/`, `config/`, `tower/` and an empty `state/`. It forges on the catalog it ships with. To fetch
 newer catalogs from the tower, enrol it (`palais.enrol`; see `INSTALL.md`). Until then the tower
-fetch row reads `fetch_failed`, which is expected. You also need gnatprove, a local model and `ssh-keygen`
-(see `INSTALL.md`). Check the download, unpack, then verify the signed set inside:
+fetch row reads `fetch_failed`, which is expected. You also need `ssh-keygen`, gnatprove and a local model
+(`INSTALL.md` has each step). On Linux x86_64, in short:
 
 ```sh
+# 1. as root (or with sudo), on a fresh Ubuntu: ssh-keygen, and the tools the gnatprove install uses
+apt-get update
+apt-get install -y openssh-client curl ca-certificates unzip git
+
+# 2. check the download, unpack, then verify the signed set inside
 sha256sum -c --ignore-missing RELEASE_TARBALLS.sha256
-tar xzf crucible-v0.4.0-<platform>.tar.gz && cd crucible-v0.4.0
+tar xzf crucible-v0.4.1-linux-x86_64.tar.gz && cd crucible-v0.4.1
 sha256sum -c SHA256SUMS
-# ssh-keygen: on a fresh Ubuntu, first (as root) apt-get update && apt-get install openssh-client
 ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
+
+# 3. gnatprove, for the prover rail (in its own directory, not inside crucible-v0.4.1/)
+mkdir -p ~/alr && cd ~/alr
+curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
+unzip -o alr.zip && bin/alr -n install gnatprove=15.1.0
+cd -
+
+# 4. the model named in config/rail.conf (needs ollama 0.32.12 or newer)
+ollama pull qwen3.8:27b
+
+# 5. self-check: read the lines, not the exit code
+./crucible-launch.sh --check
 ```
 
-Then point your MCP host at `crucible-launch.sh` (see `CONNECTING.md`). There are no other binaries.
+Then point your MCP host at `crucible-launch.sh` (see `CONNECTING.md`) and forge the `Negate` sheet in
+`INSTALL.md` ("First forge"). There are no other binaries.
 Anyone who wants to build their own network reads `INSTALL.md` and builds from source.
 
 ## Build it

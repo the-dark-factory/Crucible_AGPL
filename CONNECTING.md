@@ -10,7 +10,7 @@ Crucible needs its rails on `127.0.0.1`; nothing listens off-host. The reef rela
 the tower is the only connection that leaves the box. From a release tarball you already have the
 binaries:
 
-- Unpack `crucible-v0.4.0-<platform>.tar.gz` and `cd crucible-v0.4.0`. (Linux x86_64 ships first;
+- Unpack `crucible-v0.4.1-<platform>.tar.gz` and `cd crucible-v0.4.1`. (Linux x86_64 ships first;
   the macOS arm64 tarball follows once it is signed and notarised.)
 - Provide a model on `127.0.0.1`, named in `config/rail.conf`. The shipped default is
   `qwen3.8:27b` on ollama:
@@ -29,7 +29,7 @@ binaries:
 - gnatprove, for the prover rail. See "Install gnatprove" in `INSTALL.md`.
 - `ssh-keygen` at `/usr/bin/ssh-keygen`. Enrolment makes your key with it and every catalog fetch is
   signed with it. A fresh Ubuntu does not have it: `apt-get update`, then
-  `apt-get install openssh-client`.
+  `apt-get install -y openssh-client`.
 - `nc` (netcat) is optional; the launcher uses it to notice a rail that is already up.
 
 The launcher starts the prover rail, the vacuity rail, and the reef relay for you, and stops them
@@ -40,7 +40,7 @@ when the door exits. You do not start them by hand.
 One command. Point it at the launcher in your unpacked directory:
 
 ```sh
-claude mcp add crucible -- /absolute/path/to/crucible-v0.4.0/crucible-launch.sh
+claude mcp add crucible -- /absolute/path/to/crucible-v0.4.1/crucible-launch.sh
 ```
 
 ## Claude Desktop
@@ -51,7 +51,7 @@ Add this to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "crucible": {
-      "command": "/absolute/path/to/crucible-v0.4.0/crucible-launch.sh"
+      "command": "/absolute/path/to/crucible-v0.4.1/crucible-launch.sh"
     }
   }
 }
@@ -71,7 +71,7 @@ shipped battery path. The launcher writes nothing outside the install directory.
 If you would rather wire it by hand, the equivalent is:
 
 ```sh
-cd /absolute/path/to/crucible-v0.4.0
+cd /absolute/path/to/crucible-v0.4.1
 bin/prover_service_main & bin/vacuity_service_main & bin/reef_relay_main &
 exec bin/crucible-agpl
 ```
@@ -126,7 +126,7 @@ Call the `palais.enrol` tool through your MCP host, for example by asking Claude
 Run the launcher's self-check. It starts the rails, reports which are up, and stops them:
 
 ```sh
-/absolute/path/to/crucible-v0.4.0/crucible-launch.sh --check
+/absolute/path/to/crucible-v0.4.1/crucible-launch.sh --check
 #   prover  8471 up
 #   vacuity 8472 up
 #   reef    8473 up
@@ -148,7 +148,7 @@ For a first whole forge, and for driving the door without an MCP host, see "Firs
 
 Every `forge` begins by asking the tower what catalogue is current (at most once an hour), and the
 door records the outcome of that one exchange (one row per attempt) in `state/tower-fetch.jsonl`
-(relative to your `crucible-v0.4.0/` directory). Run any `forge`, then read the newest row:
+(relative to your `crucible-v0.4.1/` directory). Run any `forge`, then read the newest row:
 
 ```sh
 tail -n1 state/tower-fetch.jsonl

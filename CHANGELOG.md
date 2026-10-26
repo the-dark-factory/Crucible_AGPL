@@ -3,6 +3,53 @@
 All notable changes to Crucible are recorded here. The format follows Keep a Changelog. Version numbers follow
 semantic versioning; before 1.0 the middle number changes when behaviour that host programs rely on changes.
 
+## [0.4.1] - 2026-10-26
+
+0.4.1 is 0.4.0 plus two fixes to the expansion runner (`harness/expand_brief_main.adb` and the three programs
+it runs). The runner is in the source tree only: it is not in the tarball, and the door does not use it. Host programs see
+no change except the version the door reports.
+
+### Fixed
+
+- The expansion runner's model reply now reaches the design judge. Before, every `bin/expand_brief_main` run
+  ended `design text refused null`, whatever the model answered: the model caller passed on ollama's raw reply,
+  and the judge reads a top-level `content`. The caller (`harness/model_caller_main.adb`) now passes
+  `{"content":…}`, taken from the reply's `message.content` the way the door's model rail reads it. Its request
+  is now the door's (thinking off, `num_ctx` 32768, `num_predict` 8192).
+- The model caller reads the prompt up to 262,144 bytes and refuses a longer one by name
+  (`prompt_over_bound`), and a prompt that is not UTF-8 (`prompt_not_utf8`). Before, it cut the prompt at
+  4,096 bytes without saying so.
+
+### Changed
+
+- The runner asks the model as the door does. `harness/expand_front.adb` now puts the door's own design
+  instruction before the brief, plus one sentence: give every decision the brief names its own activity, never
+  merge two decisions into one activity, and never leave a named decision without an activity whose discharge
+  states it. Measured on one whole-system brief with `qwen3.8:27b`: with the old instruction the judge accepted
+  0 designs of 3; with this one, 3 of 3 (14 to 25 s each, with 11, 13 and 3 activities).
+- The server reports version `0.4.1`.
+
+### Docs
+
+- `INSTALL.md`: how to build and run the expansion runner ("Build from source", step 6), and its limits.
+- `README.md`: the install flow now includes gnatprove, the model and the self-check, not only the download
+  and signature check.
+- `apt-get install` lines carry `-y`, so they run unattended (in a container, a script).
+- Tarball names and paths say `0.4.1`.
+
+### Known limitations
+
+- The model caller's bound (262,144 bytes) is larger than what ollama's window holds: the caller asks for a
+  32,768-token context with 8,192 tokens for the reply, which holds about 67,800 bytes of brief, and it does not
+  refuse a prompt too long for that window. The runner's request line is read up to 65,536 bytes, which binds
+  first.
+- The runner reads only the first line of `config/rail.conf` (the `"rail":"ollama"` line). As shipped, that line
+  names `qwen3.8:27b`; pull it, or change the model on both lines.
+- Depth still varies from run to run (3 to 13 activities above). The judge checks the design's structure, not
+  that it is faithful to the brief.
+- The 0.4.0 limitations below still apply. The `Negate` figures in `INSTALL.md` were measured on 0.4.0 and not
+  re-measured.
+
 ## [0.4.0] - 2026-10-19
 
 ### Why 0.4.0

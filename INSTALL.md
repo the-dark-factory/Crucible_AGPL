@@ -2,7 +2,7 @@
 
 ## The short path (a published release)
 
-v0.4.0 ships prebuilt, signed tarballs. You do not need a toolchain to run the door. You need one only
+v0.4.1 ships prebuilt, signed tarballs. You do not need a toolchain to run the door. You need one only
 to build it yourself (see "Build from source" below). You do need gnatprove for the prover rail (see
 "Install gnatprove" below).
 
@@ -11,15 +11,15 @@ is Developer-ID signed and notarised. The macOS lines below apply once that tarb
 page.
 
 1. Download the tarball for your platform and the checksum file from the release page:
-   - `crucible-v0.4.0-linux-x86_64.tar.gz` (Linux, x86_64)
-   - `crucible-v0.4.0-macos-arm64.tar.gz` (macOS, Apple silicon; once it is on the release page)
+   - `crucible-v0.4.1-linux-x86_64.tar.gz` (Linux, x86_64)
+   - `crucible-v0.4.1-macos-arm64.tar.gz` (macOS, Apple silicon; once it is on the release page)
    - `RELEASE_TARBALLS.sha256`
 
 2. Check what you downloaded, then unpack:
    ```sh
    sha256sum -c --ignore-missing RELEASE_TARBALLS.sha256
-   tar xzf crucible-v0.4.0-<platform>.tar.gz
-   cd crucible-v0.4.0
+   tar xzf crucible-v0.4.1-<platform>.tar.gz
+   cd crucible-v0.4.1
    ```
 
 3. Verify the signed file set INSIDE the tarball (this is the df-release signature). This needs
@@ -27,7 +27,7 @@ page.
    root (or with `sudo`). Enrolment and the signed catalog fetch need it too.
    ```sh
    apt-get update
-   apt-get install openssh-client
+   apt-get install -y openssh-client
    ```
    Then:
    ```sh
@@ -37,10 +37,10 @@ page.
    ```
    A good run prints `Good "df-release" signature for tower@thedarkfactory.co.uk`.
 
-The tarball unpacks to `crucible-v0.4.0/` with this layout. Everything is relative to that
+The tarball unpacks to `crucible-v0.4.1/` with this layout. Everything is relative to that
 directory:
 ```
-crucible-v0.4.0/
+crucible-v0.4.1/
   crucible-launch.sh   the one-command launcher (starts the rails, serves the door, cleans up)
   bin/     crucible-agpl, prover_service_main, vacuity_service_main, reef_relay_main,
            vacuity-battery (+ its 38 kit-name links), vacuity_verdict_main, allowed_signers
@@ -59,7 +59,7 @@ this install is enrolled (see "What connecting to the tower does").
 > (built and probe-checked, not proved); its judgements are proven cores. Do not call the battery proved.
 
 > The door finds `config/rail.conf` and `tower/base.bundle` **relative to the directory it is
-> started in**. Start it from the `crucible-v0.4.0/` directory (not from inside `bin/`). The
+> started in**. Start it from the `crucible-v0.4.1/` directory (not from inside `bin/`). The
 > launcher does this for you.
 
 ### What each piece is
@@ -79,7 +79,7 @@ this install is enrolled (see "What connecting to the tower does").
 | `config/reef-allowed-signers` | the Reef's key. Enrolment checks the Reef's signed record against it, and the signed fetch names the network by it | us — in the tarball |
 | gnatprove | behind the prover service, so it can prove locally | you — see "Install gnatprove". The launcher finds it. Without it the prover rail is off, and no `forge` can end in a proved unit |
 | model endpoint | the model rail (ollama, or any OpenAI-shaped server) on `127.0.0.1` | you — any model; we ship none |
-| `ssh-keygen` at `/usr/bin/ssh-keygen` | makes this install's key, signs each catalog fetch, and checks signatures | you — a fresh Ubuntu does not have it: `apt-get update`, then `apt-get install openssh-client` |
+| `ssh-keygen` at `/usr/bin/ssh-keygen` | makes this install's key, signs each catalog fetch, and checks signatures | you — a fresh Ubuntu does not have it: `apt-get update`, then `apt-get install -y openssh-client` |
 
 Nothing listens off-host: every service binds `127.0.0.1`. The reef relay is the one component
 that leaves the box, and only to `https://thereef.ink/rail`. It sends no unit of yours. What it does
@@ -94,7 +94,7 @@ You need gnatprove only, not a GNAT compiler. The route we tested installs it wi
 ```sh
 # as root (or with sudo)
 apt-get update
-apt-get install curl ca-certificates unzip git
+apt-get install -y curl ca-certificates unzip git
 # as yourself, in an empty directory
 curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
 unzip alr.zip                         # puts the program at bin/alr
@@ -129,13 +129,14 @@ The choice is yours. Name any model you have pulled on that line. What we know a
 |---|---|
 | `qwen3.8:27b` (default) | the `Negate` sheet in "First forge": 7 runs of 10 reached `done`, about 15 s each. The harder `Saturating_Add` sheet: 1 of 16. (ollama 0.33.2 ROCm, AMD R9700) |
 | `qwen3-coder:30b` (the default before 0.4.0) | `Saturating_Add`: 0 runs of 3 reached `done` (ollama 0.32.9, macOS). On our v0.3 parity sheets: 0 of 13. Not measured on `Negate` |
-| `qwen3.6:27b` | not measured in 0.4.0 |
+| `qwen3.6:27b` | not measured |
 | any other model you run | not measured by us |
 
 These are small samples.
 
 Edit only the `"rail":"model"` line. The file has another line that names the same model: the first
-line, `"rail":"ollama"`, is kept for an older runner and the door does not read it.
+line, `"rail":"ollama"`, is read only by the expansion runner in the source tree (see "The expansion
+runner" under "Build from source"); the door does not read it.
 
 If the model is not there, the forge stops early and says so: `unmeasured` at `decompose`, with
 ollama's own message (`model '…' not found`).
@@ -150,14 +151,14 @@ vacuity rail, and the reef relay (which reaches the tower), serves the door on s
 rails when the door exits:
 
 ```sh
-claude mcp add crucible -- /absolute/path/to/crucible-v0.4.0/crucible-launch.sh
+claude mcp add crucible -- /absolute/path/to/crucible-v0.4.1/crucible-launch.sh
 ```
 
 That is the whole start. You do not start the rails by hand and you do not need a `cd` wrapper.
 The launcher cds into the install directory for you. A quick self-check:
 
 ```sh
-/absolute/path/to/crucible-v0.4.0/crucible-launch.sh --check
+/absolute/path/to/crucible-v0.4.1/crucible-launch.sh --check
 #   prover  8471 up
 #   vacuity 8472 up
 #   reef    8473 up
@@ -268,7 +269,8 @@ Run each as `./crucible-launch.sh < prove-ok.jsonl`.
   flagged `"isError":true`. This is a real outcome, not a broken install: the model wrote a contract
   that the vacuity check would not accept, so nothing was emitted. A second try usually does it.
 
-What we measured: 10 runs of this sheet, each in a fresh unpack of the signed Linux tarball, with the
+What we measured: 10 runs of this sheet, each in a fresh unpack of the signed 0.4.0 Linux tarball (not
+re-measured for 0.4.1), with the
 shipped `config/rail.conf` (`qwen3.8:27b`, ollama 0.33.2 ROCm, AMD R9700). **7 of 10 reached `done`,
 about 15 s each.** The other 3 were refused at `vacuity` (a hollow contract). It is a very small unit:
 it shows the install works end to end (model, prover, vacuity, emit). It says little about harder
@@ -310,7 +312,7 @@ your own builds: there, every row of `state/vacuity.jsonl` would show `functions
 
 ## What connecting to the tower does
 
-**The catalog needs an enrolment.** In 0.4.0 every catalog fetch is signed with this install's own
+**The catalog needs an enrolment.** Since 0.4.0, every catalog fetch is signed with this install's own
 key, and the tower serves the catalog only to an approved enrolment. Until this install is enrolled,
 the door fetches nothing. The forge still runs, on the catalog shipped in `tower/base.bundle`.
 
@@ -369,12 +371,12 @@ Other refusals name their cause: `no_reef_rail` (no `reef` line in `config/rail.
 
 The key lives in `~/.crucible/key/`. The enrolment record lives in this install's
 `state/reef-key.json`. Keep both if you move or upgrade the install.
-Renewal after `expires_at` is not available in 0.4.0.
+Renewal after `expires_at` is not available in 0.4.1.
 
 ### Confirm the connect
 
 The door records the outcome of each exchange (one row per attempt) in `state/tower-fetch.jsonl`,
-relative to your `crucible-v0.4.0/` directory. Run any `forge`, then read the newest row:
+relative to your `crucible-v0.4.1/` directory. Run any `forge`, then read the newest row:
 
 ```sh
 tail -n1 state/tower-fetch.jsonl
@@ -410,7 +412,7 @@ source. It is one tree; both editions build from it.
 - **git**
 - **curl** (Linux): Alire downloads the toolchain with it. If curl is missing, `alr update` tries to install it with
   `sudo apt-get install curl`; that fails where there is no sudo or no apt (a container, a minimal image). Install curl
-  first, e.g. `apt-get update && apt-get install curl ca-certificates` as root. (Measured 2026-09-28 in a Debian 12 build image.)
+  first, e.g. `apt-get update && apt-get install -y curl ca-certificates` as root. (Measured 2026-09-28 in a Debian 12 build image.)
 - Optional: **ollama**, for the model rail.
 
 ### 2. Fetch the pinned toolchain
@@ -435,7 +437,7 @@ Run the version guard first. It fails the build if the source version, `alire.to
 intend disagree (the regression that once shipped a binary reporting the wrong version):
 
 ```sh
-scripts/check-version.sh v0.4.0     # prints OK; STOP on a mismatch
+scripts/check-version.sh v0.4.1     # prints OK; STOP on a mismatch
 ```
 
 Run every build command through the pinned toolchain, so that no other `gprbuild`/`gnat` on your
@@ -509,6 +511,40 @@ claude mcp add crucible -- /absolute/path/to/crucible/crucible-launch.sh
 ### 5. Check it works
 
 Follow "First forge" above. Then, to reach the catalog, follow "Enrol" and "Confirm the connect".
+
+### 6. The expansion runner (optional; source tree only)
+
+`bin/expand_brief_main` turns a brief (a prose description of a whole system) into a MASCOT design and has
+the proven design judge accept or refuse it. It is not in the tarball and the door does not use it. It runs
+three programs in turn: `bin/expand_front` (checks the request and writes the prompt), `bin/model_caller_main`
+(asks the model) and `bin/expand_back` (the judge). Build all four the same way as the services above:
+
+```sh
+for p in expand_front model_caller_main expand_back expand_brief_main; do
+  PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
+      harness/$p.adb -o bin/$p || exit 1
+done
+```
+
+Run it from the tree's top directory. It reads ONE request line on standard input and writes one reply line:
+
+```sh
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"expand_brief","arguments":{"brief":"<your brief>"}}}' \
+  | bin/expand_brief_main
+```
+
+- It reads only the FIRST line of `config/rail.conf` (the `"rail":"ollama"` line) for the model, host and
+  port. If you change the model on the `"rail":"model"` line, change it on the first line too.
+- The prompt is the door's own design instruction, one sentence asking for one activity per decision the
+  brief names, then your brief.
+- Sizes. The model caller reads the prompt up to 262,144 bytes and refuses a longer one by name
+  (`prompt_over_bound`), as it does a prompt that is not UTF-8 (`prompt_not_utf8`); it no longer cuts the
+  prompt at 4,096 bytes. Two smaller limits come first. The runner reads the request line up to 65,536
+  bytes; keep it shorter (a longer line is not supported). And the caller asks ollama for a 32,768-token
+  context with 8,192 tokens for the reply (fixed in the caller; `config/rail.conf` does not change them),
+  which holds about 67,800 bytes of brief; unlike the door, the caller does not refuse a prompt too long
+  for that window.
+- The judge checks the design's structure, not that it is faithful to your brief. Read the design.
 
 ## What does not work yet
 

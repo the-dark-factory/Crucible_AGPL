@@ -1,3 +1,41 @@
+# Crucible v0.4.1
+
+0.4.1 is 0.4.0 with the expansion runner fixed. The runner (`bin/expand_brief_main`, built from the source tree)
+turns a prose brief into a MASCOT design and has the proven design judge accept or refuse it. It is not in the
+tarball, and the door does not use it. The door reports version `0.4.1`; host programs see no other change.
+
+## What changed
+
+- **The runner's reply reaches the judge.** Before, every run ended `design text refused null`, whatever the model
+  said. The model caller now hands the judge the reply's text the way the door's model rail reads it, and sends
+  the door's request (thinking off, `num_ctx` 32768, `num_predict` 8192).
+- **Long prompts are refused by name, not cut.** The caller reads the prompt up to 262,144 bytes. Above that it
+  answers `prompt_over_bound`; a prompt that is not UTF-8 gets `prompt_not_utf8`. Before, it cut the prompt at
+  4,096 bytes without saying so.
+- **The runner asks as the door does.** Its prompt is now the door's own design instruction, one sentence asking
+  for one activity per decision the brief names, then the brief. On one whole-system brief with `qwen3.8:27b`,
+  the judge accepted 0 designs of 3 with the old prompt and 3 of 3 with this one (14 to 25 s each).
+
+`INSTALL.md` ("Build from source", step 6) shows how to build and run it.
+
+## Known limits
+
+- The caller's 262,144-byte bound is larger than ollama's window. The caller asks for a 32,768-token context with
+  8,192 tokens for the reply, which holds about 67,800 bytes of brief, and it does not refuse a prompt too long
+  for that window. The runner reads the request line up to 65,536 bytes, and that binds first.
+- The runner reads only the first line of `config/rail.conf`. As shipped it names `qwen3.8:27b`: pull it, or
+  change the model on both lines.
+- Depth varies from run to run (3 to 13 activities in the three accepted designs). The judge checks structure,
+  not faithfulness to the brief. Read the design.
+
+## Install
+
+As for 0.4.0, below, with `0.4.1` in the tarball and directory names. The `apt-get install` lines now carry `-y`,
+and `README.md` ("Get it") now includes the gnatprove step. The `Negate` figures were measured on 0.4.0 and not
+re-measured.
+
+---
+
 # Crucible v0.4.0
 
 In this release a refused or unmeasured `forge`, and a `prove_unit` that does not prove,
@@ -45,7 +83,7 @@ binaries are Developer-ID signed and notarised. Until then, macOS users can buil
 - `palais.enrol` is no longer refused with `no_reef_key_pinned`. The Reef's key is pinned in this build and shipped
   in `config/reef-allowed-signers`.
 - `tower/sharer.bundle` is no longer in the tarball. The door fetches it once the install is enrolled.
-- You need `ssh-keygen` at `/usr/bin/ssh-keygen` (a fresh Ubuntu does not have it: `apt-get update`, then `apt-get install openssh-client`). The signature check, enrolment and the
+- You need `ssh-keygen` at `/usr/bin/ssh-keygen` (a fresh Ubuntu does not have it: `apt-get update`, then `apt-get install -y openssh-client`). The signature check, enrolment and the
   signed fetch all use it.
 
 ## Install
