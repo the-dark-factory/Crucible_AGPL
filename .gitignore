@@ -8,3 +8,11 @@ out/
 state/
 release/
 src/generated/crucible_build.ads
+config/reef-relay.conf
+# scratch files the INSTALL.md steps write in the tree top
+/check.txt
+/reqs.jsonl
+/out.jsonl
+/err.txt
+/prove-ok.jsonl
+/prove-bad.jsonl

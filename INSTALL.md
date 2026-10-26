@@ -91,15 +91,21 @@ You need gnatprove only, not a GNAT compiler. The route we tested installs it wi
 
 **Linux x86_64** (tested on a clean Ubuntu 24.04; about 3 minutes):
 
+As root (or with `sudo`):
+
 ```sh
-# as root (or with sudo)
 apt-get update
 apt-get install -y curl ca-certificates unzip git
-# as yourself, in an empty directory
+```
+
+Then as yourself, in an empty directory. `unzip` puts the program at `bin/alr`, and the last line prints
+`FSF 15.0`, which is the 15.1.0 release:
+
+```sh
 curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
-unzip alr.zip                         # puts the program at bin/alr
+unzip alr.zip
 bin/alr -n install gnatprove=15.1.0
-~/.alire/bin/gnatprove --version      # prints FSF 15.0: that is the 15.1.0 release
+~/.alire/bin/gnatprove --version
 ```
 
 You do not need to add `~/.alire/bin` to your `PATH`. The launcher finds `~/.alire/bin/gnatprove` by
@@ -145,6 +151,8 @@ ollama's own message (`model '…' not found`).
 <https://ollama.com/download>, and check the version with `ollama --version` (or, with the server running,
 `curl -s http://127.0.0.1:11434/api/version`). We tested
 ollama 0.33.2, the ROCm build (`ollama/ollama:0.33.2-rocm`), on an AMD Radeon R9700.
+Without the `ollama` command on this machine, `curl -s http://127.0.0.1:11434/api/tags` lists the models the
+server has. For a model server on another machine, `README.md` ("Get it", step 4) says how to reach it.
 
 The door asks ollama for a 32,768-token context by default (the model line's `"num_ctx":"32768"`;
 change it to any value from 2048 to 262144, or leave it out for 32768), so you do not need to set
@@ -393,10 +401,15 @@ relative to your `crucible-v0.4.1/` directory. Run any `forge`, then read the ne
 
 ```sh
 tail -n1 state/tower-fetch.jsonl
-#   {"fetch":"fetched", …}           reached the tower, pulled a newer catalog       -> connected
-#   {"fetch":"current", …}           reached the tower, already current              -> connected
-#   {"fetch":"fetch_failed", …}      reached the tower, the catalog was not served   -> not enrolled yet (expected)
-#   {"fetch":"reef_unreachable", …}  relay up but tower not reached                  -> offline; forge ran anyway
+```
+
+What the row says:
+
+```text
+{"fetch":"fetched", …}           reached the tower, pulled a newer catalog       -> connected
+{"fetch":"current", …}           reached the tower, already current              -> connected
+{"fetch":"fetch_failed", …}      reached the tower, the catalog was not served   -> not enrolled yet (expected)
+{"fetch":"reef_unreachable", …}  relay up but tower not reached                  -> offline; forge ran anyway
 ```
 
 **On a fresh install, before enrolment, `fetch_failed` is the expected row.** The tower answered
@@ -452,13 +465,15 @@ Every command below runs from this directory, the tree's top.
 
 ### 2. Fetch the pinned toolchain
 
-On Linux, install **curl** first (see Prerequisites): `alr update` downloads the toolchain with it.
+On Linux, install **curl** first (see Prerequisites): `alr update` downloads the toolchain with it. In the
+block below, `-n` makes `alr` ask no questions. Keep the absolute paths the last command prints: you need
+the gnatprove one in step 4.
 
 ```sh
 cd toolchain
-alr -n update                               # -n: answer no questions
+alr -n update
 alr exec -- gnatprove --version
-alr exec -- which gnatprove gnat gprbuild   # keep these absolute paths
+alr exec -- which gnatprove gnat gprbuild
 cd ..
 ```
 
@@ -468,40 +483,56 @@ The tree needs GNAT 15 (a 13.x toolchain will not compile it).
 
 ### 3. Guard the version, then build
 
-Run the version guard first. It fails the build if the source version, `alire.toml`, and the tag you
-intend disagree (the regression that once shipped a binary reporting the wrong version):
+Run the version guard first. It prints `OK` when the source version, `alire.toml`, and the tag you
+intend agree, and fails otherwise (the regression that once shipped a binary reporting the wrong
+version). STOP on a mismatch:
 
 ```sh
-scripts/check-version.sh v0.4.1     # prints OK; STOP on a mismatch
+scripts/check-version.sh v0.4.1
 ```
 
-Run every build command through the pinned toolchain, so that no other `gprbuild`/`gnat` on your
-`PATH` gets mixed in (a real failure, 2026-09-16):
+Then build. Every build command runs through the pinned toolchain (`PATH="$TC"`), so that no other
+`gprbuild`/`gnat` on your `PATH` gets mixed in (a real failure, 2026-09-16). What the block does, in order:
+
+1. makes the object and binary directories (`gnatmake -D` needs its object directory to exist);
+2. builds the build stamp tool and runs it. It records the commit you are building, and the `grep` line
+   STOPs the block unless the stamp says `commit=<hash> clean=true` (see "Check the build stamp" below);
+3. builds and runs the tower stamp tool, which pins `tower/base.bundle` by digest and version (STOP if it
+   refuses);
+4. builds the door, `bin/crucible-agpl`, with `bin/pack_tower`, `bin/certify_tower` and `bin/stamp_signers`;
+5. runs `bin/stamp_signers`, which writes `bin/allowed_signers` from the keys pinned in
+   `src/tower_keys_pkg.ads` (never hand-write it). It warns for every STAND-IN key: read those lines;
+6. builds the three rails: `bin/prover_service_main`, `bin/vacuity_service_main` and `bin/reef_relay_main`;
+7. builds the vacuity battery, `bin/vacuity-battery`, and makes its 38 kit names as links beside it;
+8. builds the battery's grade edge, `bin/vacuity_verdict_main`.
+
+The block runs in a subshell `( … )` with `set -e`: any failing line stops it, and the stop ends the
+subshell, not your terminal. It has no comments, so it pastes into bash and into zsh alike.
 
 ```sh
-(   # the whole block runs in a subshell: a STOP (exit 1) ends the subshell, not your terminal
-set -e   # any failing line stops the block
+(
+set -e
 TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
-mkdir -p obj/harness obj/battery-verdict bin                     # gnatmake -D needs its object dir to exist
+mkdir -p obj/harness obj/battery-verdict bin
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
-    harness/stamp_build_main.adb -o bin/stamp_build_main          # the build stamp tool (Ada)
-bin/stamp_build_main > obj/stamp.txt || exit 1; cat obj/stamp.txt   # records the commit you are building
+    harness/stamp_build_main.adb -o bin/stamp_build_main
+bin/stamp_build_main > obj/stamp.txt || exit 1; cat obj/stamp.txt
 grep -Eq "commit=[0-9a-f]{12} clean=true" obj/stamp.txt || { echo "STOP: not a clean git clone" >&2; exit 1; }
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
-    harness/stamp_tower_main.adb -o bin/stamp_tower_main          # the tower stamp tool (Ada)
-bin/stamp_tower_main || exit 1                                     # pins tower/base.bundle by digest and version; STOP if it refuses
-PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl     # -> bin/crucible-agpl, bin/pack_tower, bin/certify_tower, bin/stamp_signers
-bin/stamp_signers || exit 1                                        # writes bin/allowed_signers from the keys pinned in src/tower_keys_pkg.ads; never hand-write it. It WARNS for every STAND-IN key -- read those lines.
+    harness/stamp_tower_main.adb -o bin/stamp_tower_main
+bin/stamp_tower_main || exit 1
+PATH="$TC" gprbuild -P crucible.gpr -p -XCRUCIBLE_EDITION=agpl
+bin/stamp_signers || exit 1
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
-    harness/prover_service_main.adb -o bin/prover_service_main    # -> bin/prover_service_main
+    harness/prover_service_main.adb -o bin/prover_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
-    harness/vacuity_service_main.adb -o bin/vacuity_service_main  # -> bin/vacuity_service_main
+    harness/vacuity_service_main.adb -o bin/vacuity_service_main
 PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
-    harness/reef_relay_main.adb -o bin/reef_relay_main            # -> bin/reef_relay_main (the reef rail)
-PATH="$TC" gprbuild -P battery/vacuity_battery.gpr -p              # -> bin/vacuity-battery (the vacuity battery, Ada)
-for n in $(cat battery/LINKS); do ln -sfn vacuity-battery bin/$n; done   # the battery's 38 kit names, links beside it
+    harness/reef_relay_main.adb -o bin/reef_relay_main
+PATH="$TC" gprbuild -P battery/vacuity_battery.gpr -p
+for n in $(cat battery/LINKS); do ln -sfn vacuity-battery bin/$n; done
 PATH="$TC" gnatmake -gnat2022 -gnatU -D obj/battery-verdict \
-    battery/verdict/vacuity_verdict_main.adb -o bin/vacuity_verdict_main   # -> bin/vacuity_verdict_main (the grade edge)
+    battery/verdict/vacuity_verdict_main.adb -o bin/vacuity_verdict_main
 )
 ```
 
@@ -509,7 +540,11 @@ PATH="$TC" gnatmake -gnat2022 -gnatU -D obj/battery-verdict \
 `stamped: src/generated/crucible_build.ads  commit=<first 12 characters of the commit> clean=true time=<unix time>`.
 STOP if it says `commit=none` or `clean=false`. Outside a git clone it prints `fatal: not a git repository`,
 stamps `commit=none clean=false time=none`, and still exits 0, so its exit code alone does not catch this;
-the `grep` line above does. `clean=false` means `git status --porcelain` is not empty: a file changed, or a new file git does not ignore.
+the `grep` line above does. `clean=false` means `git status --porcelain` is not empty: a file changed, or a
+new file git does not ignore. The files the later steps create (the copied configs, `check.txt`, `reqs.jsonl`,
+`out.jsonl`, `err.txt`, `prove-ok.jsonl`, `prove-bad.jsonl`) are ignored, so re-running this step after them
+still passes. If you have edited a tracked file, such as the model on `config/rail.conf`, commit or stash
+that change before you re-run it.
 
 The vacuity battery is `bin/vacuity-battery`: one executable that answers to each name in
 `battery/LINKS` (it dispatches on the name it was started under), so **the links must sit beside it**.
@@ -532,24 +567,32 @@ The shipped launcher writes `config/prover-service.conf` and `config/vacuity-ser
 first start. Building by hand, you can instead copy the examples and set the absolute paths:
 
 ```sh
-cp config/prover-service.conf.example config/prover-service.conf     # set gnatprove + staging_root
-cp config/vacuity-service.conf.example config/vacuity-service.conf   # set battery + staging_root
+cp config/prover-service.conf.example config/prover-service.conf
+cp config/vacuity-service.conf.example config/vacuity-service.conf
 ```
+
+In `config/prover-service.conf`, set `gnatprove` to the absolute path that `alr exec -- which gnatprove`
+printed in step 2 (the pinned toolchain's gnatprove). Use that one even if you also installed
+`~/.alire/bin/gnatprove` by the short path. In both files set `staging_root` to an absolute directory, and in
+`config/vacuity-service.conf` set `battery` to the absolute path of `bin/vacuity-battery`.
 
 The relay's config is not written for you. In a source tree it is only an example; copy it and set
 `staging_root` to an absolute directory. Without it the launcher does not start the relay (it says
 `config/reef-relay.conf is missing`):
 
 ```sh
-cp config/reef-relay.conf.example config/reef-relay.conf             # set staging_root
+cp config/reef-relay.conf.example config/reef-relay.conf
 ```
+
+All three copied files are ignored by git, so they do not make the tree unclean for the build stamp.
 
 `config/rail.conf` ships a `reef` line by default (pointing at the local relay) and works as shipped
 if ollama is on `127.0.0.1:11434`, the prover service on `:8471`, the vacuity service on `:8472`, and
-the reef relay on `:8473`. Then start everything with the launcher:
+the reef relay on `:8473`. Then start everything with the launcher. `--check` should report prover,
+vacuity and reef all up (see "Start it" for how to read it):
 
 ```sh
-./crucible-launch.sh --check        # prover / vacuity / reef all up
+./crucible-launch.sh --check 2> check.txt; cat check.txt
 claude mcp add crucible -- /absolute/path/to/crucible/crucible-launch.sh
 ```
 
@@ -562,11 +605,12 @@ Follow "First forge" above. Then, to reach the catalog, follow "Enrol" and "Conf
 `bin/expand_brief_main` turns a brief (a prose description of a whole system) into a MASCOT design and has
 the proven design judge accept or refuse it. It is not in the tarball and the door does not use it. It runs
 three programs in turn: `bin/expand_front` (checks the request and writes the prompt), `bin/model_caller_main`
-(asks the model) and `bin/expand_back` (the judge). Build all four the same way as the services above:
+(asks the model) and `bin/expand_back` (the judge). Build all four the same way as the services above. As in
+step 3, the block runs in a subshell with `set -e`, so a failure stops it without closing your terminal:
 
 ```sh
-(   # a subshell, as in step 3: exit 1 ends it, not your terminal
-set -e   # any failing line stops the block
+(
+set -e
 TC="$(cd toolchain && alr exec -- sh -c 'echo $PATH')"
 for p in expand_front model_caller_main expand_back expand_brief_main; do
   PATH="$TC" gnatmake -gnat2022 -D obj/harness -aIsrc -aIsrc/generated -aIsrc/edition-agpl \
@@ -640,8 +684,13 @@ Notes:
 
 ```sh
 printf '127.0.0.1\n11434\nqwen3.8:27b\n%s\n' "Say OK." | bin/model_caller_main
-#   0
-#   {"content":"OK."}
+```
+
+It prints:
+
+```text
+0
+{"content":"OK."}
 ```
 
 It writes line 1, then at most line 2:

@@ -171,32 +171,64 @@ blocked). Each tarball unpacks to `crucible-v0.4.1/`: a working directory with a
 `bin/`, `config/`, `tower/` and an empty `state/`. It forges on the catalog it ships with. To fetch
 newer catalogs from the tower, enrol it (`palais.enrol`; see `INSTALL.md`). Until then the tower
 fetch row reads `fetch_failed`, which is expected. You also need `ssh-keygen`, gnatprove and a local model
-(`INSTALL.md` has each step). On Linux x86_64, in short:
+(`INSTALL.md` has each step). On Linux x86_64, in short. The blocks carry no comments, so they paste into
+bash and zsh alike.
 
-```sh
-# 1. as root (or with sudo), on a fresh Ubuntu: ssh-keygen, and the tools the gnatprove install uses
-apt-get update
-apt-get install -y openssh-client curl ca-certificates unzip git
+1. As root (or with `sudo`), on a fresh Ubuntu: `ssh-keygen`, and the tools the gnatprove install uses.
 
-# 2. check the download, unpack, then verify the signed set inside
-sha256sum -c --ignore-missing RELEASE_TARBALLS.sha256
-tar xzf crucible-v0.4.1-linux-x86_64.tar.gz && cd crucible-v0.4.1
-sha256sum -c SHA256SUMS
-ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
+   ```sh
+   apt-get update
+   apt-get install -y openssh-client curl ca-certificates unzip git
+   ```
 
-# 3. gnatprove, for the prover rail (in its own directory, not inside crucible-v0.4.1/)
-mkdir -p ~/alr && cd ~/alr
-curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
-unzip -o alr.zip && bin/alr -n install gnatprove=15.1.0
-cd -
+2. Check the download, unpack, then verify the signed set inside.
 
-# 4. the model named in config/rail.conf (needs ollama 0.32.12 or newer: https://ollama.com/download)
-ollama --version          # or: curl -s http://127.0.0.1:11434/api/version
-ollama pull qwen3.8:27b
+   ```sh
+   sha256sum -c --ignore-missing RELEASE_TARBALLS.sha256
+   tar xzf crucible-v0.4.1-linux-x86_64.tar.gz && cd crucible-v0.4.1
+   sha256sum -c SHA256SUMS
+   ssh-keygen -Y verify -f SHA256SUMS.allowed_signers -I tower@thedarkfactory.co.uk -n df-release -s SHA256SUMS.sig < SHA256SUMS
+   ```
 
-# 5. self-check: read the lines, not the exit code
-./crucible-launch.sh --check
-```
+3. gnatprove, for the prover rail. It goes in its own directory, not inside `crucible-v0.4.1/`; the last
+   line takes you back.
+
+   ```sh
+   mkdir -p ~/alr && cd ~/alr
+   curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
+   unzip -o alr.zip && bin/alr -n install gnatprove=15.1.0
+   cd -
+   ```
+
+4. The model named in `config/rail.conf`. It needs ollama 0.32.12 or newer (<https://ollama.com/download>).
+   With ollama on this machine, check its version and pull the model:
+
+   ```sh
+   ollama --version
+   ollama pull qwen3.8:27b
+   ```
+
+   Without the `ollama` command here (the server runs elsewhere, or outside your container), ask the server
+   itself. The first line prints its version; the second lists its models, and `qwen3.8:27b` must be among
+   them (pull it on the machine that runs the server):
+
+   ```sh
+   curl -s http://127.0.0.1:11434/api/version
+   curl -s http://127.0.0.1:11434/api/tags
+   ```
+
+   The door calls the host and port on the `"rail":"model"` line of `config/rail.conf`, `127.0.0.1:11434`
+   as shipped. That line says `"sovereign":"true"`, which allows only this machine (loopback). If the server
+   runs on another machine, the simplest way is to forward its port here, for example
+   `ssh -N -L 11434:127.0.0.1:11434 you@model-host`, and change nothing. Otherwise put that machine's IPv4
+   address in `host` and set `"sovereign":"false"` on that line: the door then talks to it in plain,
+   unencrypted HTTP.
+
+5. Self-check. Read the lines, not the exit code (`INSTALL.md`, "Start it", shows what they say).
+
+   ```sh
+   ./crucible-launch.sh --check 2> check.txt; cat check.txt
+   ```
 
 Then point your MCP host at `crucible-launch.sh` (see `CONNECTING.md`) and forge the `Negate` sheet in
 `INSTALL.md` ("First forge"). There are no other binaries.
@@ -213,11 +245,12 @@ git checkout v0.4.1
 ```
 
 Both editions build from the same source. The full build, with the pinned toolchain, the stamp tools and the
-C library files a fresh Linux needs, is in `INSTALL.md` ("Build from source"). In outline:
+C library files a fresh Linux needs, is in `INSTALL.md` ("Build from source"). In outline, the first line
+builds `bin/crucible-agpl` and the second `bin/crucible-commercial`:
 
 ```sh
-CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p     # bin/crucible-agpl
-CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p     # bin/crucible-commercial
+CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p
+CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p
 ```
 
 Each binary answers MCP over stdio and reports its own edition in the `initialize` result, so you can always

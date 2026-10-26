@@ -10,14 +10,21 @@
 
 ## Trois commandes
 
+1. Construire l'édition AGPL :
+
 ```sh
-# 1. Construire l'édition AGPL
 CRUCIBLE_EDITION=agpl gprbuild -P crucible.gpr -p
+```
 
-# 2. Prouver tout le projet (seul résultat acceptable : zéro vérification non prouvée)
+2. Prouver tout le projet (seul résultat acceptable : zéro vérification non prouvée) :
+
+```sh
 gnatprove -P crucible.gpr --level=2 --mode=all --checks-as-errors=on --warnings=error -j0
+```
 
-# 3. Demander au binaire quelle édition il est (MCP, sur stdio)
+3. Demander au binaire quelle édition il est (MCP, sur stdio) :
+
+```sh
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"vous","version":"0"}}}' | ./bin/crucible-agpl
 ```
 

@@ -42,6 +42,11 @@ no change except the version the door reports.
 - `README.md`: the install flow now includes gnatprove, the model and the self-check, not only the download
   and signature check.
 - `apt-get install` lines carry `-y`, so they run unattended (in a container, a script).
+- Every shell block in the docs is free of comments, so it pastes into interactive zsh (the macOS default) as
+  well as bash; the multi-line build blocks run in a subshell with `set -e`, so a stop does not close your
+  terminal. README step 4 says how to check a model server that runs elsewhere. INSTALL step 4 names which
+  gnatprove to use. `.gitignore` covers `config/reef-relay.conf` and the scratch files the steps write, so
+  re-running the build stays `clean=true`.
 - Tarball names and paths say `0.4.1`.
 
 ### Known limitations

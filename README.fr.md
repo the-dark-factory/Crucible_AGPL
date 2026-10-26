@@ -52,11 +52,12 @@ avec un reçu signé là-bas.
 
 ## Construire
 
-Les deux éditions se construisent depuis la même source :
+Les deux éditions se construisent depuis la même source. La première ligne produit `bin/crucible-agpl`,
+la seconde `bin/crucible-commercial` :
 
 ```sh
-CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p     # bin/crucible-agpl
-CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p     # bin/crucible-commercial
+CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p
+CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p
 ```
 
 Chaque binaire répond au protocole MCP sur stdio et annonce sa propre édition dans le résultat

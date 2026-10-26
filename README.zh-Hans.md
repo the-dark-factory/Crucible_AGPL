@@ -38,11 +38,11 @@ CRUCIBLE 本身就是按它建造别人的方式建造的：其中做决定的�
 
 ## 构建
 
-两个版本由同一份源码构建：
+两个版本由同一份源码构建。第一行生成 `bin/crucible-agpl`，第二行生成 `bin/crucible-commercial`：
 
 ```sh
-CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p     # bin/crucible-agpl
-CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p     # bin/crucible-commercial
+CRUCIBLE_EDITION=agpl       gprbuild -P crucible.gpr -p
+CRUCIBLE_EDITION=commercial gprbuild -P crucible.gpr -p
 ```
 
 每个可执行文件都通过 stdio 应答 MCP，并在 `initialize` 的结果中报告自己的版本，因此你随时都能确认

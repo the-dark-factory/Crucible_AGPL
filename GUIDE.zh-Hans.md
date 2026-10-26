@@ -10,14 +10,21 @@
 
 ## 三条命令
 
+1. 构建 AGPL 版本：
+
 ```sh
-# 1. 构建 AGPL 版本
 CRUCIBLE_EDITION=agpl gprbuild -P crucible.gpr -p
+```
 
-# 2. 证明整个工程（唯一通过标准：零个未证明项）
+2. 证明整个工程（唯一通过标准：零个未证明项）：
+
+```sh
 gnatprove -P crucible.gpr --level=2 --mode=all --checks-as-errors=on --warnings=error -j0
+```
 
-# 3. 问问这个二进制它是哪个版本（MCP，走 stdio）
+3. 问问这个二进制它是哪个版本（MCP，走 stdio）：
+
+```sh
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"you","version":"0"}}}' | ./bin/crucible-agpl
 ```
 
